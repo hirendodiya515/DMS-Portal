@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: dms_postgres
+    environment:
+      POSTGRES_USER: dms_user
+      POSTGRES_PASSWORD: dms_password
+      POSTGRES_DB: dms_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dms_network
+    restart: always
+
+  backend:
+    build: ./backend
+    container_name: dms_backend
+    env_file:
+      - ./backend/.env.production
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      - postgres
+    networks:
+      - dms_network
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: dms_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - dms_network
+    restart: always
+
+volumes:
+  postgres_data:
+
+networks:
+  dms_network:
+    driver: bridge
