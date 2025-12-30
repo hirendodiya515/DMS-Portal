@@ -184,7 +184,7 @@ export default function EditUserModal({ isOpen, onClose, onSuccess, user }: Edit
           </div>
 
           <div>
-             <label className="block text-sm font-medium text-slate-700 mb-1">Job Role</label>
+             <label className="block text-sm font-medium text-slate-700 mb-1">Job Role (Optional)</label>
              <select
                 value={formData.jobRoleId}
                 onChange={(e) => setFormData({ ...formData, jobRoleId: e.target.value })}

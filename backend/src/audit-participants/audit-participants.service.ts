@@ -14,6 +14,10 @@ export class AuditParticipantsService {
     return this.repository.find({ order: { createdAt: 'DESC' } });
   }
 
+  findOne(id: string) {
+    return this.repository.findOne({ where: { id } });
+  }
+
   findByType(type: AuditParticipantType) {
     return this.repository.find({
       where: { type },

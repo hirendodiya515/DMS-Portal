@@ -11,7 +11,12 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Res,
+  NotFoundException,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { join } from 'path';
+import { existsSync } from 'fs';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -74,6 +79,21 @@ export class AuditParticipantsController {
   @UseGuards(JwtAuthGuard)
   update(@Param('id') id: string, @Body() body: any) {
     return this.service.update(id, body);
+  }
+
+  @Get(':id/certificate')
+  async getCertificate(@Param('id') id: string, @Res() res: Response) {
+    const participant = await this.service.findOne(id);
+    if (!participant || !participant.certificatePath) {
+      throw new NotFoundException('Certificate not found');
+    }
+
+    const filePath = join(process.cwd(), participant.certificatePath);
+    if (!existsSync(filePath)) {
+      throw new NotFoundException('File not found on server');
+    }
+
+    return res.sendFile(filePath);
   }
 
   @Delete(':id')

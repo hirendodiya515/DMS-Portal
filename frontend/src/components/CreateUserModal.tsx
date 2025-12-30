@@ -58,7 +58,10 @@ export default function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUs
     setLoading(true);
 
     try {
-      await api.post('/auth/register', formData);
+      await api.post('/auth/register', {
+        ...formData,
+        jobRoleId: formData.jobRoleId || null,
+      });
       onSuccess();
       onClose();
       setFormData({
@@ -185,7 +188,7 @@ export default function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUs
           </div>
 
           <div>
-             <label className="block text-sm font-medium text-slate-700 mb-1">Job Role</label>
+             <label className="block text-sm font-medium text-slate-700 mb-1">Job Role (Optional)</label>
              <select
                 value={formData.jobRoleId}
                 onChange={(e) => setFormData({ ...formData, jobRoleId: e.target.value })}

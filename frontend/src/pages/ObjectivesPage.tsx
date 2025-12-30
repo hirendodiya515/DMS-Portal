@@ -666,13 +666,13 @@ function ObjectiveFormModal({
   const [formData, setFormData] = useState({
     name: objective?.name || '',
     description: objective?.description || '',
-    type: objective?.type || 'quality',
+    type: (objective?.type as string) || 'quality',
     department: objective?.department || '',
     uom: objective?.uom || (uomList.length > 0 ? uomList[0] : 'Number'),
     frequency: objective?.frequency || 'monthly',
     target: objective?.target?.toString() || '',
     higherIsBetter: objective?.higherIsBetter ?? true,
-    status: objective?.status || 'active',
+    status: (objective?.status as string) || 'active',
   });
   const [loading, setLoading] = useState(false);
 

@@ -147,6 +147,19 @@ export default function AuditorsPage() {
     }
   };
 
+  const handleViewCertificate = async (id: string) => {
+    try {
+      const response = await api.get(`/audit-participants/${id}/certificate`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: response.headers['content-type'] }));
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('Failed to view certificate:', error);
+      alert('Failed to load certificate');
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this participant?')) return;
     try {
@@ -234,15 +247,14 @@ export default function AuditorsPage() {
                 {activeTab === 'auditor' && (
                    <td className="px-6 py-3 text-center">
                       {item.certificateName ? (
-                          <a 
-                            // In real app, build correct download URL
-                            href="#" 
+                          <button 
+                            onClick={() => handleViewCertificate(item.id)}
                             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700"
                             title={item.certificateName}
                           >
                              <FileText className="w-4 h-4" />
                              <span className="text-xs">View</span>
-                          </a>
+                          </button>
                       ) : (
                           <span className="text-slate-400">-</span>
                       )}
