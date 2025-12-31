@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import DocViewer, { DocViewerRenderers } from '@cyntler/react-doc-viewer';
 import { X, Download, Loader2 } from 'lucide-react';
 import api from '../lib/api';
@@ -80,7 +80,18 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }: Docu
 
       if (detectedType === 'docx') {
         const arrayBuffer = await blob.arrayBuffer();
-        const result = await mammoth.convertToHtml({ arrayBuffer });
+        const result = await mammoth.convertToHtml(
+          { arrayBuffer },
+          {
+            convertImage: mammoth.images.imgElement((image) => {
+              return image.read("base64").then((imageBuffer) => {
+                return {
+                  src: `data:${image.contentType};base64,${imageBuffer}`
+                };
+              });
+            })
+          }
+        );
         setHtmlContent(result.value);
       } else if (detectedType === 'xlsx') {
         const arrayBuffer = await blob.arrayBuffer();
@@ -115,10 +126,20 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }: Docu
         responseType: 'blob',
       });
       
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Try to extract filename from Content-Disposition header
+      let fileName = document.title;
+      const contentDisposition = response.headers['content-disposition'];
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (fileNameMatch && fileNameMatch.length > 1) {
+          fileName = fileNameMatch[1];
+        }
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: response.headers['content-type'] }));
       const link = window.document.createElement('a');
       link.href = url;
-      link.setAttribute('download', document.title);
+      link.setAttribute('download', fileName);
       window.document.body.appendChild(link);
       link.click();
       link.remove();
@@ -166,7 +187,37 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }: Docu
           ) : (
             <>
               {fileType === 'docx' && htmlContent && (
-                <div className="prose max-w-none bg-white p-8 shadow-sm rounded-lg min-h-full" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+                <div className="bg-white p-8 shadow-sm rounded-lg min-h-full">
+                  <style dangerouslySetInnerHTML={{ __html: `
+                    .docx-preview table {
+                      border-collapse: collapse;
+                      width: 100%;
+                      margin-bottom: 1rem;
+                    }
+                    .docx-preview table td, .docx-preview table th {
+                      border: 1px solid #e2e8f0;
+                      padding: 0.5rem;
+                    }
+                    .docx-preview img {
+                      max-width: 100%;
+                      height: auto;
+                      margin: 1rem 0;
+                    }
+                    .docx-preview p {
+                      margin-bottom: 1rem;
+                      line-height: 1.6;
+                    }
+                    .docx-preview h1, .docx-preview h2, .docx-preview h3 {
+                      font-weight: bold;
+                      margin-top: 1.5rem;
+                      margin-bottom: 0.75rem;
+                    }
+                  ` }} />
+                  <div 
+                    className="docx-preview prose max-w-none" 
+                    dangerouslySetInnerHTML={{ __html: htmlContent }} 
+                  />
+                </div>
               )}
               
               {fileType === 'xlsx' && spreadsheetData.length > 0 && (

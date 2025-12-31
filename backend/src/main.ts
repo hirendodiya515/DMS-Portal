@@ -9,6 +9,7 @@ async function bootstrap() {
   app.enableCors({
     origin: 'http://localhost:5173', // Vite default port
     credentials: true,
+    exposedHeaders: ['Content-Disposition'],
   });
 
   // Enable validation

@@ -128,10 +128,20 @@ export default function DocumentsPage() {
         responseType: 'blob',
       });
       
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Try to extract filename from Content-Disposition header
+      let fileName = doc.title;
+      const contentDisposition = response.headers['content-disposition'];
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (fileNameMatch && fileNameMatch.length > 1) {
+          fileName = fileNameMatch[1];
+        }
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: response.headers['content-type'] }));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${doc.title}.pdf`); // Assuming PDF or use content-disposition header if possible
+      link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();

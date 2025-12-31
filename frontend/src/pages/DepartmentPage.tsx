@@ -91,28 +91,38 @@ export default function DepartmentPage() {
   };
 
   const handleDownload = async (doc: Document) => {
-      if (!doc.currentVersionId) {
-        alert('No file version available to download.');
-        return;
-      }
+    if (!doc.currentVersionId) {
+      alert('No file version available to download.');
+      return;
+    }
+    
+    try {
+      const response = await api.get(`/files/${doc.currentVersionId}/download`, {
+        responseType: 'blob',
+      });
       
-      try {
-        const response = await api.get(`/files/${doc.currentVersionId}/download`, {
-          responseType: 'blob',
-        });
-        
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${doc.title}.pdf`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-      } catch (error) {
-        console.error('Failed to download file:', error);
-        alert('Failed to download file.');
+      // Try to extract filename from Content-Disposition header
+      let fileName = doc.title;
+      const contentDisposition = response.headers['content-disposition'];
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (fileNameMatch && fileNameMatch.length > 1) {
+          fileName = fileNameMatch[1];
+        }
       }
-    };
+
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: response.headers['content-type'] }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Failed to download file:', error);
+      alert('Failed to download file.');
+    }
+  };
 
   const filteredDocuments = selectedDept 
     ? documents.filter(doc => doc.departments && doc.departments.includes(selectedDept))

@@ -9,7 +9,6 @@ import {
   User, 
   Calendar,
   Shield,
-  MoreVertical,
   Upload
 } from 'lucide-react';
 import api from '../lib/api';
@@ -56,6 +55,7 @@ interface DocumentDetail {
 }
 
 import UploadVersionModal from '../components/UploadVersionModal';
+import ActionMenu from '../components/ActionMenu';
 
 export default function DocumentDetailPage() {
   const { id } = useParams();
@@ -64,6 +64,7 @@ export default function DocumentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'audit'>('details');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
@@ -100,12 +101,23 @@ export default function DocumentDetailPage() {
     }
   };
 
-  const handleDownload = async (versionId: string, fileName: string) => {
+  const handleDownload = async (versionId: string, defaultFileName: string) => {
     try {
       const response = await api.get(`/files/${versionId}/download`, {
         responseType: 'blob',
       });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+
+      // Try to extract filename from Content-Disposition header
+      let fileName = defaultFileName;
+      const contentDisposition = response.headers['content-disposition'];
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (fileNameMatch && fileNameMatch.length > 1) {
+          fileName = fileNameMatch[1];
+        }
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: response.headers['content-type'] }));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', fileName);
@@ -208,9 +220,34 @@ export default function DocumentDetailPage() {
               </button>
             </>
           )}
-          <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
-            <MoreVertical className="w-5 h-5" />
-          </button>
+          <ActionMenu
+            isOpen={isActionMenuOpen}
+            onToggle={() => setIsActionMenuOpen(!isActionMenuOpen)}
+            onClose={() => setIsActionMenuOpen(false)}
+          >
+            <button 
+              onClick={() => {
+                if (docData.currentVersionId) {
+                  handleDownload(docData.currentVersionId, docData.title);
+                }
+                setIsActionMenuOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+            >
+              <Download className="w-4 h-4 text-slate-400" />
+              Download Current Version
+            </button>
+            <button 
+              onClick={() => {
+                navigate('/documents');
+                setIsActionMenuOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4 text-slate-400" />
+              Back to Documents
+            </button>
+          </ActionMenu>
         </div>
       </div>
 
