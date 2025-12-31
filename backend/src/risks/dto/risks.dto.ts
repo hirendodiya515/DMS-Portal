@@ -25,6 +25,34 @@ export class CreateRiskDto {
   @IsString()
   interestedParties?: string;
 
+  @IsOptional()
+  @IsString()
+  area?: string;
+
+  @IsOptional()
+  @IsString()
+  hazard?: string;
+
+  @IsOptional()
+  @IsString()
+  risk?: string;
+
+  @IsOptional()
+  @IsString()
+  aspect?: string;
+
+  @IsOptional()
+  @IsString()
+  impact?: string;
+
+  @IsOptional()
+  @IsString()
+  failureMode?: string;
+
+  @IsOptional()
+  @IsString()
+  potentialImpact?: string;
+
   @Type(() => Number)
   @IsNumber()
   @Min(1)
@@ -89,6 +117,26 @@ export class UpdateRiskDto {
   @IsOptional()
   @IsString()
   interestedParties?: string;
+
+  @IsOptional()
+  @IsString()
+  area?: string;
+
+  @IsOptional()
+  @IsString()
+  hazardRisk?: string;
+
+  @IsOptional()
+  @IsString()
+  aspectImpact?: string;
+
+  @IsOptional()
+  @IsString()
+  failureMode?: string;
+
+  @IsOptional()
+  @IsString()
+  potentialImpact?: string;
 
   @IsOptional()
   @Type(() => Number)

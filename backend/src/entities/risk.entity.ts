@@ -72,6 +72,27 @@ export class Risk {
   @Column({ nullable: true })
   interestedParties: string; // Who is affected
 
+  @Column({ nullable: true })
+  area: string; // Area/work station or Process / Area
+
+  @Column({ nullable: true })
+  hazard: string; // For HIRA
+
+  @Column({ nullable: true })
+  risk: string; // For HIRA
+
+  @Column({ nullable: true })
+  aspect: string; // For EAA
+
+  @Column({ nullable: true })
+  impact: string; // For EAA
+
+  @Column({ nullable: true })
+  failureMode: string; // For QRA
+
+  @Column({ nullable: true })
+  potentialImpact: string; // For QRA
+
   // Initial Risk Assessment
   @Column('int', { default: 1 })
   likelihood: number; // 1-5

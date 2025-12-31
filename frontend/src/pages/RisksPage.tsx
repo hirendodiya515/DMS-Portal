@@ -26,6 +26,13 @@ interface Risk {
   department: string;
   source: string;
   interestedParties: string;
+  area?: string;
+  hazard?: string;
+  risk?: string;
+  aspect?: string;
+  impact?: string;
+  failureMode?: string;
+  potentialImpact?: string;
   likelihood: number;
   severity: number;
   riskRating: number;
@@ -65,6 +72,46 @@ const STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
   { value: 'closed', label: 'Closed' },
 ];
+
+const getRowBgColor = (level: string) => {
+  switch (level) {
+    case 'low': return 'bg-green-50 hover:bg-green-100';
+    case 'medium': return 'bg-yellow-50 hover:bg-yellow-100';
+    case 'high': return 'bg-orange-50 hover:bg-orange-100';
+    case 'critical': return 'bg-red-50 hover:bg-red-100';
+    default: return 'hover:bg-slate-50';
+  }
+};
+
+const getLevelBadge = (level: string, rating: number) => {
+  const colors = {
+    low: 'bg-green-500 text-white',
+    medium: 'bg-yellow-500 text-white',
+    high: 'bg-orange-500 text-white',
+    critical: 'bg-red-500 text-white',
+  };
+  return (
+    <span className={`px-2 py-1 rounded text-xs font-bold ${colors[level] || 'bg-gray-500 text-white'}`}>
+      {rating}
+    </span>
+  );
+};
+
+const getStatusBadge = (status: string) => {
+  const colors = {
+    draft: 'bg-gray-100 text-gray-700',
+    pending_review: 'bg-purple-100 text-purple-700',
+    approved: 'bg-blue-100 text-blue-700',
+    open: 'bg-emerald-100 text-emerald-700',
+    under_review: 'bg-yellow-100 text-yellow-700',
+    closed: 'bg-slate-100 text-slate-700',
+  };
+  return (
+    <span className={`px-2 py-1 rounded-full text-xs font-medium ${colors[status] || 'bg-gray-100'}`}>
+      {status.replace('_', ' ')}
+    </span>
+  );
+};
 
 export default function RisksPage() {
   const [risks, setRisks] = useState<Risk[]>([]);
@@ -124,45 +171,6 @@ export default function RisksPage() {
     }
   };
 
-  const getRowBgColor = (level: string) => {
-    switch (level) {
-      case 'low': return 'bg-green-50 hover:bg-green-100';
-      case 'medium': return 'bg-yellow-50 hover:bg-yellow-100';
-      case 'high': return 'bg-orange-50 hover:bg-orange-100';
-      case 'critical': return 'bg-red-50 hover:bg-red-100';
-      default: return 'hover:bg-slate-50';
-    }
-  };
-
-  const getLevelBadge = (level: string, rating: number) => {
-    const colors = {
-      low: 'bg-green-500 text-white',
-      medium: 'bg-yellow-500 text-white',
-      high: 'bg-orange-500 text-white',
-      critical: 'bg-red-500 text-white',
-    };
-    return (
-      <span className={`px-2 py-1 rounded text-xs font-bold ${colors[level] || 'bg-gray-500 text-white'}`}>
-        {rating}
-      </span>
-    );
-  };
-
-  const getStatusBadge = (status: string) => {
-    const colors = {
-      draft: 'bg-gray-100 text-gray-700',
-      pending_review: 'bg-purple-100 text-purple-700',
-      approved: 'bg-blue-100 text-blue-700',
-      open: 'bg-emerald-100 text-emerald-700',
-      under_review: 'bg-yellow-100 text-yellow-700',
-      closed: 'bg-slate-100 text-slate-700',
-    };
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${colors[status] || 'bg-gray-100'}`}>
-        {status.replace('_', ' ')}
-      </span>
-    );
-  };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this risk?')) return;
@@ -472,6 +480,13 @@ function RiskFormModal({
     proposedActions: risk?.proposedActions || '',
     residualLikelihood: risk?.residualLikelihood || undefined,
     residualSeverity: risk?.residualSeverity || undefined,
+    area: risk?.area || '',
+    hazard: risk?.hazard || '',
+    risk: risk?.risk || '',
+    aspect: risk?.aspect || '',
+    impact: risk?.impact || '',
+    failureMode: risk?.failureMode || '',
+    potentialImpact: risk?.potentialImpact || '',
     reviewDate: risk?.reviewDate ? format(new Date(risk.reviewDate), 'yyyy-MM-dd') : '',
   });
   const [loading, setLoading] = useState(false);
@@ -496,6 +511,13 @@ function RiskFormModal({
         severity: Number(formData.severity),
         currentControls: formData.currentControls || undefined,
         proposedActions: formData.proposedActions || undefined,
+        area: formData.area || undefined,
+        hazard: formData.hazard || undefined,
+        risk: formData.risk || undefined,
+        aspect: formData.aspect || undefined,
+        impact: formData.impact || undefined,
+        failureMode: formData.failureMode || undefined,
+        potentialImpact: formData.potentialImpact || undefined,
       };
 
       // Only include residual risk if both are set
@@ -544,7 +566,9 @@ function RiskFormModal({
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {type === 'qra' ? 'Risk category' : 'Activity'} *
+            </label>
             <input
               type="text"
               value={formData.title}
@@ -554,13 +578,95 @@ function RiskFormModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              {type === 'qra' ? 'Risk description' : 'Task'}
+            </label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={2}
               className="w-full px-4 py-2 border border-slate-200 rounded-lg"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {type === 'qra' ? 'Process / Area' : 'Area/work station'}
+              </label>
+              <input
+                type="text"
+                value={formData.area}
+                onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+              />
+            </div>
+            {type === 'hira' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Hazard</label>
+                  <input
+                    type="text"
+                    value={formData.hazard}
+                    onChange={(e) => setFormData({ ...formData, hazard: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Risk</label>
+                  <input
+                    type="text"
+                    value={formData.risk}
+                    onChange={(e) => setFormData({ ...formData, risk: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                  />
+                </div>
+              </>
+            )}
+            {type === 'eaa' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Aspect</label>
+                  <input
+                    type="text"
+                    value={formData.aspect}
+                    onChange={(e) => setFormData({ ...formData, aspect: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Impact</label>
+                  <input
+                    type="text"
+                    value={formData.impact}
+                    onChange={(e) => setFormData({ ...formData, impact: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                  />
+                </div>
+              </>
+            )}
+            {type === 'qra' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Failure mode</label>
+                  <input
+                    type="text"
+                    value={formData.failureMode}
+                    onChange={(e) => setFormData({ ...formData, failureMode: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Potential Impact</label>
+                  <input
+                    type="text"
+                    value={formData.potentialImpact}
+                    onChange={(e) => setFormData({ ...formData, potentialImpact: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+                  />
+                </div>
+              </>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -737,15 +843,62 @@ function RiskDetailModal({
               <p className="font-medium">{risk.department || '-'}</p>
             </div>
             <div>
+              <span className="text-sm text-slate-500">
+                {risk.type === 'qra' ? 'Process / Area' : 'Area/work station'}
+              </span>
+              <p className="font-medium">{risk.area || '-'}</p>
+            </div>
+            <div>
               <span className="text-sm text-slate-500">Status</span>
-              <p>{risk.status.replace('_', ' ')}</p>
+              <p>{getStatusBadge(risk.status)}</p>
             </div>
           </div>
 
           <div>
-            <span className="text-sm text-slate-500">Description</span>
+            <span className="text-sm text-slate-500">
+              {risk.type === 'qra' ? 'Risk description' : 'Task'}
+            </span>
             <p className="mt-1">{risk.description || '-'}</p>
           </div>
+
+          {risk.type === 'hira' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-sm text-slate-500">Hazard</span>
+                <p className="mt-1">{risk.hazard || '-'}</p>
+              </div>
+              <div>
+                <span className="text-sm text-slate-500">Risk</span>
+                <p className="mt-1">{risk.risk || '-'}</p>
+              </div>
+            </div>
+          )}
+          {risk.type === 'eaa' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-sm text-slate-500">Aspect</span>
+                <p className="mt-1">{risk.aspect || '-'}</p>
+              </div>
+              <div>
+                <span className="text-sm text-slate-500">Impact</span>
+                <p className="mt-1">{risk.impact || '-'}</p>
+              </div>
+            </div>
+          )}
+          {risk.type === 'qra' && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-sm text-slate-500">Failure mode</span>
+                  <p className="mt-1">{risk.failureMode || '-'}</p>
+                </div>
+                <div>
+                  <span className="text-sm text-slate-500">Potential Impact</span>
+                  <p className="mt-1">{risk.potentialImpact || '-'}</p>
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg">
             <div>
