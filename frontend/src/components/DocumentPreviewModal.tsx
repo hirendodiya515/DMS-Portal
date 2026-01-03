@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import DocViewer, { DocViewerRenderers } from '@cyntler/react-doc-viewer';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import { X, Download, Loader2 } from 'lucide-react';
 import api from '../lib/api';
 import mammoth from 'mammoth';
@@ -19,7 +21,7 @@ interface DocumentPreviewModalProps {
 }
 
 export default function DocumentPreviewModal({ isOpen, onClose, document }: DocumentPreviewModalProps) {
-  const [docs, setDocs] = useState<{ uri: string; fileName: string }[]>([]);
+  const [docs, setDocs] = useState<{ uri: string; fileName: string; fileType?: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -50,35 +52,38 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }: Docu
     setSpreadsheetData([]);
 
     try {
-      const response = await api.get(`/files/${document.currentVersionId}/download`, {
+      const response = await api.get(`/files/${document.currentVersionId}/preview`, {
         responseType: 'blob'
       });
       
-      const contentType = response.headers['content-type'];
+      let contentType = response.headers['content-type'];
       const blob = new Blob([response.data], { type: contentType });
       
-      let detectedType: 'pdf' | 'docx' | 'xlsx' | 'image' | 'other' = 'other';
-      
+      let finalFileType: 'pdf' | 'docx' | 'xlsx' | 'image' | 'other' = 'other';
+      const ext = document.title.split('.').pop()?.toLowerCase();
+
       if (contentType.includes('pdf')) {
-        detectedType = 'pdf';
+        finalFileType = 'pdf';
       } else if (contentType.includes('wordprocessingml') || contentType.includes('msword')) {
-        detectedType = 'docx';
+        finalFileType = 'docx';
       } else if (contentType.includes('spreadsheetml') || contentType.includes('excel') || contentType.includes('sheet')) {
-        detectedType = 'xlsx';
+        finalFileType = 'xlsx';
       } else if (contentType.startsWith('image/')) {
-        detectedType = 'image';
+        finalFileType = 'image';
       } else {
-        // Fallback to extension check if content-type is generic
-        const ext = document.title.split('.').pop()?.toLowerCase();
-        if (ext === 'pdf') detectedType = 'pdf';
-        else if (ext === 'docx' || ext === 'doc') detectedType = 'docx';
-        else if (ext === 'xlsx' || ext === 'xls') detectedType = 'xlsx';
-        else if (['jpg', 'jpeg', 'png', 'gif'].includes(ext || '')) detectedType = 'image';
+        // Fallback to extension check
+        if (ext === 'pdf') finalFileType = 'pdf';
+        else if (ext === 'docx' || ext === 'doc') finalFileType = 'docx';
+        else if (ext === 'xlsx' || ext === 'xls') finalFileType = 'xlsx';
+        else if (['jpg', 'jpeg', 'png', 'gif'].includes(ext || '')) finalFileType = 'image';
       }
 
-      setFileType(detectedType);
+      // If it originated as a Word doc but backend sent a PDF, it's a PDF now
+      if (finalFileType === 'docx' && contentType.includes('pdf')) {
+        finalFileType = 'pdf';
+      }
 
-      if (detectedType === 'docx') {
+      if (finalFileType === 'docx') {
         const arrayBuffer = await blob.arrayBuffer();
         const result = await mammoth.convertToHtml(
           { arrayBuffer },
@@ -93,7 +98,7 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }: Docu
           }
         );
         setHtmlContent(result.value);
-      } else if (detectedType === 'xlsx') {
+      } else if (finalFileType === 'xlsx') {
         const arrayBuffer = await blob.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer);
         const firstSheetName = workbook.SheetNames[0];
@@ -103,10 +108,16 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }: Docu
           row.map((cell: any) => ({ value: cell, readOnly: true }))
         );
         setSpreadsheetData(data);
-      } else if (detectedType === 'pdf' || detectedType === 'image') {
+      } else if (finalFileType === 'pdf' || finalFileType === 'image') {
         const url = window.URL.createObjectURL(blob);
-        setDocs([{ uri: url, fileName: document.title }]);
+        setDocs([{ 
+          uri: url, 
+          fileName: document.title, 
+          fileType: finalFileType === 'pdf' ? 'pdf' : contentType 
+        }]);
       }
+
+      setFileType(finalFileType);
 
     } catch (err) {
       console.error('Failed to load document for preview:', err);
@@ -176,6 +187,41 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }: Docu
         </div>
 
         <div className="flex-1 overflow-auto bg-slate-50 relative p-4">
+          <style dangerouslySetInnerHTML={{ __html: `
+            .docx-preview table {
+              border-collapse: collapse;
+              width: 100%;
+              margin-bottom: 1rem;
+            }
+            .docx-preview table td, .docx-preview table th {
+              border: 1px solid #e2e8f0;
+              padding: 0.5rem;
+            }
+            .docx-preview img {
+              max-width: 100%;
+              height: auto;
+              margin: 1rem 0;
+            }
+            .docx-preview p {
+              margin-bottom: 1rem;
+              line-height: 1.6;
+            }
+            .docx-preview h1, .docx-preview h2, .docx-preview h3 {
+              font-weight: bold;
+              margin-top: 1.5rem;
+              margin-bottom: 0.75rem;
+            }
+            /* Fix for PDF duplicate text (react-pdf text layer) */
+            .react-pdf__Page__textContent, .react-pdf__Page__annotations {
+              /* Styles imported from react-pdf/dist/esm/Page/... */
+            }
+            .react-pdf__Page {
+              position: relative !important;
+              margin: 0 auto 20px auto !important;
+              background-color: white !important;
+              box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+            }
+          ` }} />
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
@@ -188,31 +234,6 @@ export default function DocumentPreviewModal({ isOpen, onClose, document }: Docu
             <>
               {fileType === 'docx' && htmlContent && (
                 <div className="bg-white p-8 shadow-sm rounded-lg min-h-full">
-                  <style dangerouslySetInnerHTML={{ __html: `
-                    .docx-preview table {
-                      border-collapse: collapse;
-                      width: 100%;
-                      margin-bottom: 1rem;
-                    }
-                    .docx-preview table td, .docx-preview table th {
-                      border: 1px solid #e2e8f0;
-                      padding: 0.5rem;
-                    }
-                    .docx-preview img {
-                      max-width: 100%;
-                      height: auto;
-                      margin: 1rem 0;
-                    }
-                    .docx-preview p {
-                      margin-bottom: 1rem;
-                      line-height: 1.6;
-                    }
-                    .docx-preview h1, .docx-preview h2, .docx-preview h3 {
-                      font-weight: bold;
-                      margin-top: 1.5rem;
-                      margin-bottom: 0.75rem;
-                    }
-                  ` }} />
                   <div 
                     className="docx-preview prose max-w-none" 
                     dangerouslySetInnerHTML={{ __html: htmlContent }} 

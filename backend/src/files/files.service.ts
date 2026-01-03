@@ -7,11 +7,13 @@ import { AuditLog, AuditAction } from '../entities/audit-log.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
+import { exec } from 'child_process';
 
 const mkdir = promisify(fs.mkdir);
 const writeFile = promisify(fs.writeFile);
 const readFile = promisify(fs.readFile);
 const unlink = promisify(fs.unlink);
+const execAsync = promisify(exec);
 
 @Injectable()
 export class FilesService {
@@ -99,6 +101,69 @@ export class FilesService {
         }
 
         await this.versionRepository.remove(version);
+    }
+
+    async convertToPdf(versionId: string): Promise<{ buffer: Buffer; fileName: string }> {
+        const version = await this.versionRepository.findOne({ where: { id: versionId } });
+
+        if (!version) {
+            throw new Error('File not found');
+        }
+
+        const inputPath = path.resolve(version.filePath);
+        const fileNameWithoutExt = path.parse(version.fileName).name;
+        const pdfFileName = `${path.parse(version.filePath).name}.pdf`;
+        const outputPath = path.resolve(path.join(this.uploadPath, pdfFileName));
+
+        // Check if PDF already exists (cache)
+        if (fs.existsSync(outputPath)) {
+            const buffer = await readFile(outputPath);
+            return {
+                buffer,
+                fileName: `${fileNameWithoutExt}.pdf`,
+            };
+        }
+
+        // Create a temporary VBScript for conversion
+        const vbsPath = path.join(this.uploadPath, `convert-${Date.now()}.vbs`);
+        const vbsScript = `
+Set objWord = CreateObject("Word.Application")
+objWord.Visible = False
+Set objDoc = objWord.Documents.Open("${inputPath.replace(/\\/g, '\\\\')}")
+objDoc.SaveAs "${outputPath.replace(/\\/g, '\\\\')}", 17
+objDoc.Close
+objWord.Quit
+Set objDoc = Nothing
+Set objWord = Nothing
+        `;
+
+        try {
+            await writeFile(vbsPath, vbsScript);
+            
+            // Run VBScript using cscript
+            await execAsync(`cscript.exe //NoLogo "${vbsPath}"`);
+            
+            if (!fs.existsSync(outputPath)) {
+                throw new Error('PDF was not created by VBScript');
+            }
+
+            const buffer = await readFile(outputPath);
+            
+            // Cleanup VBScript
+            await unlink(vbsPath).catch(() => {});
+
+            return {
+                buffer,
+                fileName: `${fileNameWithoutExt}.pdf`,
+            };
+        } catch (error) {
+            console.error('Word to PDF conversion failed via VBS:', error);
+            // Cleanup VBScript on error
+            if (fs.existsSync(vbsPath)) {
+                await unlink(vbsPath).catch(() => {});
+            }
+            throw new Error('Failed to convert document for preview');
+        }
     }
 
     private async logAction(action: AuditAction, userId: string, documentId: string, details: string) {

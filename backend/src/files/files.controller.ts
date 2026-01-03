@@ -59,9 +59,26 @@ export class FilesController {
     ) {
         const { buffer, fileName, mimeType } = await this.filesService.downloadFile(versionId, req.user.userId);
 
+        // If it's a Word document, convert it to PDF for preview
+        if (mimeType.includes('wordprocessingml') || mimeType.includes('msword') || fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
+            try {
+                const { buffer: pdfBuffer, fileName: pdfFileName } = await this.filesService.convertToPdf(versionId);
+                res.set({
+                    'Content-Type': 'application/pdf',
+                    'Content-Disposition': `inline; filename="${pdfFileName}"`,
+                    'Content-Length': pdfBuffer.length,
+                });
+                return res.send(pdfBuffer);
+            } catch (error) {
+                console.error('Conversion failed, falling back to original file:', error);
+                // Fallback to original file if conversion fails
+            }
+        }
+
         res.set({
             'Content-Type': mimeType,
             'Content-Disposition': `inline; filename="${fileName}"`,
+            'Content-Length': buffer.length,
         });
 
         res.send(buffer);
