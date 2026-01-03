@@ -9,7 +9,7 @@ interface EditDocumentModalProps {
   document: {
     id: string;
     title: string;
-    documentNumber?: string;
+    documentNumber?: string | null;
     description: string;
     type: string;
     departments: string[];

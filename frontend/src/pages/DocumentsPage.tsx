@@ -12,7 +12,9 @@ import {
   AlertCircle,
   Edit,
   FileSpreadsheet,
-  Trash2
+  Trash2,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import api from '../lib/api';
 import { format } from 'date-fns';
@@ -20,6 +22,7 @@ import { useAuthStore } from '../stores/authStore';
 
 interface Document {
   id: string;
+  documentNumber: string | null;
   title: string;
   description: string;
   type: string;
@@ -56,6 +59,7 @@ export default function DocumentsPage() {
   const [isExcelEditorOpen, setIsExcelEditorOpen] = useState(false);
   const [excelDocument, setExcelDocument] = useState<Document | null>(null);
   const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Document; direction: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
     fetchDocuments();
@@ -112,10 +116,40 @@ export default function DocumentsPage() {
 
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          doc.description.toLowerCase().includes(searchTerm.toLowerCase());
+                          doc.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (doc.documentNumber && doc.documentNumber.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
     return matchesSearch && matchesStatus;
+  }).sort((a, b) => {
+    if (!sortConfig) return 0;
+    
+    const { key, direction } = sortConfig;
+    
+    // Handle special cases or nested properties if needed
+    // For now assuming direct properties on Document interface
+    let aValue = a[key];
+    let bValue = b[key];
+
+    // Handle null/undefined values
+    if (aValue === null || aValue === undefined) aValue = '';
+    if (bValue === null || bValue === undefined) bValue = '';
+
+    if (aValue < bValue) {
+      return direction === 'asc' ? -1 : 1;
+    }
+    if (aValue > bValue) {
+      return direction === 'asc' ? 1 : -1;
+    }
+    return 0;
   });
+
+  const handleSort = (key: keyof Document) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const handleDownload = async (doc: Document) => {
     if (!doc.currentVersionId) {
@@ -241,11 +275,72 @@ export default function DocumentsPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4">Document Name</th>
-                <th className="px-6 py-4">Type</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Version</th>
-                <th className="px-6 py-4">Last Updated</th>
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('documentNumber')}
+                >
+                  <div className="flex items-center gap-1">
+                    Document No
+                    {sortConfig?.key === 'documentNumber' && (
+                      sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('title')}
+                >
+                  <div className="flex items-center gap-1">
+                    Document Name
+                    {sortConfig?.key === 'title' && (
+                      sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('type')}
+                >
+                  <div className="flex items-center gap-1">
+                    Type
+                    {sortConfig?.key === 'type' && (
+                      sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('status')}
+                >
+                  <div className="flex items-center gap-1">
+                    Status
+                    {sortConfig?.key === 'status' && (
+                      sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('version')}
+                >
+                  <div className="flex items-center gap-1">
+                    Version
+                    {sortConfig?.key === 'version' && (
+                      sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors"
+                  onClick={() => handleSort('updatedAt')}
+                >
+                  <div className="flex items-center gap-1">
+                    Last Updated
+                    {sortConfig?.key === 'updatedAt' && (
+                      sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -274,6 +369,9 @@ export default function DocumentsPage() {
               ) : (
                 filteredDocuments.map((doc) => (
                   <tr key={doc.id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-6 py-4 text-slate-600 font-mono text-xs">
+                      {doc.documentNumber || '-'}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-start gap-3">
                         <div className="p-2 bg-blue-50 text-blue-600 rounded-lg mt-0.5">
