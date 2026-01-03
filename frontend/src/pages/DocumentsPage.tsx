@@ -60,10 +60,22 @@ export default function DocumentsPage() {
   const [excelDocument, setExcelDocument] = useState<Document | null>(null);
   const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Document; direction: 'asc' | 'desc' } | null>(null);
+  const [documentTypes, setDocumentTypes] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState('all');
 
   useEffect(() => {
     fetchDocuments();
+    fetchSettings();
   }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await api.get('/settings/document_types');
+      setDocumentTypes(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch document types:', error);
+    }
+  };
 
   const fetchDocuments = async () => {
     try {
@@ -119,7 +131,8 @@ export default function DocumentsPage() {
                           doc.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (doc.documentNumber && doc.documentNumber.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'all' || doc.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesType = typeFilter === 'all' || doc.type === typeFilter;
+    return matchesSearch && matchesStatus && matchesType;
   }).sort((a, b) => {
     if (!sortConfig) return 0;
     
@@ -257,6 +270,17 @@ export default function DocumentsPage() {
           
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Filter className="w-4 h-4 text-slate-500" />
+            <select 
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 capitalize"
+            >
+              <option value="all">All Types</option>
+              {documentTypes.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+            <div className="w-px h-6 bg-slate-200 mx-1"></div>
             <select 
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
