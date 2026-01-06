@@ -56,7 +56,7 @@ export default function AuditPlanPage() {
       }
   };
 
-  const years = [currentYear, currentYear + 1, currentYear + 2];
+  const years = [currentYear -1, currentYear, currentYear + 1, currentYear + 2];
   const months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
