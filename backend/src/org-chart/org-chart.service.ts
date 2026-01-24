@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not, IsNull } from 'typeorm';
 import { OrgNode } from '../entities/org-node.entity';
 import { AuditLog, AuditAction } from '../entities/audit-log.entity';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +14,14 @@ export class OrgChartService {
     private auditRepository: Repository<AuditLog>,
   ) {}
 
-  findAll() {
+  findAll(hasJobRole: boolean = false) {
+    if (hasJobRole) {
+        return this.orgNodeRepository.find({
+            where: {
+                jobRoleId: Not(IsNull())
+            }
+        });
+    }
     return this.orgNodeRepository.find();
   }
 

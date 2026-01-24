@@ -76,7 +76,7 @@ export default function EmployeeSkillMatrix() {
 
     const loadUsers = async () => { 
         try {
-            const res = await api.get('/org-chart'); 
+            const res = await api.get('/org-chart?hasJobRole=true'); 
             // Map OrgNode to User interface expected by this component
             setUsers(res.data.map((node: any) => ({
                 id: node.id,

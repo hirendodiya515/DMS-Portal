@@ -16,6 +16,7 @@ import {
   Network,
   GitBranch,
   GraduationCap,
+  Wrench,
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 
@@ -64,6 +65,7 @@ export default function Sidebar() {
         { name: "NC Tracking", href: "/internal-audit/nc-tracking" },
       ],
     },
+    { name: "Calibration & Equipment", href: "/calibration-equipment", icon: Wrench },
     { name: "Reports", href: "/reports", icon: BarChart3 },
     { name: "Audit Logs", href: "/audit-logs", icon: FileStack },
     // Only show Settings (which includes Users) to Admin

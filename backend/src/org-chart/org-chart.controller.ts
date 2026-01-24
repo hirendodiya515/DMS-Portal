@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Put,
+  Param,
+  Delete,
+  UseGuards,
+  Request,
+  Query,
+} from '@nestjs/common';
 import { OrgChartService } from './org-chart.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -11,8 +22,8 @@ export class OrgChartController {
   constructor(private readonly orgChartService: OrgChartService) {}
 
   @Get()
-  findAll() {
-    return this.orgChartService.findAll();
+  findAll(@Query('hasJobRole') hasJobRole?: string) {
+    return this.orgChartService.findAll(hasJobRole === 'true');
   }
 
   @Post()
@@ -29,7 +40,11 @@ export class OrgChartController {
 
   @Put(':id')
   @Roles(UserRole.ADMIN)
-  update(@Param('id') id: string, @Body() updateOrgNodeDto: any, @Request() req) {
+  update(
+    @Param('id') id: string,
+    @Body() updateOrgNodeDto: any,
+    @Request() req,
+  ) {
     return this.orgChartService.update(id, updateOrgNodeDto, req.user?.userId);
   }
 

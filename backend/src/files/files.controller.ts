@@ -4,6 +4,7 @@ import type { Response } from 'express';
 import { FilesService } from './files.service';
 import { DocumentsService } from '../documents/documents.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Public } from '../auth/public.decorator';
 
 @Controller('files')
 @UseGuards(JwtAuthGuard)
@@ -32,6 +33,36 @@ export class FilesController {
         await this.documentsService.createVersion(body.documentId, version);
 
         return version;
+    }
+
+    @Post('upload-generic')
+    @UseInterceptors(FileInterceptor('file'))
+    async uploadGenericFile(
+        @UploadedFile() file: Express.Multer.File,
+    ) {
+        const path = await this.filesService.storeFile(file);
+        return { path };
+    }
+
+    @Public()
+    @Get('uploads/:filename')
+    async serveFile(
+        @Param('filename') filename: string,
+        @Res() res: Response,
+    ) {
+        try {
+            const filePath = `uploads/${filename}`;
+            const { stream, mimeType, fileName } = await this.filesService.getFileStream(filePath);
+
+            res.set({
+                'Content-Type': mimeType,
+                'Content-Disposition': `inline; filename="${fileName}"`,
+            });
+
+            stream.pipe(res);
+        } catch (error) {
+            res.status(404).send('File not found');
+        }
     }
 
     @Get(':versionId/download')

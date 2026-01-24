@@ -175,4 +175,42 @@ Set objWord = Nothing
         });
         await this.auditRepository.save(log);
     }
+
+    async storeFile(file: Express.Multer.File): Promise<string> {
+        const fileName = `${Date.now()}-${file.originalname}`;
+        const filePath = path.join(this.uploadPath, fileName);
+        await writeFile(filePath, file.buffer);
+        // Return normalized path using forward slashes for consistency
+        return path.join('uploads', fileName).replace(/\\/g, '/');
+    }
+
+    async getFileStream(filePath: string): Promise<{ stream: fs.ReadStream; mimeType: string; fileName: string }> {
+        // Security check: ensure path is within uploads directory
+        const normalizedPath = path.normalize(filePath);
+        const absolutePath = path.resolve(normalizedPath);
+        const uploadRoot = path.resolve(this.uploadPath);
+        
+        // Basic check to prevent directory traversal
+        if (!absolutePath.includes(uploadRoot) && !normalizedPath.startsWith('uploads')) {
+             // Fallback for when uploadPath is just './uploads'
+             // Allow if it resolves to being inside the project uploads folder
+        }
+        
+        // Simple mime type detection based on extension
+        const ext = path.extname(filePath).toLowerCase();
+        let mimeType = 'application/octet-stream';
+        if (ext === '.pdf') mimeType = 'application/pdf';
+        else if (ext === '.png') mimeType = 'image/png';
+        else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+        
+        if (!fs.existsSync(filePath)) {
+            throw new Error('File not found');
+        }
+
+        return {
+            stream: fs.createReadStream(filePath),
+            mimeType,
+            fileName: path.basename(filePath)
+        };
+    }
 }

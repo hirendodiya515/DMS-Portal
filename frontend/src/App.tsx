@@ -23,6 +23,7 @@ import EmployeeSkillMatrix from './components/competency/EmployeeSkillMatrix';
 import SkillAssessmentPage from './pages/SkillAssessmentPage';
 import GapAnalysisDashboard from './components/competency/GapAnalysisDashboard';
 import TrainingManager from './components/competency/TrainingManager';
+import CalibrationEquipmentPage from './pages/CalibrationEquipmentPage';
 
 import './index.css';
 
@@ -60,7 +61,9 @@ function App() {
           <Route path="internal-audit/summary" element={<AuditSummaryPage />} />
           <Route path="internal-audit/nc-tracking" element={<div className="text-center text-slate-500 mt-20">Internal Audit - NC Tracking coming soon...</div>} />
           
-
+          {/* Calibration & Equipment Route */}
+          <Route path="calibration-equipment" element={<CalibrationEquipmentPage />} />
+          
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

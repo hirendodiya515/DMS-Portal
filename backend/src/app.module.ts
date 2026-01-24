@@ -41,6 +41,9 @@ import { CompetencyRequirement } from './entities/competency-requirement.entity'
 import { EmployeeSkill } from './entities/employee-skill.entity';
 import { TrainingProgram } from './entities/training-program.entity';
 import { TrainingPlan } from './entities/training-plan.entity';
+import { Equipment } from './entities/equipment.entity';
+import { CalibrationHistory } from './entities/calibration-history.entity';
+import { EquipmentModule } from './equipment/equipment.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -62,7 +65,8 @@ import { ScheduleModule } from '@nestjs/schedule';
         entities: [
           User, Document, DocumentVersion, AuditLog, Notification, SystemSetting, Objective, ObjectiveMeasurement, 
           Risk, AuditPlan, AuditParticipant, AuditSchedule, AuditExecution, OrgNode, Flowchart,
-          Competency, JobRole, CompetencyRequirement, EmployeeSkill, TrainingProgram, TrainingPlan
+          Competency, JobRole, CompetencyRequirement, EmployeeSkill, TrainingProgram, TrainingPlan,
+          Equipment, CalibrationHistory
         ],
         synchronize: true, // Set to false in production
       }),
@@ -85,6 +89,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuditLogsModule,
     OrgChartModule,
     FlowchartModule,
+    EquipmentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
