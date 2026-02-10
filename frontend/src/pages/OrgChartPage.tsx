@@ -323,11 +323,21 @@ function AdminNodeModal({ mode, node, nodes, onClose, onSuccess }: any) {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Sanitize data: convert empty strings to null for optional fields
+        const sanitizedData = {
+            ...formData,
+            department: formData.department || null,
+            jobRoleId: formData.jobRoleId || null,
+            parentId: formData.parentId || null,
+            photoUrl: formData.photoUrl || null
+        };
+
         try {
             if (mode === 'add') {
-                 await api.post('/org-chart', formData);
+                 await api.post('/org-chart', sanitizedData);
             } else {
-                 await api.put(`/org-chart/${node.id}`, formData);
+                 await api.put(`/org-chart/${node.id}`, sanitizedData);
             }
             onSuccess();
         } catch (err) { 
