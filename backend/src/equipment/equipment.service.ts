@@ -222,14 +222,19 @@ export class EquipmentService {
   }
 
   async deleteCalibrationHistory(historyId: string): Promise<void> {
+    const history = await this.getCalibrationHistoryById(historyId);
+    await this.calibrationHistoryRepository.remove(history);
+  }
+
+  async getCalibrationHistoryById(id: string): Promise<CalibrationHistory> {
     const history = await this.calibrationHistoryRepository.findOne({
-      where: { id: historyId },
+      where: { id },
     });
 
     if (!history) {
-      throw new NotFoundException(`Calibration history with ID ${historyId} not found`);
+      throw new NotFoundException(`Calibration history with ID ${id} not found`);
     }
 
-    await this.calibrationHistoryRepository.remove(history);
+    return history;
   }
 }

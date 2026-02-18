@@ -20,16 +20,29 @@ import { CreateEquipmentDto, UpdateEquipmentDto, CreateCalibrationHistoryDto } f
 export class EquipmentController {
   constructor(private readonly equipmentService: EquipmentService) {}
 
-  // Helper to check if user is admin or creator
-  private checkAdminOrCreator(user: any) {
-    if (user.role !== 'admin' && user.role !== 'creator') {
-      throw new ForbiddenException('Only admin and creator roles can perform this action');
+  // Helper to check department-based access
+  private async checkDepartmentAccess(user: any, departmentOrId: string, action: 'create' | 'modify') {
+    if (user.role === 'admin') return;
+
+    if (user.role !== 'creator' && user.role !== 'reviewer') {
+      throw new ForbiddenException('Only admin, creator, and reviewer roles can perform this action');
+    }
+
+    if (action === 'create') {
+      if (user.department !== departmentOrId) {
+        throw new ForbiddenException(`You can only create equipment for your own department (${user.department})`);
+      }
+    } else {
+      const equipment = await this.equipmentService.findOne(departmentOrId);
+      if (user.department !== equipment.department) {
+        throw new ForbiddenException(`You can only modify equipment belonging to your department (${user.department})`);
+      }
     }
   }
 
   @Post()
-  create(@Body() createDto: CreateEquipmentDto, @Request() req) {
-    this.checkAdminOrCreator(req.user);
+  async create(@Body() createDto: CreateEquipmentDto, @Request() req) {
+    await this.checkDepartmentAccess(req.user, createDto.department, 'create');
     return this.equipmentService.create(createDto, req.user.userId);
   }
 
@@ -54,24 +67,25 @@ export class EquipmentController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateDto: UpdateEquipmentDto, @Request() req) {
-    this.checkAdminOrCreator(req.user);
+  async update(@Param('id') id: string, @Body() updateDto: UpdateEquipmentDto, @Request() req) {
+    await this.checkDepartmentAccess(req.user, id, 'modify');
     return this.equipmentService.update(id, updateDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Request() req) {
-    this.checkAdminOrCreator(req.user);
+  async remove(@Param('id') id: string, @Request() req) {
+    await this.checkDepartmentAccess(req.user, id, 'modify');
     return this.equipmentService.remove(id);
   }
 
   // Calibration History endpoints
   @Post(':id/calibration-history')
-  addCalibrationHistory(
+  async addCalibrationHistory(
     @Param('id') id: string,
     @Body() createDto: CreateCalibrationHistoryDto,
     @Request() req,
   ) {
+    await this.checkDepartmentAccess(req.user, id, 'modify');
     return this.equipmentService.addCalibrationHistory(id, createDto, req.user.userId);
   }
 
@@ -81,8 +95,14 @@ export class EquipmentController {
   }
 
   @Delete('calibration-history/:historyId')
-  deleteCalibrationHistory(@Param('historyId') historyId: string, @Request() req) {
-    this.checkAdminOrCreator(req.user);
+  async deleteCalibrationHistory(@Param('historyId') historyId: string, @Request() req) {
+    if (req.user.role !== 'admin') {
+      const history = await this.equipmentService.getCalibrationHistoryById(historyId);
+      const equipment = await this.equipmentService.findOne(history.equipmentId);
+      if (req.user.department !== equipment.department) {
+        throw new ForbiddenException(`You can only delete calibration history for equipment in your department (${req.user.department})`);
+      }
+    }
     return this.equipmentService.deleteCalibrationHistory(historyId);
   }
 }

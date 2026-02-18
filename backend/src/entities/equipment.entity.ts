@@ -87,6 +87,12 @@ export class Equipment {
   @OneToMany(() => CalibrationHistory, history => history.equipment)
   calibrationHistory: CalibrationHistory[];
 
+  @Column({ type: 'timestamp', nullable: true })
+  lastAlertSentAt: Date;
+
+  @Column({ nullable: true })
+  lastAlertStatus: string; // ok, upcoming, due
+
   @CreateDateColumn()
   createdAt: Date;
 

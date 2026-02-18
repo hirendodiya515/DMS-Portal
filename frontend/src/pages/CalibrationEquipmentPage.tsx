@@ -62,7 +62,18 @@ export default function CalibrationEquipmentPage() {
   const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
 
-  const canModify = user?.role === 'admin' || user?.role === 'creator';
+  const checkAccess = (equipmentDepartment?: string) => {
+    if (user?.role === 'admin') return true;
+    if (user?.role !== 'creator' && user?.role !== 'reviewer') return false;
+    
+    // If equipmentDepartment is provided, check if it matches user's department
+    if (equipmentDepartment) {
+      return user?.department === equipmentDepartment;
+    }
+    
+    // For general actions like "Add Equipment", being a creator/reviewer is enough
+    return true;
+  };
 
   useEffect(() => {
     fetchDashboard();
@@ -150,7 +161,7 @@ export default function CalibrationEquipmentPage() {
             </h1>
             <p className="text-slate-500 text-sm mt-1">Manage equipment and track calibration schedules</p>
           </div>
-          {canModify && (
+          {checkAccess() && (
             <button
               onClick={() => {
                 setSelectedEquipment(null);
@@ -347,7 +358,7 @@ export default function CalibrationEquipmentPage() {
             <p className="text-slate-500 text-sm mt-1">{equipmentList.length} total equipment</p>
           </div>
         </div>
-        {canModify && (
+        {checkAccess(selectedDepartment || undefined) && (
           <button
             onClick={() => {
               setSelectedEquipment(null);
@@ -437,7 +448,7 @@ export default function CalibrationEquipmentPage() {
                         >
                           <History className="w-4 h-4" />
                         </button>
-                        {canModify && (
+                        {checkAccess(equipment.department) && (
                           <>
                             <button
                               onClick={() => {

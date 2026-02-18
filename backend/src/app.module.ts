@@ -45,6 +45,8 @@ import { Equipment } from './entities/equipment.entity';
 import { CalibrationHistory } from './entities/calibration-history.entity';
 import { EquipmentModule } from './equipment/equipment.module';
 import { SearchModule } from './search/search.module';
+import { MailModule } from './mail/mail.module';
+import { CalibrationAlertModule } from './calibration-alert/calibration-alert.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -92,6 +94,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     FlowchartModule,
     EquipmentModule,
     SearchModule,
+    MailModule,
+    CalibrationAlertModule,
   ],
   controllers: [AppController],
   providers: [AppService],
