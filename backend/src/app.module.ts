@@ -44,6 +44,7 @@ import { TrainingPlan } from './entities/training-plan.entity';
 import { Equipment } from './entities/equipment.entity';
 import { CalibrationHistory } from './entities/calibration-history.entity';
 import { EquipmentModule } from './equipment/equipment.module';
+import { SearchModule } from './search/search.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -90,6 +91,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     OrgChartModule,
     FlowchartModule,
     EquipmentModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],

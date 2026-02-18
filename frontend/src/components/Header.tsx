@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Bell, Search, LogOut, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Bell, Search, LogOut, Check, FileText, Settings, Target, AlertTriangle, Monitor, ExternalLink } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
@@ -12,12 +12,27 @@ interface Notification {
   documentId?: string;
 }
 
+interface SearchResult {
+  id: string;
+  title: string;
+  category: string;
+  route: string;
+  subtitle?: string;
+}
+
 export default function Header() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -27,6 +42,62 @@ export default function Header() {
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery.trim().length >= 2) {
+        handleSearch(searchQuery);
+      } else {
+        setSearchResults([]);
+        setShowSearchSuggestions(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Close search suggestions on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [searchRef]);
+
+  const handleSearch = async (query: string) => {
+    setIsSearching(true);
+    try {
+      const response = await api.get(`/search?q=${encodeURIComponent(query)}`);
+      setSearchResults(response.data);
+      setShowSearchSuggestions(true);
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSuggestionClick = (route: string) => {
+    navigate(route);
+    setSearchQuery('');
+    setShowSearchSuggestions(false);
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'Document': return <FileText className="w-4 h-4 text-blue-500" />;
+      case 'Equipment': return <Settings className="w-4 h-4 text-orange-500" />;
+      case 'Objective': return <Target className="w-4 h-4 text-green-500" />;
+      case 'Risk': return <AlertTriangle className="w-4 h-4 text-red-500" />;
+      case 'Setting': return <Settings className="w-4 h-4 text-slate-500" />;
+      case 'Page': return <Monitor className="w-4 h-4 text-purple-500" />;
+      default: return <ExternalLink className="w-4 h-4 text-slate-400" />;
+    }
+  };
 
   const fetchNotifications = async () => {
     try {
@@ -73,13 +144,52 @@ export default function Header() {
                 DMS - BRL
             </h1>
         </div>
-        <div className="relative w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <div className="relative w-96" ref={searchRef}>
+          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${isSearching ? 'text-blue-500 animate-pulse' : 'text-slate-400'}`} />
           <input 
             type="text" 
-            placeholder="Search documents..." 
+            placeholder="Search documents, screens, risks..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => searchQuery.length >= 2 && setShowSearchSuggestions(true)}
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
           />
+
+          {showSearchSuggestions && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="max-h-[min(80vh,400px)] overflow-y-auto">
+                {searchResults.map((result, index) => (
+                  <button
+                    key={`${result.id}-${index}`}
+                    onClick={() => handleSuggestionClick(result.route)}
+                    className="w-full px-4 py-3 flex items-start gap-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-0"
+                  >
+                    <div className="mt-0.5 p-1.5 bg-slate-100 rounded-lg">
+                      {getCategoryIcon(result.category)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-slate-800 truncate">{result.title}</p>
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                          {result.category}
+                        </span>
+                      </div>
+                      {result.subtitle && (
+                        <p className="text-xs text-slate-500 truncate mt-0.5">{result.subtitle}</p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {showSearchSuggestions && searchQuery.length >= 2 && searchResults.length === 0 && !isSearching && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 z-50 p-6 text-center animate-in fade-in slide-in-from-top-2 duration-200">
+              <Search className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">No results found for "{searchQuery}"</p>
+            </div>
+          )}
         </div>
       </div>
 
