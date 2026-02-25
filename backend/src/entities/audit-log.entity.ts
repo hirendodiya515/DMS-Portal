@@ -3,6 +3,9 @@ import { User } from './user.entity';
 import { Document } from './document.entity';
 import { Objective } from './objective.entity';
 import { Risk } from './risk.entity';
+import { HiraRisk } from './hira-risk.entity';
+import { EaaRisk } from './eaa-risk.entity';
+import { QraRisk } from './qra-risk.entity';
 
 export enum AuditAction {
     CREATE = 'create',
@@ -58,6 +61,27 @@ export class AuditLog {
 
     @Column({ nullable: true })
     riskId: string;
+
+    @ManyToOne(() => HiraRisk, (risk) => risk.auditLogs, { nullable: true })
+    @JoinColumn({ name: 'hiraRiskId' })
+    hiraRisk: HiraRisk;
+
+    @Column({ nullable: true })
+    hiraRiskId: string;
+
+    @ManyToOne(() => EaaRisk, (risk) => risk.auditLogs, { nullable: true })
+    @JoinColumn({ name: 'eaaRiskId' })
+    eaaRisk: EaaRisk;
+
+    @Column({ nullable: true })
+    eaaRiskId: string;
+
+    @ManyToOne(() => QraRisk, (risk) => risk.auditLogs, { nullable: true })
+    @JoinColumn({ name: 'qraRiskId' })
+    qraRisk: QraRisk;
+
+    @Column({ nullable: true })
+    qraRiskId: string;
 
     @Column({ type: 'text', nullable: true })
     details: string;

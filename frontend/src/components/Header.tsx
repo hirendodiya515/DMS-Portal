@@ -3,6 +3,7 @@ import { Bell, Search, LogOut, Check, FileText, Settings, Target, AlertTriangle,
 import { useAuthStore } from '../stores/authStore';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import ProfileModal from './ProfileModal';
 
 interface Notification {
   id: string;
@@ -25,6 +26,7 @@ export default function Header() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   // Search state
@@ -266,9 +268,13 @@ export default function Header() {
             <p className="text-sm font-medium text-slate-800">{user?.firstName} {user?.lastName}</p>
             <p className="text-xs text-slate-500 capitalize">{user?.role?.replace('_', ' ')}</p>
           </div>
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-medium shadow-lg shadow-blue-500/20">
+          <button 
+            onClick={() => setShowProfileModal(true)}
+            className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-medium shadow-lg shadow-blue-500/20 hover:scale-105 transition-transform active:scale-95"
+            title="View Profile"
+          >
             {user?.firstName?.[0]}{user?.lastName?.[0]}
-          </div>
+          </button>
           <button 
             onClick={handleLogout}
             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition ml-2"
@@ -278,6 +284,10 @@ export default function Header() {
           </button>
         </div>
       </div>
+      <ProfileModal 
+        isOpen={showProfileModal} 
+        onClose={() => setShowProfileModal(false)} 
+      />
     </header>
   );
 }

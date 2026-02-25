@@ -12,42 +12,27 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Document } from './document.entity';
+import { AuditLog } from './audit-log.entity';
 import { RiskAssessmentItem } from './risk-assessment-item.entity';
-import { RiskType, RiskStatus, RiskLevel } from './risk.enums';
+import { RiskStatus, RiskLevel } from './risk.enums';
 
 
-@Entity('risks')
-export class Risk {
+@Entity('eaa_risks')
+export class EaaRisk {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ unique: true })
-  riskNumber: string; // R-001, R-002, etc.
-
-  @Column({
-    type: 'enum',
-    enum: RiskType,
-    default: RiskType.QRA,
-  })
-  type: RiskType;
+  riskNumber: string; // E-001, E-002, etc.
 
   @Column()
-  title: string;
-
-  @Column('text', { nullable: true })
-  description: string;
+  process: string;
 
   @Column({ nullable: true })
   department: string;
 
   @Column({ nullable: true })
-  source: string; // Where/how risk was identified
-
-  @Column({ nullable: true })
-  interestedParties: string; // Who is affected
-
-  @Column({ nullable: true })
-  area: string; // Area/work station or Process / Area
+  area: string;
 
   @Column({
     type: 'enum',
@@ -56,7 +41,7 @@ export class Risk {
   })
   maxRiskLevel: RiskLevel;
 
-  @OneToMany(() => RiskAssessmentItem, (item) => item.risk, { cascade: true, eager: true })
+  @OneToMany(() => RiskAssessmentItem, (item) => item.eaaRisk, { cascade: true, eager: true })
   items: RiskAssessmentItem[];
 
   // Workflow
@@ -82,19 +67,21 @@ export class Risk {
   reviewerId: string;
 
   @Column({ type: 'date', nullable: true })
-  reviewDate: Date; // Next review date
+  reviewDate: Date;
 
   @Column('text', { nullable: true })
   reviewComments: string;
 
-  // Related Documents
   @ManyToMany(() => Document)
   @JoinTable({
-    name: 'risk_documents',
+    name: 'eaa_risk_documents',
     joinColumn: { name: 'riskId', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'documentId', referencedColumnName: 'id' },
   })
   relatedDocuments: Document[];
+
+  @OneToMany(() => AuditLog, (log) => log.eaaRisk)
+  auditLogs: AuditLog[];
 
   @CreateDateColumn()
   createdAt: Date;

@@ -8,6 +8,9 @@ import ReportsPage from './pages/ReportsPage';
 import ObjectivesPage from './pages/ObjectivesPage';
 import RisksPage from './pages/RisksPage';
 import AuditLogsPage from './pages/AuditLogsPage';
+import HiraPage from './pages/HiraPage';
+import EaaPage from './pages/EaaPage';
+import QraPage from './pages/QraPage';
 import Layout from './components/Layout';
 import DepartmentPage from './pages/DepartmentPage';
 import AuditPlanPage from './pages/internal-audit/AuditPlanPage';
@@ -39,6 +42,9 @@ function App() {
           <Route path="org-chart" element={<OrgChartPage />} />
           <Route path="objectives" element={<ObjectivesPage />} />
           <Route path="risks" element={<RisksPage />} />
+          <Route path="risks/hira" element={<HiraPage />} />
+          <Route path="risks/eaa" element={<EaaPage />} />
+          <Route path="risks/qra" element={<QraPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="department" element={<DepartmentPage />} />

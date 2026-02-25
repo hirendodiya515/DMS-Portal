@@ -15,9 +15,23 @@ export class EquipmentService {
   ) {}
 
   async create(createDto: CreateEquipmentDto, userId: string): Promise<Equipment> {
-    // Generate equipment number
-    const count = await this.equipmentRepository.count();
-    const equipmentNumber = `EQ-${String(count + 1).padStart(3, '0')}`;
+    // Generate equipment number based on the highest existing number to avoid reuse after deletions
+    const lastEquipment = await this.equipmentRepository
+      .createQueryBuilder('equipment')
+      .select('equipment.equipmentNumber', 'equipmentNumber')
+      .orderBy('equipment.equipmentNumber', 'DESC')
+      .limit(1)
+      .getRawOne();
+
+    let nextNumber = 1;
+    if (lastEquipment?.equipmentNumber) {
+      const match = lastEquipment.equipmentNumber.match(/^EQ-(\d+)$/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    const equipmentNumber = `EQ-${String(nextNumber).padStart(3, '0')}`;
 
     const equipment = this.equipmentRepository.create({
       ...createDto,

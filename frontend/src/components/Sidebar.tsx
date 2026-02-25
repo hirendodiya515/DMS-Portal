@@ -40,7 +40,15 @@ export default function Sidebar() {
     { name: "Flowchart", href: "/flowchart", icon: GitBranch },
     { name: "Department", href: "/department", icon: Briefcase },
     { name: "Objectives", href: "/objectives", icon: Target },
-    { name: "Risks", href: "/risks", icon: Shield },
+    {
+      name: "Risks",
+      icon: Shield,
+      children: [
+        { name: "HIRA (ISO 45001)", href: "/risks/hira" },
+        { name: "EAA (ISO 14001)", href: "/risks/eaa" },
+        { name: "QRA (ISO 9001)", href: "/risks/qra" },
+      ],
+    },
     {
       name: "Competency & Training",
       icon: GraduationCap,

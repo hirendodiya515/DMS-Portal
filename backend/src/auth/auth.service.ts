@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -96,5 +96,25 @@ export class AuthService {
     const savedUser = await this.userRepository.save(user);
     const { password, ...result } = savedUser;
     return result;
+  }
+
+  async changePassword(userId: string, oldPassword: string, newPassword: string) {
+    if (!oldPassword || !newPassword) {
+      throw new BadRequestException('Old password and new password are required');
+    }
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      throw new UnauthorizedException('Incorrect old password');
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.save(user);
+
+    return { message: 'Password changed successfully' };
   }
 }

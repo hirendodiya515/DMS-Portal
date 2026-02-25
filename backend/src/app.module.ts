@@ -12,6 +12,10 @@ import { SystemSetting } from './entities/system-setting.entity';
 import { Objective } from './entities/objective.entity';
 import { ObjectiveMeasurement } from './entities/objective-measurement.entity';
 import { Risk } from './entities/risk.entity';
+import { RiskAssessmentItem } from './entities/risk-assessment-item.entity';
+import { HiraRisk } from './entities/hira-risk.entity';
+import { EaaRisk } from './entities/eaa-risk.entity';
+import { QraRisk } from './entities/qra-risk.entity';
 import { AuthModule } from './auth/auth.module';
 import { DocumentsModule } from './documents/documents.module';
 import { FilesModule } from './files/files.module';
@@ -47,6 +51,9 @@ import { EquipmentModule } from './equipment/equipment.module';
 import { SearchModule } from './search/search.module';
 import { MailModule } from './mail/mail.module';
 import { CalibrationAlertModule } from './calibration-alert/calibration-alert.module';
+import { HiraRisksModule } from './risks/hira/hira-risks.module';
+import { EaaRisksModule } from './risks/eaa/eaa-risks.module';
+import { QraRisksModule } from './risks/qra/qra-risks.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -67,7 +74,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         database: configService.get<string>('DB_DATABASE'),
         entities: [
           User, Document, DocumentVersion, AuditLog, Notification, SystemSetting, Objective, ObjectiveMeasurement, 
-          Risk, AuditPlan, AuditParticipant, AuditSchedule, AuditExecution, OrgNode, Flowchart,
+          Risk, RiskAssessmentItem, HiraRisk, EaaRisk, QraRisk, AuditPlan, AuditParticipant, AuditSchedule, AuditExecution, OrgNode, Flowchart,
           Competency, JobRole, CompetencyRequirement, EmployeeSkill, TrainingProgram, TrainingPlan,
           Equipment, CalibrationHistory
         ],
@@ -84,7 +91,6 @@ import { ScheduleModule } from '@nestjs/schedule';
     NotificationsModule,
     SettingsModule,
     ObjectivesModule,
-    RisksModule,
     AuditPlansModule,
     AuditParticipantsModule,
     AuditSchedulesModule,
@@ -96,6 +102,10 @@ import { ScheduleModule } from '@nestjs/schedule';
     SearchModule,
     MailModule,
     CalibrationAlertModule,
+    HiraRisksModule,
+    EaaRisksModule,
+    QraRisksModule,
+    RisksModule,
   ],
   controllers: [AppController],
   providers: [AppService],

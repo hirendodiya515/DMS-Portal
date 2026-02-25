@@ -12,42 +12,33 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Document } from './document.entity';
+import { AuditLog } from './audit-log.entity';
 import { RiskAssessmentItem } from './risk-assessment-item.entity';
-import { RiskType, RiskStatus, RiskLevel } from './risk.enums';
+import { RiskStatus, RiskLevel } from './risk.enums';
 
 
-@Entity('risks')
-export class Risk {
+@Entity('hira_risks')
+export class HiraRisk {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ unique: true })
-  riskNumber: string; // R-001, R-002, etc.
-
-  @Column({
-    type: 'enum',
-    enum: RiskType,
-    default: RiskType.QRA,
-  })
-  type: RiskType;
+  riskNumber: string; // H-001, H-002, etc.
 
   @Column()
-  title: string;
+  activity: string;
 
-  @Column('text', { nullable: true })
-  description: string;
+  @Column({ nullable: true })
+  task: string;
 
   @Column({ nullable: true })
   department: string;
 
   @Column({ nullable: true })
-  source: string; // Where/how risk was identified
+  location: string;
 
   @Column({ nullable: true })
-  interestedParties: string; // Who is affected
-
-  @Column({ nullable: true })
-  area: string; // Area/work station or Process / Area
+  identificationDate: Date;
 
   @Column({
     type: 'enum',
@@ -56,7 +47,7 @@ export class Risk {
   })
   maxRiskLevel: RiskLevel;
 
-  @OneToMany(() => RiskAssessmentItem, (item) => item.risk, { cascade: true, eager: true })
+  @OneToMany(() => RiskAssessmentItem, (item) => item.hiraRisk, { cascade: true, eager: true })
   items: RiskAssessmentItem[];
 
   // Workflow
@@ -82,19 +73,21 @@ export class Risk {
   reviewerId: string;
 
   @Column({ type: 'date', nullable: true })
-  reviewDate: Date; // Next review date
+  reviewDate: Date;
 
   @Column('text', { nullable: true })
   reviewComments: string;
 
-  // Related Documents
   @ManyToMany(() => Document)
   @JoinTable({
-    name: 'risk_documents',
+    name: 'hira_risk_documents',
     joinColumn: { name: 'riskId', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'documentId', referencedColumnName: 'id' },
   })
   relatedDocuments: Document[];
+
+  @OneToMany(() => AuditLog, (log) => log.hiraRisk)
+  auditLogs: AuditLog[];
 
   @CreateDateColumn()
   createdAt: Date;
