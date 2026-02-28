@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -31,6 +32,9 @@
     "@types/bcrypt": "^6.0.0",
     "@types/multer": "^2.0.0",
     "@types/passport-jwt": "^4.0.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/uuid": "^10.0.0",
+    "axios": "^1.13.5",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
@@ -42,9 +46,11 @@
     "pdf-lib": "^1.17.1",
     "pg": "^8.16.3",
     "puppeteer": "^24.33.0",
+    "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.28"
+    "typeorm": "^0.3.28",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

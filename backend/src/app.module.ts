@@ -54,6 +54,9 @@ import { CalibrationAlertModule } from './calibration-alert/calibration-alert.mo
 import { HiraRisksModule } from './risks/hira/hira-risks.module';
 import { EaaRisksModule } from './risks/eaa/eaa-risks.module';
 import { QraRisksModule } from './risks/qra/qra-risks.module';
+import { TrainingCalendar } from './entities/training-calendar.entity';
+import { TrainingAttendance } from './entities/training-attendance.entity';
+import { TrainingCalendarModule } from './training-calendar/training-calendar.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -76,7 +79,8 @@ import { ScheduleModule } from '@nestjs/schedule';
           User, Document, DocumentVersion, AuditLog, Notification, SystemSetting, Objective, ObjectiveMeasurement, 
           Risk, RiskAssessmentItem, HiraRisk, EaaRisk, QraRisk, AuditPlan, AuditParticipant, AuditSchedule, AuditExecution, OrgNode, Flowchart,
           Competency, JobRole, CompetencyRequirement, EmployeeSkill, TrainingProgram, TrainingPlan,
-          Equipment, CalibrationHistory
+          Equipment, CalibrationHistory,
+          TrainingCalendar, TrainingAttendance
         ],
         synchronize: true, // Set to false in production
       }),
@@ -106,6 +110,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     EaaRisksModule,
     QraRisksModule,
     RisksModule,
+    TrainingCalendarModule,
   ],
   controllers: [AppController],
   providers: [AppService],
