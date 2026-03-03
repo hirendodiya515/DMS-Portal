@@ -17,6 +17,9 @@ export class ObjectiveMeasurement {
   @Column('decimal', { precision: 10, scale: 2 })
   actualValue: number;
 
+  @Column({ type: 'jsonb', nullable: true })
+  subValues: { subTargetId: string; value: number }[];
+
   @Column({ type: 'date' })
   measurementDate: Date;
 

@@ -27,6 +27,7 @@ import SkillAssessmentPage from './pages/SkillAssessmentPage';
 import GapAnalysisDashboard from './components/competency/GapAnalysisDashboard';
 import TrainingManager from './components/competency/TrainingManager';
 import CalibrationEquipmentPage from './pages/CalibrationEquipmentPage';
+import AboutPage from './pages/AboutPage';
 
 import './index.css';
 
@@ -69,6 +70,8 @@ function App() {
           
           {/* Calibration & Equipment Route */}
           <Route path="calibration-equipment" element={<CalibrationEquipmentPage />} />
+          
+          <Route path="about" element={<AboutPage />} />
           
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

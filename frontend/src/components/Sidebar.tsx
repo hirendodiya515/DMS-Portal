@@ -17,6 +17,7 @@ import {
   GitBranch,
   GraduationCap,
   Wrench,
+  Info,
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 
@@ -76,6 +77,7 @@ export default function Sidebar() {
     { name: "Calibration & Equipment", href: "/calibration-equipment", icon: Wrench },
     { name: "Reports", href: "/reports", icon: BarChart3 },
     { name: "Audit Logs", href: "/audit-logs", icon: FileStack },
+    { name: "About", href: "/about", icon: Info },
     // Only show Settings (which includes Users) to Admin
     ...(user?.role === "admin"
       ? [{ name: "Settings", href: "/settings", icon: Settings }]

@@ -6,10 +6,11 @@ import { Objective } from '../entities/objective.entity';
 import { ObjectiveMeasurement } from '../entities/objective-measurement.entity';
 import { Document } from '../entities/document.entity';
 import { AuditLog } from '../entities/audit-log.entity';
+import { User } from '../entities/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Objective, ObjectiveMeasurement, Document, AuditLog]),
+    TypeOrmModule.forFeature([Objective, ObjectiveMeasurement, Document, AuditLog, User]),
   ],
   controllers: [ObjectivesController],
   providers: [ObjectivesService],

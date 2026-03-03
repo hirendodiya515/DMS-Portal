@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Objective, ObjectiveStatus } from '../entities/objective.entity';
 import { ObjectiveMeasurement } from '../entities/objective-measurement.entity';
 import { Document } from '../entities/document.entity';
+import { User, UserRole } from '../entities/user.entity';
 import { AuditLog, AuditAction } from '../entities/audit-log.entity';
 import {
   CreateObjectiveDto,
@@ -24,13 +25,28 @@ export class ObjectivesService {
     private documentRepository: Repository<Document>,
     @InjectRepository(AuditLog)
     private auditLogRepository: Repository<AuditLog>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {
     this.initializeCounter();
   }
 
   private async initializeCounter() {
-    const count = await this.objectiveRepository.count();
-    this.objectiveCounter = count;
+    const objectives = await this.objectiveRepository.find({
+      select: ['objectiveNumber'],
+    });
+    
+    let maxCounter = 0;
+    for (const obj of objectives) {
+      if (obj.objectiveNumber && obj.objectiveNumber.startsWith('OBJ-')) {
+        const numPart = obj.objectiveNumber.split('-')[1];
+        const num = parseInt(numPart, 10);
+        if (!isNaN(num) && num > maxCounter) {
+          maxCounter = num;
+        }
+      }
+    }
+    this.objectiveCounter = maxCounter;
   }
 
   private generateObjectiveNumber(): string {
@@ -41,12 +57,35 @@ export class ObjectivesService {
   // ================== OBJECTIVES ==================
 
   async create(createDto: CreateObjectiveDto, userId: string): Promise<Objective> {
+    // 1. Find Dept Head or Reviewer for the selected department
+    let assignedOwnerId = userId; // Fallback to creator
+    if (createDto.department) {
+      // Try finding department head first
+      let deptManager = await this.userRepository.findOne({
+        where: { department: createDto.department, role: UserRole.DEPT_HEAD, isActive: true },
+      });
+
+      // If no dept head, try finding a reviewer for that department
+      if (!deptManager) {
+        deptManager = await this.userRepository.findOne({
+          where: { department: createDto.department, role: UserRole.REVIEWER, isActive: true },
+        });
+      }
+
+      if (deptManager) {
+        assignedOwnerId = deptManager.id;
+      }
+    }
+
     const objective = this.objectiveRepository.create({
       ...createDto,
       objectiveNumber: this.generateObjectiveNumber(),
-      ownerId: userId,
+      ownerId: assignedOwnerId,
       status: ObjectiveStatus.ACTIVE,
       higherIsBetter: createDto.higherIsBetter ?? true,
+      hasSubTargets: createDto.hasSubTargets ?? false,
+      aggregationType: createDto.aggregationType || 'sum',
+      subTargets: createDto.subTargets || [],
     });
 
     const savedObjective = await this.objectiveRepository.save(objective);
@@ -140,6 +179,7 @@ export class ObjectivesService {
       ...createDto,
       objectiveId: objective.id,
       recordedById: userId,
+      subValues: createDto.subValues || [],
     });
 
     const savedMeasurement = await this.measurementRepository.save(measurement);

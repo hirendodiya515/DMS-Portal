@@ -3,7 +3,6 @@ import { CompetencyAPI } from '../lib/competency-api';
 import api from '../lib/api';
 import { 
     Search, 
-    Filter, 
     User, 
     ChevronRight, 
     Award, 
@@ -54,7 +53,6 @@ export default function SkillAssessmentPage() {
     
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
-    const [roleFilter, setRoleFilter] = useState('all');
 
     useEffect(() => {
         loadUsers();
@@ -62,7 +60,7 @@ export default function SkillAssessmentPage() {
 
     useEffect(() => {
         filterUsers();
-    }, [users, searchTerm, roleFilter]);
+    }, [users, searchTerm]);
 
     useEffect(() => {
         if (selectedUser && selectedUser.jobRoleId) {

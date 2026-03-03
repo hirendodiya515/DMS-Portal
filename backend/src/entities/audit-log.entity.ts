@@ -48,7 +48,7 @@ export class AuditLog {
     @Column({ nullable: true })
     documentId: string;
 
-    @ManyToOne(() => Objective, { nullable: true })
+    @ManyToOne(() => Objective, { nullable: true, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'objectiveId' })
     objective: Objective;
 

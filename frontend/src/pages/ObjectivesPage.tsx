@@ -1,32 +1,24 @@
 import { useEffect, useState } from 'react';
 import {
   Plus,
-  Search,
+  BarChart2,
+  List,
   Target,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  Trash2,
-  Edit,
+  Activity,
   X,
-  ChevronDown,
-  ChevronUp,
+  Trash2
 } from 'lucide-react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts';
 import api from '../lib/api';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { useAuthStore } from '../stores/authStore';
+import { v4 as uuidv4 } from 'uuid';
+
+// Import new components
+import { ObjectivesList } from './objectives/ObjectivesList';
+import { ObjectivesHighlights } from './objectives/ObjectivesHighlights';
+import { ObjectivesLogs } from './objectives/ObjectivesLogs';
+import { ObjectiveDetailView } from './objectives/ObjectiveDetailView';
+import { ObjectivesTracking } from './objectives/ObjectivesTracking';
 
 interface Measurement {
   id: string;
@@ -47,12 +39,14 @@ interface Objective {
   frequency: string;
   target: number;
   higherIsBetter: boolean;
-  owner: { firstName: string; lastName: string };
   measurements: Measurement[];
   latestValue?: number | null;
   progress?: number;
   progressStatus?: string;
   createdAt: string;
+  hasSubTargets?: boolean;
+  aggregationType?: 'sum' | 'average';
+  subTargets?: { id: string; name: string; target?: number }[];
 }
 
 interface DashboardStats {
@@ -81,89 +75,12 @@ const FREQUENCY_OPTIONS = [
 
 const DEFAULT_UOM_LIST = ['Number', 'Percentage', 'Currency', 'Days', 'Count', 'Rating'];
 
-// Get current financial year months (April to March)
-function getFinancialYearMonths(): { month: string; label: string }[] {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth(); // 0-11
-  
-  // FY starts in April (month 3)
-  // If we're in Jan-Mar, FY started previous year
-  const fyStartYear = currentMonth < 3 ? currentYear - 1 : currentYear;
-  
-  const months = [];
-  for (let i = 0; i < 12; i++) {
-    const monthIndex = (3 + i) % 12; // Start from April (3)
-    const year = monthIndex < 3 ? fyStartYear + 1 : fyStartYear;
-    const date = new Date(year, monthIndex, 1);
-    months.push({
-      month: format(date, 'yyyy-MM'),
-      label: format(date, 'MMM'),
-    });
-  }
-  return months;
-}
-
 function getFYLabel(): string {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
   const fyStartYear = currentMonth < 3 ? currentYear - 1 : currentYear;
   return `FY ${fyStartYear}-${(fyStartYear + 1).toString().slice(-2)}`;
-}
-
-// Prepare chart data for an objective
-function prepareChartData(measurements: Measurement[], target: number) {
-  const fyMonths = getFinancialYearMonths();
-  
-  // Group measurements by month
-  const measurementsByMonth: { [key: string]: number[] } = {};
-  measurements.forEach((m) => {
-    const monthKey = format(parseISO(m.measurementDate), 'yyyy-MM');
-    if (!measurementsByMonth[monthKey]) {
-      measurementsByMonth[monthKey] = [];
-    }
-    measurementsByMonth[monthKey].push(Number(m.actualValue));
-  });
-  
-  return fyMonths.map(({ month, label }) => {
-    const values = measurementsByMonth[month];
-    const avgValue = values && values.length > 0 
-      ? values.reduce((a, b) => a + b, 0) / values.length 
-      : null;
-    
-    return {
-      month: label,
-      value: avgValue,
-      target,
-    };
-  });
-}
-
-// Mini sparkline component
-function Sparkline({ data, target, higherIsBetter }: { data: any[]; target: number; higherIsBetter: boolean }) {
-  const hasData = data.some(d => d.value !== null);
-  const latestValue = [...data].reverse().find(d => d.value !== null)?.value;
-  const isGood = latestValue !== null && latestValue !== undefined && 
-    (higherIsBetter ? latestValue >= target : latestValue <= target);
-  
-  return (
-    <div className="w-32 h-8">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke={hasData ? (isGood ? '#10b981' : '#ef4444') : '#d1d5db'}
-            strokeWidth={1.5}
-            dot={false}
-            connectNulls={false}
-          />
-          <ReferenceLine y={target} stroke="#94a3b8" strokeDasharray="2 2" strokeWidth={1} />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
 }
 
 export default function ObjectivesPage() {
@@ -174,12 +91,15 @@ export default function ObjectivesPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterDepartment, setFilterDepartment] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMeasurementModal, setShowMeasurementModal] = useState(false);
   const [selectedObjective, setSelectedObjective] = useState<Objective | null>(null);
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  // New states for Tabs and Views
+  const [activeTab, setActiveTab] = useState<'highlights' | 'objectives' | 'tracking' | 'logs'>('objectives');
+  const [viewingObjective, setViewingObjective] = useState<Objective | null>(null);
 
   const user = useAuthStore((state) => state.user);
 
@@ -189,7 +109,7 @@ export default function ObjectivesPage() {
 
   useEffect(() => {
     fetchData();
-  }, [filterType, filterStatus, searchTerm]);
+  }, []); // Fetch all data initially, components handle local filtering
 
   const fetchMasterData = async () => {
     try {
@@ -210,53 +130,20 @@ export default function ObjectivesPage() {
     try {
       setLoading(true);
       const dashboardRes = await api.get('/objectives/dashboard', {
-        params: { type: filterType, status: filterStatus, search: searchTerm },
+        params: { }, // Fetch all data
       });
-      setObjectives(dashboardRes.data.objectives || []);
+      const fetchedObjectives = dashboardRes.data.objectives || [];
+      setObjectives(fetchedObjectives);
       setDashboardStats(dashboardRes.data);
+      
+      setViewingObjective(current => {
+        if (!current) return null;
+        return fetchedObjectives.find((o: any) => o.id === current.id) || current;
+      });
     } catch (error) {
       console.error('Error fetching objectives:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const toggleExpand = (id: string) => {
-    const newSet = new Set(expandedRows);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setExpandedRows(newSet);
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'quality': return 'bg-blue-100 text-blue-800';
-      case 'environmental': return 'bg-green-100 text-green-800';
-      case 'safety': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-emerald-100 text-emerald-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      case 'on_hold': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getProgressIcon = (status?: string) => {
-    switch (status) {
-      case 'achieved': return <CheckCircle className="w-4 h-4 text-emerald-500" />;
-      case 'on_track': return <TrendingUp className="w-4 h-4 text-blue-500" />;
-      case 'at_risk': return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
-      case 'behind': return <TrendingDown className="w-4 h-4 text-red-500" />;
-      default: return <Clock className="w-4 h-4 text-gray-400" />;
     }
   };
 
@@ -277,322 +164,140 @@ export default function ObjectivesPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-800">Objectives & KPIs</h1>
-        <p className="text-slate-500 mt-1">Track and monitor organizational objectives • {getFYLabel()}</p>
-      </div>
-
-      {/* Stats Cards */}
-      {dashboardStats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-slate-800">{dashboardStats.summary.total}</div>
-            <div className="text-sm text-slate-500">Total Objectives</div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-emerald-600">{dashboardStats.summary.active}</div>
-            <div className="text-sm text-slate-500">Active</div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-blue-600">{dashboardStats.summary.onTrack}</div>
-            <div className="text-sm text-slate-500">On Track</div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-yellow-600">{dashboardStats.summary.atRisk}</div>
-            <div className="text-sm text-slate-500">At Risk</div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-red-600">{dashboardStats.summary.behind}</div>
-            <div className="text-sm text-slate-500">Behind</div>
-          </div>
-          <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-            <div className="text-2xl font-bold text-slate-600">{dashboardStats.summary.completed}</div>
-            <div className="text-sm text-slate-500">Completed</div>
-          </div>
-        </div>
-      )}
-
-      {/* Type Distribution */}
-      {dashboardStats && (
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-3xl font-bold">{dashboardStats.byType.quality}</div>
-                <div className="text-blue-100">Quality (ISO 9001)</div>
-              </div>
-              <Target className="w-10 h-10 text-blue-200" />
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-5 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-3xl font-bold">{dashboardStats.byType.environmental}</div>
-                <div className="text-green-100">Environmental (ISO 14001)</div>
-              </div>
-              <Target className="w-10 h-10 text-green-200" />
-            </div>
-          </div>
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-5 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-3xl font-bold">{dashboardStats.byType.safety}</div>
-                <div className="text-orange-100">Safety (ISO 45001)</div>
-              </div>
-              <Target className="w-10 h-10 text-orange-200" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Filters and Actions */}
-      <div className="flex flex-wrap gap-4 mb-6">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search objectives..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Types</option>
-          <option value="quality">Quality</option>
-          <option value="environmental">Environmental</option>
-          <option value="safety">Safety</option>
-        </select>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-4 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
-          <option value="on_hold">On Hold</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-        {(user?.role === 'admin' || user?.role === 'compliance_manager') && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            New Objective
-          </button>
-        )}
-      </div>
-
-      {/* Objectives Table */}
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      ) : objectives.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-          <Target className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-slate-600">No objectives found</h3>
-          <p className="text-slate-400">Create your first objective to get started</p>
-        </div>
+      {viewingObjective ? (
+        // Detailed View Mode
+        <ObjectiveDetailView 
+          objective={viewingObjective}
+          onBack={() => setViewingObjective(null)}
+          onEdit={handleEdit}
+          onDelete={(id) => {
+            handleDelete(id);
+            setViewingObjective(null);
+          }}
+          onAddMeasurement={(obj) => {
+            setSelectedObjective(obj);
+            setShowMeasurementModal(true);
+          }}
+          user={user}
+        />
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase w-8"></th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">ID</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Type</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Department</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Target</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Actual</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Trend</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Status</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {objectives.map((objective) => {
-                const chartData = prepareChartData(objective.measurements || [], objective.target);
-                const isExpanded = expandedRows.has(objective.id);
-                
-                return (
-                  <>
-                    <tr key={objective.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-4">
-                        <button
-                          onClick={() => toggleExpand(objective.id)}
-                          className="p-1 hover:bg-slate-200 rounded"
-                        >
-                          {isExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-slate-500" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-slate-500" />
-                          )}
-                        </button>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="font-mono text-sm text-slate-500">{objective.objectiveNumber}</span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div>
-                          <div className="font-medium text-slate-800">{objective.name || '-'}</div>
-                          <div className="text-sm text-slate-500 line-clamp-1">{objective.description}</div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeColor(objective.type)}`}>
-                          {objective.type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-slate-600">{objective.department || '-'}</td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm">
-                          <span className="font-medium">{objective.target}</span>
-                          <span className="text-slate-500 ml-1">({objective.uom})</span>
-                        </div>
-                        <div className="text-xs text-slate-400">
-                          {objective.higherIsBetter ? '↑ Higher' : '↓ Lower'}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1">
-                          <span className="font-medium text-slate-800">
-                            {objective.latestValue !== null && objective.latestValue !== undefined 
-                              ? objective.latestValue 
-                              : <span className="text-slate-400">-</span>
-                            }
-                          </span>
-                          {getProgressIcon(objective.progressStatus)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <Sparkline 
-                          data={chartData} 
-                          target={objective.target} 
-                          higherIsBetter={objective.higherIsBetter} 
-                        />
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(objective.status)}`}>
-                          {objective.status.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => {
-                              setSelectedObjective(objective);
-                              setShowMeasurementModal(true);
-                            }}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                            title="Add Measurement"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                          {(user?.role === 'admin' || user?.role === 'compliance_manager') && (
-                            <>
-                              <button
-                                onClick={() => handleEdit(objective)}
-                                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-                                title="Edit"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(objective.id)}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                    {/* Expanded Row with Full Chart */}
-                    {isExpanded && (
-                      <tr key={`${objective.id}-chart`}>
-                        <td colSpan={10} className="px-6 py-4 bg-slate-50">
-                          <div className="bg-white rounded-lg border border-slate-200 p-4">
-                            <div className="flex items-center justify-between mb-4">
-                              <h4 className="font-semibold text-slate-700">
-                                {objective.name} - {getFYLabel()} Performance
-                              </h4>
-                              <div className="flex items-center gap-4 text-sm text-slate-500">
-                                <span className="flex items-center gap-1">
-                                  <span className="w-3 h-0.5 bg-blue-500"></span> Actual
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <span className="w-3 h-0.5 bg-red-500 border-dashed border-t-2 border-red-500"></span> Target ({objective.target})
-                                </span>
-                              </div>
-                            </div>
-                            <div className="h-64">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                  <XAxis 
-                                    dataKey="month" 
-                                    tick={{ fontSize: 12, fill: '#64748b' }}
-                                    axisLine={{ stroke: '#cbd5e1' }}
-                                  />
-                                  <YAxis 
-                                    tick={{ fontSize: 12, fill: '#64748b' }}
-                                    axisLine={{ stroke: '#cbd5e1' }}
-                                    domain={['auto', 'auto']}
-                                  />
-                                  <Tooltip
-                                    contentStyle={{
-                                      backgroundColor: '#fff',
-                                      border: '1px solid #e2e8f0',
-                                      borderRadius: '8px',
-                                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                                    }}
-                                    formatter={(value: any) => value !== null ? [value, 'Actual'] : ['No data', '']}
-                                  />
-                                  <ReferenceLine 
-                                    y={objective.target} 
-                                    stroke="#ef4444" 
-                                    strokeDasharray="5 5" 
-                                    strokeWidth={2}
-                                    label={{ value: 'Target', position: 'right', fill: '#ef4444', fontSize: 12 }}
-                                  />
-                                  <Line
-                                    type="monotone"
-                                    dataKey="value"
-                                    stroke="#3b82f6"
-                                    strokeWidth={2}
-                                    dot={{ fill: '#3b82f6', strokeWidth: 2 }}
-                                    activeDot={{ r: 6, fill: '#3b82f6' }}
-                                    connectNulls={false}
-                                  />
-                                </LineChart>
-                              </ResponsiveContainer>
-                            </div>
-                            {chartData.every(d => d.value === null) && (
-                              <div className="text-center text-slate-400 mt-2">
-                                No measurements recorded for this financial year
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        // Tabbed Mode
+        <>
+          {/* Header Layout for Tabs */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+            <div className="flex flex-col gap-3">
+              <div>
+                <h1 className="text-3xl font-bold text-slate-800 leading-tight">Objectives & KPIs</h1>
+                <p className="text-sm text-slate-500 mt-1">Track and monitor organizational objectives • {getFYLabel()}</p>
+              </div>
+              
+              {/* Tabs inline under title */}
+              <div className="flex space-x-1 bg-slate-100/50 p-1 rounded-lg border border-slate-200 inline-flex w-fit mt-1">
+                <button
+                  onClick={() => setActiveTab('highlights')}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    activeTab === 'highlights'
+                      ? 'bg-white text-slate-800 shadow-sm border border-slate-200/50'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                  }`}
+                >
+                  <BarChart2 className="w-4 h-4" />
+                  Highlights
+                </button>
+                <button
+                  onClick={() => setActiveTab('objectives')}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    activeTab === 'objectives'
+                      ? 'bg-white text-slate-800 shadow-sm border border-slate-200/50'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                  }`}
+                >
+                  <List className="w-4 h-4" />
+                  Objectives
+                </button>
+                <button
+                  onClick={() => setActiveTab('tracking')}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    activeTab === 'tracking'
+                      ? 'bg-white text-slate-800 shadow-sm border border-slate-200/50'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                  }`}
+                >
+                  <Target className="w-4 h-4" />
+                  Tracking
+                </button>
+                <button
+                  onClick={() => setActiveTab('logs')}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    activeTab === 'logs'
+                      ? 'bg-white text-slate-800 shadow-sm border border-slate-200/50'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                  }`}
+                >
+                  <Activity className="w-4 h-4" />
+                  Logs
+                </button>
+              </div>
+            </div>
+            
+            {(!viewingObjective && (
+              ['admin', 'compliance_manager', 'creator', 'reviewer', 'dept_head'].includes(user?.role || '')
+            )) && (
+              <button
+                onClick={() => {
+                  setSelectedObjective(null);
+                  setShowCreateModal(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm self-start md:self-auto h-fit"
+              >
+                <Plus className="w-4 h-4" />
+                New Objective
+              </button>
+            )}
+          </div>
+          {/* Tab Content */}
+          {activeTab === 'highlights' && (
+            <ObjectivesHighlights stats={dashboardStats} />
+          )}
+
+          {activeTab === 'objectives' && (
+            <ObjectivesList 
+              objectives={objectives}
+              loading={loading}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              filterType={filterType}
+              setFilterType={setFilterType}
+              filterDepartment={filterDepartment}
+              setFilterDepartment={setFilterDepartment}
+              departments={departments}
+              onViewDetails={setViewingObjective}
+              onAddMeasurement={(obj) => {
+                setSelectedObjective(obj);
+                setShowMeasurementModal(true);
+              }}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              user={user}
+            />
+          )}
+
+          {activeTab === 'tracking' && (
+             <ObjectivesTracking 
+               objectives={objectives} 
+               loading={loading}
+               departments={departments}
+               onViewDetails={setViewingObjective}
+             />
+          )}
+
+          {activeTab === 'logs' && (
+             <ObjectivesLogs 
+               departments={departments}
+               objectives={objectives}
+             />
+          )}
+        </>
       )}
 
       {/* Create Objective Modal */}
@@ -673,8 +378,47 @@ function ObjectiveFormModal({
     target: objective?.target?.toString() || '',
     higherIsBetter: objective?.higherIsBetter ?? true,
     status: (objective?.status as string) || 'active',
+    hasSubTargets: objective?.hasSubTargets ?? false,
+    aggregationType: objective?.aggregationType || 'sum',
+    subTargets: objective?.subTargets || [] as { id: string; name: string; target: number }[],
   });
   const [loading, setLoading] = useState(false);
+
+  // Auto-calculate main target whenever subTargets or aggregationType changes
+  useEffect(() => {
+    if (formData.hasSubTargets && formData.subTargets.length > 0) {
+      const total = formData.subTargets.reduce((sum: number, st: any) => sum + (parseFloat(st.target) || 0), 0);
+      const calculatedTarget = formData.aggregationType === 'average' 
+        ? total / formData.subTargets.length 
+        : total;
+        
+      setFormData(prev => ({
+        ...prev,
+        target: isNaN(calculatedTarget) ? '' : calculatedTarget.toFixed(2)
+      }));
+    }
+  }, [formData.subTargets, formData.aggregationType, formData.hasSubTargets]);
+
+  const handleAddSubTarget = () => {
+    setFormData((prev: any) => ({
+      ...prev,
+      subTargets: [...prev.subTargets, { id: uuidv4(), name: '', target: '' }]
+    }));
+  };
+
+  const handleRemoveSubTarget = (id: string) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      subTargets: prev.subTargets.filter((st: any) => st.id !== id)
+    }));
+  };
+
+  const handleSubTargetChange = (id: string, field: 'name' | 'target', value: string) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      subTargets: prev.subTargets.map((st: any) => st.id === id ? { ...st, [field]: value } : st)
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -683,6 +427,10 @@ function ObjectiveFormModal({
       const payload = {
         ...formData,
         target: parseFloat(formData.target),
+        subTargets: formData.hasSubTargets ? formData.subTargets.map((st: any) => ({
+          ...st,
+          target: parseFloat(st.target) || 0
+        })) : []
       };
 
       if (mode === 'create') {
@@ -739,9 +487,9 @@ function ObjectiveFormModal({
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
-                <option value="quality">Quality (ISO 9001)</option>
-                <option value="environmental">Environmental (ISO 14001)</option>
-                <option value="safety">Safety (ISO 45001)</option>
+                <option value="quality">QMS (ISO 9001)</option>
+                <option value="environmental">EMS (ISO 14001)</option>
+                <option value="safety">OHSMS (ISO 45001)</option>
               </select>
             </div>
             <div>
@@ -793,9 +541,13 @@ function ObjectiveFormModal({
               value={formData.target}
               onChange={(e) => setFormData({ ...formData, target: e.target.value })}
               placeholder="e.g., 95"
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className={`w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 ${formData.hasSubTargets ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''}`}
               required
+              readOnly={formData.hasSubTargets}
             />
+            {formData.hasSubTargets && (
+              <p className="text-xs text-slate-500 mt-1 italic">Automatically calculated based on sub-targets and aggregation method.</p>
+            )}
           </div>
           {mode === 'edit' && (
             <div>
@@ -824,6 +576,85 @@ function ObjectiveFormModal({
               Higher value is better (uncheck for metrics like defects)
             </label>
           </div>
+          
+          <div className="pt-4 border-t border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="hasSubTargets"
+                  checked={formData.hasSubTargets}
+                  onChange={(e) => setFormData({ ...formData, hasSubTargets: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-300"
+                />
+                <label htmlFor="hasSubTargets" className="font-medium text-slate-700">
+                  Track Sub-Objectives (Line-wise details)
+                </label>
+              </div>
+              {formData.hasSubTargets && (
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-slate-700">Aggregation:</label>
+                    <select
+                      value={formData.aggregationType}
+                      onChange={(e) => setFormData({ ...formData, aggregationType: e.target.value as 'sum' | 'average' })}
+                      className="text-sm border border-slate-200 rounded-md py-1 px-2 focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="sum">Sum</option>
+                      <option value="average">Average</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddSubTarget}
+                    className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Line
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {formData.hasSubTargets && (
+              <div className="space-y-3 pl-6 border-l-2 border-slate-100">
+                {formData.subTargets.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic">Click "Add Line" to define sub-components.</p>
+                ) : (
+                  formData.subTargets.map((st: any, index: number) => (
+                    <div key={st.id} className="flex items-center gap-2">
+                      <span className="text-sm text-slate-400 w-6">{index + 1}.</span>
+                      <input
+                        type="text"
+                        value={st.name}
+                        onChange={(e) => handleSubTargetChange(st.id, 'name', e.target.value)}
+                        placeholder="e.g. Line 1"
+                        className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={st.target}
+                        onChange={(e) => handleSubTargetChange(st.id, 'target', e.target.value)}
+                        placeholder="Target"
+                        className="w-24 px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSubTarget(st.id)}
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
@@ -856,20 +687,57 @@ function AddMeasurementModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const isLineWise = objective.hasSubTargets && objective.subTargets && objective.subTargets.length > 0;
+  
   const [formData, setFormData] = useState({
     actualValue: '',
     measurementDate: format(new Date(), 'yyyy-MM-dd'),
     remarks: '',
+    subValues: isLineWise 
+      ? objective.subTargets!.reduce((acc, st) => ({ ...acc, [st.id]: '' }), {} as Record<string, string>)
+      : {}
   });
+  
   const [loading, setLoading] = useState(false);
+
+  const handleSubValueChange = (id: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      subValues: { ...prev.subValues, [id]: value }
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    
     try {
+      let finalActualValue = 0;
+      let finalSubValues: any[] = [];
+      
+      if (isLineWise) {
+        const valuesArr = Object.values(formData.subValues).map(v => parseFloat(v) || 0);
+        const sum = valuesArr.reduce((acc, val) => acc + val, 0);
+        
+        if (objective.aggregationType === 'average' && valuesArr.length > 0) {
+          finalActualValue = sum / valuesArr.length;
+        } else {
+          finalActualValue = sum;
+        }
+        
+        finalSubValues = Object.entries(formData.subValues).map(([id, val]) => ({
+          subTargetId: id,
+          value: parseFloat(val) || 0
+        }));
+      } else {
+        finalActualValue = parseFloat(formData.actualValue);
+      }
+
       await api.post(`/objectives/${objective.id}/measurements`, {
-        ...formData,
-        actualValue: parseFloat(formData.actualValue),
+        actualValue: finalActualValue,
+        measurementDate: formData.measurementDate,
+        remarks: formData.remarks,
+        subValues: finalSubValues.length > 0 ? finalSubValues : undefined
       });
       onSuccess();
     } catch (error) {
@@ -881,9 +749,9 @@ function AddMeasurementModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl w-full max-w-md mx-4 shadow-xl">
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-md shadow-xl flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div>
             <h2 className="text-xl font-bold text-slate-800">Record Measurement</h2>
             <p className="text-sm text-slate-500 mt-1">{objective.name}</p>
@@ -895,50 +763,88 @@ function AddMeasurementModal({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Actual Value *</label>
-            <input
-              type="number"
-              step="0.01"
-              value={formData.actualValue}
-              onChange={(e) => setFormData({ ...formData, actualValue: e.target.value })}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0">
+          <div className="p-6 space-y-4 overflow-y-auto flex-1">
+            {isLineWise ? (
+              <div className="space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <h3 className="text-sm font-semibold text-slate-700 mb-2">Line-wise Breakdown</h3>
+                {objective.subTargets!.map(st => (
+                  <div key={st.id} className="flex items-center gap-3">
+                    <div className="w-1/3">
+                      <label className="text-sm font-medium text-slate-600 truncate block" title={st.name}>{st.name}</label>
+                      <span className="text-xs text-slate-400 block mt-0.5">Target: {st.target}</span>
+                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.subValues[st.id] || ''}
+                      onChange={(e) => handleSubValueChange(st.id, e.target.value)}
+                      placeholder={`Value in ${objective.uom}`}
+                      className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
+                      required
+                    />
+                  </div>
+                ))}
+                <div className="pt-3 mt-3 border-t border-slate-200 flex justify-between items-center">
+                  <span className="text-sm font-semibold text-slate-700">Calculated Total ({objective.aggregationType === 'average' ? 'Avg' : 'Sum'}):</span>
+                  <span className="text-lg font-bold text-blue-600">
+                    {(() => {
+                       const valuesArr = Object.values(formData.subValues).map(v => parseFloat(v) || 0);
+                       if (valuesArr.length === 0) return 0;
+                       const sum = valuesArr.reduce((acc, val) => acc + val, 0);
+                       const result = objective.aggregationType === 'average' ? sum / valuesArr.length : sum;
+                       return result.toFixed(2);
+                    })()} {objective.uom}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Actual Value *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.actualValue}
+                  onChange={(e) => setFormData({ ...formData, actualValue: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Date *</label>
+              <input
+                type="date"
+                value={formData.measurementDate}
+                onChange={(e) => setFormData({ ...formData, measurementDate: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Remarks</label>
+              <textarea
+                value={formData.remarks}
+                onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                rows={2}
+                placeholder="Optional notes"
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Date *</label>
-            <input
-              type="date"
-              value={formData.measurementDate}
-              onChange={(e) => setFormData({ ...formData, measurementDate: e.target.value })}
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Remarks</label>
-            <textarea
-              value={formData.remarks}
-              onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-              rows={2}
-              placeholder="Optional notes"
-              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="p-6 border-t border-slate-200 shrink-0 bg-slate-50 flex justify-end gap-3 rounded-b-xl">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50"
+              className="px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {loading ? 'Saving...' : 'Save'}
             </button>

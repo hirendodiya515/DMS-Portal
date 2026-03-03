@@ -97,6 +97,15 @@ export class Objective {
   @Column()
   ownerId: string;
 
+  @Column({ default: false })
+  hasSubTargets: boolean;
+
+  @Column({ default: 'sum' })
+  aggregationType: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  subTargets: { id: string; name: string; target: number }[];
+
   @OneToMany('ObjectiveMeasurement', 'objective', { cascade: true })
   measurements: any[];
 

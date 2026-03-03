@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, Save, Send, AlertCircle } from 'lucide-react';
 import api from '../../lib/api';
+import { v4 as uuidv4 } from 'uuid';
 
 interface AuditEntry {
   id: string;
@@ -53,7 +54,7 @@ export default function PerformAuditPage() {
           } else {
              // Initialize with 10 empty rows ONLY if no existing data
              const initialRows = Array.from({ length: 10 }).map(() => ({
-                id: crypto.randomUUID(),
+                id: uuidv4(),
                 title: '',
                 docNumber: '',
                 observation: '',
@@ -78,7 +79,7 @@ export default function PerformAuditPage() {
     setEntries(prev => [
       ...prev,
       {
-        id: crypto.randomUUID(),
+        id: uuidv4(),
         title: '',
         docNumber: '',
         observation: '',

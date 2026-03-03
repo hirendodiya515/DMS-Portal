@@ -1,5 +1,25 @@
-import { IsString, IsEnum, IsOptional, IsNumber, IsBoolean } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ObjectiveType, ObjectiveStatus, ObjectiveFrequency } from '../../entities/objective.entity';
+
+class SubTargetDto {
+  @IsString()
+  id: string;
+
+  @IsString()
+  name: string;
+
+  @IsNumber()
+  target: number;
+}
+
+class SubValueDto {
+  @IsString()
+  subTargetId: string;
+
+  @IsNumber()
+  value: number;
+}
 
 export class CreateObjectiveDto {
   @IsString()
@@ -28,6 +48,20 @@ export class CreateObjectiveDto {
   @IsOptional()
   @IsBoolean()
   higherIsBetter?: boolean = true;
+
+  @IsOptional()
+  @IsBoolean()
+  hasSubTargets?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SubTargetDto)
+  subTargets?: SubTargetDto[];
+
+  @IsOptional()
+  @IsString()
+  aggregationType?: string;
 }
 
 export class UpdateObjectiveDto {
@@ -66,6 +100,20 @@ export class UpdateObjectiveDto {
   @IsOptional()
   @IsBoolean()
   higherIsBetter?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  hasSubTargets?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SubTargetDto)
+  subTargets?: SubTargetDto[];
+
+  @IsOptional()
+  @IsString()
+  aggregationType?: string;
 }
 
 export class CreateMeasurementDto {
@@ -78,4 +126,10 @@ export class CreateMeasurementDto {
   @IsOptional()
   @IsString()
   remarks?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SubValueDto)
+  subValues?: SubValueDto[];
 }
