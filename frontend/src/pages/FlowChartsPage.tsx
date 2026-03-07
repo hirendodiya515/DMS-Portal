@@ -85,7 +85,6 @@ export default function FlowChartsPage() {
         isOpen={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)} 
         onSuccess={fetchCharts}
-        defaultType="org_chart"
       />
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">

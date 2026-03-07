@@ -36,7 +36,7 @@ export default function AuditSummaryPage() {
     complianceScore: 100,
   });
   const [reports, setReports] = useState<AuditReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
 
   useEffect(() => {

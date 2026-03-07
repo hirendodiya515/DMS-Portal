@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Play, Calendar, User, AlignLeft } from 'lucide-react';
+import { Plus, Pencil, Trash2, Play, Calendar, User } from 'lucide-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -23,7 +23,7 @@ export default function AuditSchedulePage() {
   const [schedules, setSchedules] = useState<AuditSchedule[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [auditors, setAuditors] = useState<Auditor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<AuditSchedule | null>(null);
 

@@ -96,10 +96,6 @@ export function ObjectivesList({
   setFilterDepartment,
   departments,
   onViewDetails,
-  onAddMeasurement,
-  onEdit,
-  onDelete,
-  user,
 }: {
   objectives: Objective[];
   loading: boolean;

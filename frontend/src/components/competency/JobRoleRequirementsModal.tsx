@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Save, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Plus, Trash2, Loader2 } from 'lucide-react';
 import { CompetencyAPI } from '../../lib/competency-api';
 
 interface JobRoleRequirementsModalProps {

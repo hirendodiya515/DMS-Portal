@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader2, Save } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import api from '../lib/api';
 
 interface EditDocumentModalProps {

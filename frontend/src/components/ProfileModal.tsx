@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Lock, Mail, Building, Shield, Loader2, CheckCircle2 } from 'lucide-react';
+import { X, Lock, Mail, Building, Shield, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import api from '../lib/api';
 import { useNavigate } from 'react-router-dom';

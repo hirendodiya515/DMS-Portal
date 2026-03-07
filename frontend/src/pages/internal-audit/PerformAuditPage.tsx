@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Save, Send, AlertCircle } from 'lucide-react';
+import { Plus, Save, Send } from 'lucide-react';
 import api from '../../lib/api';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -25,7 +25,7 @@ export default function PerformAuditPage() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const [schedule, setSchedule] = useState<any>(null);
+  const [, setSchedule] = useState<any>(null);
   const [executionId, setExecutionId] = useState<string | null>(null);
 
   useEffect(() => {

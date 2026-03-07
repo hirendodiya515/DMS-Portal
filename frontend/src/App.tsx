@@ -7,6 +7,7 @@ import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
 import ObjectivesPage from './pages/ObjectivesPage';
 import RisksPage from './pages/RisksPage';
+import StrategicRisksPage from './pages/StrategicRisksPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import HiraPage from './pages/HiraPage';
 import EaaPage from './pages/EaaPage';
@@ -28,6 +29,7 @@ import GapAnalysisDashboard from './components/competency/GapAnalysisDashboard';
 import TrainingManager from './components/competency/TrainingManager';
 import CalibrationEquipmentPage from './pages/CalibrationEquipmentPage';
 import AboutPage from './pages/AboutPage';
+import ContextOfOrgPage from './pages/ContextOfOrgPage';
 
 import './index.css';
 
@@ -43,6 +45,7 @@ function App() {
           <Route path="org-chart" element={<OrgChartPage />} />
           <Route path="objectives" element={<ObjectivesPage />} />
           <Route path="risks" element={<RisksPage />} />
+          <Route path="risks/strategic" element={<StrategicRisksPage />} />
           <Route path="risks/hira" element={<HiraPage />} />
           <Route path="risks/eaa" element={<EaaPage />} />
           <Route path="risks/qra" element={<QraPage />} />
@@ -70,6 +73,9 @@ function App() {
           
           {/* Calibration & Equipment Route */}
           <Route path="calibration-equipment" element={<CalibrationEquipmentPage />} />
+          
+          {/* Organization Context Route */}
+          <Route path="context-organization" element={<ContextOfOrgPage />} />
           
           <Route path="about" element={<AboutPage />} />
           

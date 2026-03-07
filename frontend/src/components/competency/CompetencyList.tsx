@@ -83,7 +83,7 @@ export default function CompetencyList() {
         { accessorKey: 'description', header: 'Description' },
         ...(user?.role === 'admin' || user?.role === 'reviewer' ? [{
             id: 'actions',
-            cell: ({ row }) => (
+            cell: ({ row }: any) => (
                 <div className="flex gap-2 justify-end">
                     <button
                         onClick={() => handleEdit(row.original)}

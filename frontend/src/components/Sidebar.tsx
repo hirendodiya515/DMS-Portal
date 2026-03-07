@@ -18,6 +18,7 @@ import {
   GraduationCap,
   Wrench,
   Info,
+  Building,
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 
@@ -37,6 +38,7 @@ export default function Sidebar() {
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Documents", href: "/documents", icon: FileText },
+    { name: "Context of Organization", href: "/context-organization", icon: Building },
     { name: "Organization Chart", href: "/org-chart", icon: Network },
     { name: "Flowchart", href: "/flowchart", icon: GitBranch },
     { name: "Department", href: "/department", icon: Briefcase },
@@ -45,6 +47,7 @@ export default function Sidebar() {
       name: "Risks",
       icon: Shield,
       children: [
+        { name: "Strategic Risks", href: "/risks/strategic" },
         { name: "HIRA (ISO 45001)", href: "/risks/hira" },
         { name: "EAA (ISO 14001)", href: "/risks/eaa" },
         { name: "QRA (ISO 9001)", href: "/risks/qra" },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import Spreadsheet from 'react-spreadsheet';
 import { X, Save, Loader2, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';

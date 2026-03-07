@@ -122,7 +122,7 @@ export default function CalibrationCalendarModal({ isOpen, onClose, calibrations
             ))}
 
             {/* Calendar Days */}
-            {calendarDays.map((day, dayIdx) => {
+            {calendarDays.map((day) => {
               const dayCalibrations = calibrations.filter(cal => 
                 isSameDay(parseISO(cal.nextCalibrationDate), day)
               );

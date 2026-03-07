@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+
 import api from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import EditAuditStatusModal from '../../components/EditAuditStatusModal';
@@ -12,7 +12,7 @@ interface AuditStatus {
 export default function AuditPlanPage() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [currentYear] = useState(new Date().getFullYear());
   const user = useAuthStore((state) => state.user);
   
   // Modal state

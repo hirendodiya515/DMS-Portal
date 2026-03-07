@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2, FileText, Upload } from 'lucide-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
@@ -18,7 +18,7 @@ export default function AuditorsPage() {
   const [activeTab, setActiveTab] = useState<'auditor' | 'auditee'>('auditor');
   const [participants, setParticipants] = useState<AuditParticipant[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<AuditParticipant | null>(null);
   

@@ -59,6 +59,11 @@ import { TrainingAttendance } from './entities/training-attendance.entity';
 import { TrainingCalendarModule } from './training-calendar/training-calendar.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
+import { OrgContextModule } from './org-context/org-context.module';
+import { StrategicRisksModule } from './strategic-risks/strategic-risks.module';
+import { SwotIssue } from './entities/swot-issue.entity';
+import { InterestedParty } from './entities/interested-party.entity';
+import { StrategicRisk } from './entities/strategic-risk.entity';
 
 @Module({
   imports: [
@@ -80,7 +85,8 @@ import { ScheduleModule } from '@nestjs/schedule';
           Risk, RiskAssessmentItem, HiraRisk, EaaRisk, QraRisk, AuditPlan, AuditParticipant, AuditSchedule, AuditExecution, OrgNode, Flowchart,
           Competency, JobRole, CompetencyRequirement, EmployeeSkill, TrainingProgram, TrainingPlan,
           Equipment, CalibrationHistory,
-          TrainingCalendar, TrainingAttendance
+          TrainingCalendar, TrainingAttendance,
+          SwotIssue, InterestedParty, StrategicRisk
         ],
         synchronize: true, // Set to false in production
       }),
@@ -111,6 +117,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     QraRisksModule,
     RisksModule,
     TrainingCalendarModule,
+    OrgContextModule,
+    StrategicRisksModule,
   ],
   controllers: [AppController],
   providers: [AppService],
