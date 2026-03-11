@@ -9,6 +9,7 @@ import { RisksService } from './risks.service';
 import { HiraRisksModule } from './hira/hira-risks.module';
 import { EaaRisksModule } from './eaa/eaa-risks.module';
 import { QraRisksModule } from './qra/qra-risks.module';
+import { PfmeaModule } from './pfmea/pfmea.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { QraRisksModule } from './qra/qra-risks.module';
     HiraRisksModule,
     EaaRisksModule,
     QraRisksModule,
+    PfmeaModule,
   ],
   controllers: [RisksController],
   providers: [RisksService],

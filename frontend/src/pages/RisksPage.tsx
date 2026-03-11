@@ -4,7 +4,8 @@ import {
   AlertTriangle,
   Leaf,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Activity
 } from 'lucide-react';
 
 const MODULES = [
@@ -28,6 +29,13 @@ const MODULES = [
     path: '/risks/qra', 
     icon: ShieldCheck, 
     color: 'indigo' 
+  },
+  {
+    title: 'PFMEA',
+    desc: 'Process Failure Mode and Effects Analysis',
+    path: '/risks/pfmea',
+    icon: Activity,
+    color: 'blue'
   }
 ];
 
@@ -48,7 +56,7 @@ export default function RisksPage() {
       </div>
 
       {/* Module Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         {MODULES.map((card) => (
           <div 
             key={card.path}
@@ -58,6 +66,7 @@ export default function RisksPage() {
             <div className={`absolute top-0 left-0 w-2 h-full ${
               card.color === 'orange' ? 'bg-orange-500' : 
               card.color === 'emerald' ? 'bg-emerald-500' : 
+              card.color === 'blue' ? 'bg-blue-500' : 
               'bg-indigo-500'
             }`}></div>
             
@@ -65,6 +74,7 @@ export default function RisksPage() {
               <card.icon className={`w-10 h-10 ${
                 card.color === 'orange' ? 'text-orange-500' : 
                 card.color === 'emerald' ? 'text-emerald-500' : 
+                card.color === 'blue' ? 'text-blue-500' : 
                 'text-indigo-500'
               }`} />
             </div>

@@ -64,6 +64,8 @@ import { StrategicRisksModule } from './strategic-risks/strategic-risks.module';
 import { SwotIssue } from './entities/swot-issue.entity';
 import { InterestedParty } from './entities/interested-party.entity';
 import { StrategicRisk } from './entities/strategic-risk.entity';
+import { Pfmea } from './entities/pfmea.entity';
+import { PfmeaWorksheetRow } from './entities/pfmea-worksheet-row.entity';
 
 @Module({
   imports: [
@@ -86,7 +88,8 @@ import { StrategicRisk } from './entities/strategic-risk.entity';
           Competency, JobRole, CompetencyRequirement, EmployeeSkill, TrainingProgram, TrainingPlan,
           Equipment, CalibrationHistory,
           TrainingCalendar, TrainingAttendance,
-          SwotIssue, InterestedParty, StrategicRisk
+          SwotIssue, InterestedParty, StrategicRisk,
+          Pfmea, PfmeaWorksheetRow
         ],
         synchronize: true, // Set to false in production
       }),

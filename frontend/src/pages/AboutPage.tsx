@@ -15,6 +15,21 @@ import {
 
 const changeLog = [
   {
+    version: '2.2.0',
+    date: '08 March 2026',
+    title: 'Process Failure Mode and Effects Analysis (PFMEA) Integration',
+    changes: [
+      'Added comprehensive PFMEA module for risk management and failure mode tracking',
+      'Implemented "All Processes (Aggregate View)" for global portfolio monitoring across all projects',
+      'Created Summary Dashboard with interactive Risk Level & RPN distribution charts and progress tracking',
+      'Built a robust FMEA Worksheet with inline editing, row duplication, and automatic RPN calculation',
+      'Developed an interactive 5x5 Risk Matrix Heat Map to visually plot and analyze failure modes',
+      'Added History tab for complete traceability, including Revision Logs, Action Logs, and detailed Audit Trails',
+      'Integrated Role-Based Access Control (RBAC) to securely manage view, edit, and delete permissions',
+      'Introduced floating toast notifications for improved user feedback during worksheet operations'
+    ]
+  },
+  {
     version: '2.1.0',
     date: '01 March 2026',
     title: 'Objective page re-structure',
@@ -133,7 +148,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v2.1.0
+                    v2.2.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

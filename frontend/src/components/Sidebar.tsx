@@ -51,6 +51,7 @@ export default function Sidebar() {
         { name: "HIRA (ISO 45001)", href: "/risks/hira" },
         { name: "EAA (ISO 14001)", href: "/risks/eaa" },
         { name: "QRA (ISO 9001)", href: "/risks/qra" },
+        { name: "PFMEA", href: "/risks/pfmea" },
       ],
     },
     {

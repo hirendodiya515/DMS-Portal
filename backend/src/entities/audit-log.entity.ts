@@ -6,6 +6,7 @@ import { Risk } from './risk.entity';
 import { HiraRisk } from './hira-risk.entity';
 import { EaaRisk } from './eaa-risk.entity';
 import { QraRisk } from './qra-risk.entity';
+import { Pfmea } from './pfmea.entity';
 
 export enum AuditAction {
     CREATE = 'create',
@@ -82,6 +83,13 @@ export class AuditLog {
 
     @Column({ nullable: true })
     qraRiskId: string;
+
+    @ManyToOne(() => Pfmea, (pfmea) => pfmea.auditLogs, { nullable: true })
+    @JoinColumn({ name: 'pfmeaId' })
+    pfmea: Pfmea;
+
+    @Column({ nullable: true })
+    pfmeaId: string;
 
     @Column({ type: 'text', nullable: true })
     details: string;

@@ -12,6 +12,7 @@ import AuditLogsPage from './pages/AuditLogsPage';
 import HiraPage from './pages/HiraPage';
 import EaaPage from './pages/EaaPage';
 import QraPage from './pages/QraPage';
+import PfmeaPage from './pages/PfmeaPage';
 import Layout from './components/Layout';
 import DepartmentPage from './pages/DepartmentPage';
 import AuditPlanPage from './pages/internal-audit/AuditPlanPage';
@@ -49,6 +50,7 @@ function App() {
           <Route path="risks/hira" element={<HiraPage />} />
           <Route path="risks/eaa" element={<EaaPage />} />
           <Route path="risks/qra" element={<QraPage />} />
+          <Route path="risks/pfmea" element={<PfmeaPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="department" element={<DepartmentPage />} />
