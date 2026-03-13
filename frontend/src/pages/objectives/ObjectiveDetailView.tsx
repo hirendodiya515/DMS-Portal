@@ -144,6 +144,8 @@ export function ObjectiveDetailView({
   onEdit,
   onDelete,
   onAddMeasurement,
+  onEditMeasurement,
+  onDeleteMeasurement,
   user
 }: {
   objective: Objective;
@@ -151,6 +153,8 @@ export function ObjectiveDetailView({
   onEdit: (obj: Objective) => void;
   onDelete: (id: string) => void;
   onAddMeasurement: (obj: Objective) => void;
+  onEditMeasurement: (measurement: Measurement, obj: Objective) => void;
+  onDeleteMeasurement: (measurementId: string) => void;
   user: any;
 }) {
   const chartData = prepareChartData(objective.measurements || [], objective.target, objective.hasSubTargets ? objective.subTargets : undefined);
@@ -167,6 +171,8 @@ export function ObjectiveDetailView({
   const isSameDepartment = user?.department === objective.department;
   const isAllowedRoleInDept = ['creator', 'reviewer', 'dept_head'].includes(user?.role);
   const canModify = user?.role === 'admin' || (isSameDepartment && isAllowedRoleInDept);
+  
+  const canManageMeasurements = ['admin', 'dept_head'].includes(user?.role);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -393,6 +399,7 @@ export function ObjectiveDetailView({
                 <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Actual Value</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider w-32">Status</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Remarks & Insights</th>
+                <th className="px-6 py-4 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider w-24">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -436,6 +443,32 @@ export function ObjectiveDetailView({
                       <td className="px-6 py-4">
                         <span className="text-sm text-slate-500 italic">{row.remarks}</span>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        {hasData && canManageMeasurements && (
+                          <div className="flex items-center justify-end gap-2">
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 onEditMeasurement(row.latestMeasurementObj, objective);
+                               }}
+                               className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                               title="Edit Reading"
+                             >
+                               <Edit className="w-3.5 h-3.5" />
+                             </button>
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 onDeleteMeasurement(row.latestMeasurementObj.id);
+                               }}
+                               className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                               title="Delete Reading"
+                             >
+                               <Trash2 className="w-3.5 h-3.5" />
+                             </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                     
                     {/* Render sub-target breakdowns below the parent row if it exists */}
@@ -458,6 +491,8 @@ export function ObjectiveDetailView({
                               </span>
                             </td>
                             <td className="px-6 py-2 whitespace-nowrap">
+                            </td>
+                            <td className="px-6 py-2">
                             </td>
                             <td className="px-6 py-2">
                             </td>

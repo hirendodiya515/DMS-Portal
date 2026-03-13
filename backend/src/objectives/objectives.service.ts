@@ -10,6 +10,7 @@ import {
   CreateObjectiveDto,
   UpdateObjectiveDto,
   CreateMeasurementDto,
+  UpdateMeasurementDto,
 } from './dto/objectives.dto';
 
 @Injectable()
@@ -195,6 +196,28 @@ export class ObjectivesService {
       relations: ['recordedBy'],
       order: { measurementDate: 'DESC' },
     });
+  }
+
+  async updateMeasurement(
+    measurementId: string,
+    updateDto: UpdateMeasurementDto,
+    userId: string,
+  ): Promise<ObjectiveMeasurement> {
+    const measurement = await this.measurementRepository.findOne({
+      where: { id: measurementId },
+      relations: ['objective'],
+    });
+
+    if (!measurement) {
+      throw new NotFoundException(`Measurement with ID ${measurementId} not found`);
+    }
+
+    Object.assign(measurement, updateDto);
+    const updatedMeasurement = await this.measurementRepository.save(measurement);
+    
+    await this.logAction(AuditAction.UPDATE, userId, measurement.objectiveId, `Measurement updated in objective`);
+    
+    return updatedMeasurement;
   }
 
   async deleteMeasurement(measurementId: string, userId?: string): Promise<void> {

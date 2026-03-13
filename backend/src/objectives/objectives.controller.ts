@@ -16,6 +16,7 @@ import {
   CreateObjectiveDto,
   UpdateObjectiveDto,
   CreateMeasurementDto,
+  UpdateMeasurementDto,
 } from './dto/objectives.dto';
 
 @Controller('objectives')
@@ -78,6 +79,15 @@ export class ObjectivesController {
   @Get(':id/measurements')
   getMeasurements(@Param('id') id: string) {
     return this.objectivesService.getMeasurements(id);
+  }
+
+  @Patch('measurements/:measurementId')
+  updateMeasurement(
+    @Param('measurementId') measurementId: string,
+    @Body() updateDto: UpdateMeasurementDto,
+    @Request() req: any,
+  ) {
+    return this.objectivesService.updateMeasurement(measurementId, updateDto, req.user.userId);
   }
 
   @Delete('measurements/:measurementId')

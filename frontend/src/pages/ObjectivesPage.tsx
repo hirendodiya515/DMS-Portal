@@ -25,6 +25,7 @@ interface Measurement {
   actualValue: number;
   measurementDate: string;
   remarks?: string;
+  subValues?: { subTargetId: string; value: number }[];
 }
 
 interface Objective {
@@ -96,6 +97,7 @@ export default function ObjectivesPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMeasurementModal, setShowMeasurementModal] = useState(false);
   const [selectedObjective, setSelectedObjective] = useState<Objective | null>(null);
+  const [measurementToEdit, setMeasurementToEdit] = useState<Measurement | null>(null);
 
   // New states for Tabs and Views
   const [activeTab, setActiveTab] = useState<'highlights' | 'objectives' | 'tracking' | 'logs'>('objectives');
@@ -162,6 +164,22 @@ export default function ObjectivesPage() {
     setShowEditModal(true);
   };
 
+  const handleEditMeasurement = (measurement: Measurement, obj: Objective) => {
+    setMeasurementToEdit(measurement);
+    setSelectedObjective(obj);
+    setShowMeasurementModal(true);
+  };
+
+  const handleDeleteMeasurement = async (measurementId: string) => {
+    if (!confirm('Are you sure you want to delete this reading?')) return;
+    try {
+      await api.delete(`/objectives/measurements/${measurementId}`);
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting measurement:', error);
+    }
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {viewingObjective ? (
@@ -176,8 +194,11 @@ export default function ObjectivesPage() {
           }}
           onAddMeasurement={(obj) => {
             setSelectedObjective(obj);
+            setMeasurementToEdit(null);
             setShowMeasurementModal(true);
           }}
+          onEditMeasurement={handleEditMeasurement}
+          onDeleteMeasurement={handleDeleteMeasurement}
           user={user}
         />
       ) : (
@@ -274,6 +295,7 @@ export default function ObjectivesPage() {
               onViewDetails={setViewingObjective}
               onAddMeasurement={(obj) => {
                 setSelectedObjective(obj);
+                setMeasurementToEdit(null);
                 setShowMeasurementModal(true);
               }}
               onEdit={handleEdit}
@@ -333,17 +355,20 @@ export default function ObjectivesPage() {
         />
       )}
 
-      {/* Add Measurement Modal */}
+      {/* Add/Edit Measurement Modal */}
       {showMeasurementModal && selectedObjective && (
         <AddMeasurementModal
           objective={selectedObjective}
+          measurementToEdit={measurementToEdit}
           onClose={() => {
             setShowMeasurementModal(false);
             setSelectedObjective(null);
+            setMeasurementToEdit(null);
           }}
           onSuccess={() => {
             setShowMeasurementModal(false);
             setSelectedObjective(null);
+            setMeasurementToEdit(null);
             fetchData();
           }}
         />
@@ -677,24 +702,29 @@ function ObjectiveFormModal({
   );
 }
 
-// Add Measurement Modal Component
+// Add/Edit Measurement Modal Component
 function AddMeasurementModal({
   objective,
+  measurementToEdit,
   onClose,
   onSuccess,
 }: {
   objective: Objective;
+  measurementToEdit?: Measurement | null;
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const isLineWise = objective.hasSubTargets && objective.subTargets && objective.subTargets.length > 0;
   
   const [formData, setFormData] = useState({
-    actualValue: '',
-    measurementDate: format(new Date(), 'yyyy-MM-dd'),
-    remarks: '',
+    actualValue: measurementToEdit ? measurementToEdit.actualValue.toString() : '',
+    measurementDate: measurementToEdit ? format(new Date(measurementToEdit.measurementDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+    remarks: measurementToEdit?.remarks || '',
     subValues: isLineWise 
-      ? objective.subTargets!.reduce((acc, st) => ({ ...acc, [st.id]: '' }), {} as Record<string, string>)
+      ? objective.subTargets!.reduce((acc, st) => {
+          const existingSubVal = measurementToEdit?.subValues?.find(sv => sv.subTargetId === st.id);
+          return { ...acc, [st.id]: existingSubVal ? existingSubVal.value.toString() : '' };
+        }, {} as Record<string, string>)
       : {}
   });
   
@@ -733,16 +763,25 @@ function AddMeasurementModal({
         finalActualValue = parseFloat(formData.actualValue);
       }
 
-      await api.post(`/objectives/${objective.id}/measurements`, {
-        actualValue: finalActualValue,
-        measurementDate: formData.measurementDate,
-        remarks: formData.remarks,
-        subValues: finalSubValues.length > 0 ? finalSubValues : undefined
-      });
+      if (measurementToEdit) {
+        await api.patch(`/objectives/measurements/${measurementToEdit.id}`, {
+          actualValue: finalActualValue,
+          measurementDate: formData.measurementDate,
+          remarks: formData.remarks,
+          subValues: finalSubValues.length > 0 ? finalSubValues : undefined
+        });
+      } else {
+        await api.post(`/objectives/${objective.id}/measurements`, {
+          actualValue: finalActualValue,
+          measurementDate: formData.measurementDate,
+          remarks: formData.remarks,
+          subValues: finalSubValues.length > 0 ? finalSubValues : undefined
+        });
+      }
       onSuccess();
     } catch (error) {
-      console.error('Error adding measurement:', error);
-      alert('Failed to add measurement');
+      console.error(`Error ${measurementToEdit ? 'updating' : 'adding'} measurement:`, error);
+      alert(`Failed to ${measurementToEdit ? 'update' : 'add'} measurement`);
     } finally {
       setLoading(false);
     }
@@ -753,7 +792,9 @@ function AddMeasurementModal({
       <div className="bg-white rounded-xl w-full max-w-md shadow-xl flex flex-col max-h-[90vh]">
         <div className="p-6 border-b border-slate-200 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">Record Measurement</h2>
+            <h2 className="text-xl font-bold text-slate-800">
+              {measurementToEdit ? 'Edit Reading' : 'Record Measurement'}
+            </h2>
             <p className="text-sm text-slate-500 mt-1">{objective.name}</p>
             <p className="text-xs text-slate-400">
               Target: {objective.target} {objective.uom} | {objective.higherIsBetter ? '↑ Higher' : '↓ Lower'}

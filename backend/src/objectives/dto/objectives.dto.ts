@@ -124,6 +124,22 @@ export class CreateMeasurementDto {
   measurementDate: string;
 
   @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SubValueDto)
+  subValues?: SubValueDto[];
+}
+
+export class UpdateMeasurementDto {
+  @IsOptional()
+  @IsNumber()
+  actualValue?: number;
+
+  @IsOptional()
+  @IsString()
+  measurementDate?: string;
+
+  @IsOptional()
   @IsString()
   remarks?: string;
 

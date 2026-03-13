@@ -64,8 +64,7 @@ function getDepartmentDistData(objectives: any[]) {
   
   return Object.entries(deptCounts)
     .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8); // Top 8
+    .sort((a, b) => b.count - a.count);
 }
 
 // Sparkline for top KPIs
