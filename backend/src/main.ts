@@ -7,7 +7,11 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: 'http://localhost:5173', // Vite default port
+    origin: [
+      'http://localhost:5173', // Main Vite frontend
+      'http://localhost:5174', // Customer Feedback Vite app
+      /\.vercel\.app$/,        // All Vercel deployments
+    ],
     credentials: true,
     exposedHeaders: ['Content-Disposition'],
   });

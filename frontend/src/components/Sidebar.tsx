@@ -19,6 +19,7 @@ import {
   Wrench,
   Info,
   Building,
+  SmilePlus,
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 
@@ -81,6 +82,7 @@ export default function Sidebar() {
     { name: "Calibration & Equipment", href: "/calibration-equipment", icon: Wrench },
     { name: "Reports", href: "/reports", icon: BarChart3 },
     { name: "Audit Logs", href: "/audit-logs", icon: FileStack },
+    { name: "Customer Satisfaction", href: "/customer-satisfaction", icon: SmilePlus },
     { name: "About", href: "/about", icon: Info },
     // Only show Settings (which includes Users) to Admin
     ...(user?.role === "admin"

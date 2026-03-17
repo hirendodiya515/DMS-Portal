@@ -15,6 +15,17 @@ import {
 
 const changeLog = [
   {
+    version: '2.3.0',
+    date: '17-Mar-2026',
+    title: 'Customer Feedback Integration',
+    changes: [
+      'Integrated customer feedback system with this DMS',
+      'Customer can log their feedback and rating using the link https://brl-customer-feedback.vercel.app/ and the data will be stored in cloud server',
+      'Every midnight the score will be fetched with DMS and update the latest changes. You can also manually fetch the data using manual button',
+      'Customer statistics available in tab customer-feedback'
+    ]
+  },
+  {
     version: '2.2.0',
     date: '08 March 2026',
     title: 'Process Failure Mode and Effects Analysis (PFMEA) Integration',
@@ -148,7 +159,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v2.2.0
+                    v2.3.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

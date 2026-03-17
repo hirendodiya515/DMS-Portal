@@ -66,6 +66,9 @@ import { InterestedParty } from './entities/interested-party.entity';
 import { StrategicRisk } from './entities/strategic-risk.entity';
 import { Pfmea } from './entities/pfmea.entity';
 import { PfmeaWorksheetRow } from './entities/pfmea-worksheet-row.entity';
+import { CustomerFeedback } from './entities/customer-feedback.entity';
+import { CorrectiveActionRequest } from './entities/corrective-action-request.entity';
+import { CustomerFeedbackModule } from './customer-feedback/customer-feedback.module';
 
 @Module({
   imports: [
@@ -89,7 +92,7 @@ import { PfmeaWorksheetRow } from './entities/pfmea-worksheet-row.entity';
           Equipment, CalibrationHistory,
           TrainingCalendar, TrainingAttendance,
           SwotIssue, InterestedParty, StrategicRisk,
-          Pfmea, PfmeaWorksheetRow
+          Pfmea, PfmeaWorksheetRow, CustomerFeedback, CorrectiveActionRequest
         ],
         synchronize: true, // Set to false in production
       }),
@@ -122,6 +125,7 @@ import { PfmeaWorksheetRow } from './entities/pfmea-worksheet-row.entity';
     TrainingCalendarModule,
     OrgContextModule,
     StrategicRisksModule,
+    CustomerFeedbackModule,
   ],
   controllers: [AppController],
   providers: [AppService],

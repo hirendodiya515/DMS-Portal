@@ -31,6 +31,7 @@ import TrainingManager from './components/competency/TrainingManager';
 import CalibrationEquipmentPage from './pages/CalibrationEquipmentPage';
 import AboutPage from './pages/AboutPage';
 import ContextOfOrgPage from './pages/ContextOfOrgPage';
+import CustomerSatisfactionDashboard from './pages/customer-feedback/CustomerSatisfactionDashboard';
 
 import './index.css';
 
@@ -78,6 +79,8 @@ function App() {
           
           {/* Organization Context Route */}
           <Route path="context-organization" element={<ContextOfOrgPage />} />
+          
+          <Route path="customer-satisfaction" element={<CustomerSatisfactionDashboard />} />
           
           <Route path="about" element={<AboutPage />} />
           

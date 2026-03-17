@@ -34,6 +34,8 @@
     "dagre": "^0.8.5",
     "date-fns": "^4.1.0",
     "framer-motion": "^12.23.25",
+    "jspdf": "^4.2.0",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.555.0",
     "mammoth": "^1.11.0",
     "react": "^19.2.1",
