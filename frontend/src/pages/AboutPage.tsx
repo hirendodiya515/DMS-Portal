@@ -15,6 +15,17 @@ import {
 
 const changeLog = [
   {
+    version: '2.4.0',
+    date: '19 March 2026',
+    title: 'AI Integration for Internal Audits',
+    changes: [
+      'Introduced Gemini AI integration in the Perform Audit module',
+      'Added smart AI-based ISO Clause recognition directly from audit observations',
+      'Added grouped AI suggestions for automatically drafting comprehensive NC Statements, Requirements, and precise Clauses',
+      'Optimized AI query processing for lightning-fast suggestion generation'
+    ]
+  },
+  {
     version: '2.3.0',
     date: '17-Mar-2026',
     title: 'Customer Feedback Integration',
@@ -159,7 +170,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v2.3.0
+                    v2.4.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

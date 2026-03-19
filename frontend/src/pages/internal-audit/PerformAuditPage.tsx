@@ -1,8 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Save, Send } from 'lucide-react';
+import { Plus, Save, Send, Sparkles, Loader2 } from 'lucide-react';
 import api from '../../lib/api';
 import { v4 as uuidv4 } from 'uuid';
+
+interface AISuggestion {
+  clause: string;
+  requirement: string;
+  ncStatement: string;
+}
+
+interface AIState {
+  loading: boolean;
+  suggestions: AISuggestion[] | null;
+}
 
 interface AuditEntry {
   id: string;
@@ -24,6 +35,8 @@ export default function PerformAuditPage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [aiState, setAiState] = useState<Record<string, AIState>>({});
+  const [clauseAiState, setClauseAiState] = useState<Record<string, { loading: boolean, suggestions: string[] | null }>>({});
 
   const [, setSchedule] = useState<any>(null);
   const [executionId, setExecutionId] = useState<string | null>(null);
@@ -95,6 +108,98 @@ export default function PerformAuditPage() {
       case 'AFI': return 'border-2 border-yellow-500 bg-yellow-50/30';
       case 'NC': return 'border-2 border-red-500 bg-red-50/30';
       default: return 'border border-slate-200';
+    }
+  };
+
+  const generateAISuggestions = async (entryId: string, observation: string) => {
+    if (!observation.trim()) {
+      alert("Please write an observation first to generate suggestions.");
+      return;
+    }
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      alert("Gemini API key is missing. Please add VITE_GEMINI_API_KEY to your .env file.");
+      return;
+    }
+
+    setAiState(prev => ({ ...prev, [entryId]: { loading: true, suggestions: null } }));
+
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Based on the following audit observation, suggest 2 concise combinations of ISO Clause, Requirement, and NC Statement. Return the result strictly as a valid JSON array of objects with exactly 2 objects. Each object must have keys "clause", "requirement", and "ncStatement". Keep text short.\n\nObservation: ${observation}` }] }]
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error?.message || 'Failed to generate content');
+      }
+
+      let contentText = data.candidates[0].content.parts[0].text;
+      contentText = contentText.replace(/```json/g, '').replace(/```/g, '').trim();
+      
+      const suggestions = JSON.parse(contentText);
+      setAiState(prev => ({ ...prev, [entryId]: { loading: false, suggestions } }));
+    } catch (error) {
+      console.error("AI Generation Error:", error);
+      alert("Failed to generate AI suggestions. Check console for details.");
+      setAiState(prev => ({ ...prev, [entryId]: { loading: false, suggestions: null } }));
+    }
+  };
+
+  const applySuggestion = (entryId: string, suggestion: AISuggestion) => {
+    const clauseMatch = suggestion.clause.match(/^[\d.]+/);
+    let clauseValue = clauseMatch ? clauseMatch[0] : suggestion.clause;
+    if (clauseValue.endsWith('.')) clauseValue = clauseValue.slice(0, -1);
+
+    setEntries(prev => prev.map(entry => 
+      entry.id === entryId ? { 
+        ...entry, 
+        clause: clauseValue, 
+        requirement: suggestion.requirement, 
+        ncStatement: suggestion.ncStatement 
+      } : entry
+    ));
+    // optionally clear the suggestions after applying
+    setAiState(prev => ({ ...prev, [entryId]: { loading: false, suggestions: null } }));
+  };
+
+  const generateClauseSuggestions = async (entryId: string, observation: string) => {
+    if (!observation.trim()) {
+      alert("Please write an observation first to generate a clause.");
+      return;
+    }
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      alert("Gemini API key is missing. Please add VITE_GEMINI_API_KEY to your .env file.");
+      return;
+    }
+
+    setClauseAiState(prev => ({ ...prev, [entryId]: { loading: true, suggestions: null } }));
+
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Suggest 2 likely ISO clauses (just the clause number and name, e.g. "7.1.2 Competence") for this observation. Return ONLY a valid JSON array of 2 strings. Do not include markdown formatting.\nObservation: ${observation}` }] }]
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error();
+
+      let contentText = data.candidates[0].content.parts[0].text;
+      contentText = contentText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const suggestions = JSON.parse(contentText);
+      setClauseAiState(prev => ({ ...prev, [entryId]: { loading: false, suggestions } }));
+    } catch (error) {
+      console.error("AI Generation Error:", error);
+      alert("Failed to generate Clause suggestions.");
+      setClauseAiState(prev => ({ ...prev, [entryId]: { loading: false, suggestions: null } }));
     }
   };
 
@@ -199,8 +304,18 @@ export default function PerformAuditPage() {
                                     onChange={e => handleEntryChange(entry.id, 'docNumber', e.target.value)}
                                 />
                             </div>
-                            <div className="col-span-1">
-                                <label className="block text-xs font-semibold text-slate-600 mb-1">Clause</label>
+                            <div className="col-span-1 border-slate-300 relative">
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-xs font-semibold text-slate-600">Clause</label>
+                                    <button
+                                        onClick={() => generateClauseSuggestions(entry.id, entry.observation)}
+                                        disabled={clauseAiState[entry.id]?.loading}
+                                        className="text-purple-600 hover:text-purple-700 transition-colors"
+                                        title="Suggest Clause using AI"
+                                    >
+                                        {clauseAiState[entry.id]?.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                    </button>
+                                </div>
                                 <input
                                     type="text"
                                     placeholder="ISO Clause"
@@ -208,6 +323,37 @@ export default function PerformAuditPage() {
                                     value={entry.clause}
                                     onChange={e => handleEntryChange(entry.id, 'clause', e.target.value)}
                                 />
+                                {clauseAiState[entry.id]?.suggestions && (
+                                    <div className="absolute z-10 w-full mt-1 bg-white border border-purple-200 rounded-lg shadow-xl p-2 text-xs">
+                                        <div className="flex justify-between items-center mb-1 pb-1 border-b border-slate-100">
+                                            <span className="font-semibold text-slate-600">Suggestions:</span>
+                                            <button 
+                                                className="text-slate-400 hover:text-slate-600" 
+                                                onClick={() => setClauseAiState(prev => ({...prev, [entry.id]: {loading: false, suggestions: null}}))}
+                                            >
+                                                Dismiss
+                                            </button>
+                                        </div>
+                                        <div className="space-y-1">
+                                            {clauseAiState[entry.id].suggestions?.map((c, i) => (
+                                                <div 
+                                                    key={i} 
+                                                    onClick={() => {
+                                                        const match = c.match(/^[\d.]+/);
+                                                        let val = match ? match[0] : c;
+                                                        if (val.endsWith('.')) val = val.slice(0, -1);
+                                                        
+                                                        handleEntryChange(entry.id, 'clause', val);
+                                                        setClauseAiState(prev => ({...prev, [entry.id]: {loading: false, suggestions: null}}));
+                                                    }} 
+                                                    className="p-1.5 hover:bg-purple-50 hover:text-purple-700 cursor-pointer rounded transition-colors"
+                                                >
+                                                    {c}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <div className="col-span-1">
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">Status</label>
@@ -243,33 +389,75 @@ export default function PerformAuditPage() {
 
                         {/* NC Fields */}
                         {entry.status === 'NC' && (
-                            <div className="grid grid-cols-3 gap-4 bg-red-50/50 p-4 rounded-lg border border-red-100 animate-in fade-in slide-in-from-top-2">
-                                <div>
-                                    <label className="block text-xs font-semibold text-red-700 mb-1">NC Statement</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 rounded border border-red-200 focus:border-red-500 outline-none text-sm"
-                                        value={entry.ncStatement || ''}
-                                        onChange={e => handleEntryChange(entry.id, 'ncStatement', e.target.value)}
-                                    />
+                            <div className="bg-red-50/50 p-4 rounded-lg border border-red-100 animate-in fade-in slide-in-from-top-2 space-y-4 mt-4">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-sm font-semibold text-red-800">Non-Conformance Details</h4>
+                                    <button 
+                                        onClick={() => generateAISuggestions(entry.id, entry.observation)}
+                                        disabled={aiState[entry.id]?.loading}
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-md border border-purple-200 hover:bg-purple-100 transition-colors text-xs font-medium"
+                                    >
+                                        {aiState[entry.id]?.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                        {aiState[entry.id]?.loading ? 'Generating...' : 'AI Suggest Details'}
+                                    </button>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-red-700 mb-1">Requirement</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 rounded border border-red-200 focus:border-red-500 outline-none text-sm"
-                                        value={entry.requirement || ''}
-                                        onChange={e => handleEntryChange(entry.id, 'requirement', e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-red-700 mb-1">Target Date</label>
-                                    <input
-                                        type="date"
-                                        className="w-full px-3 py-2 rounded border border-red-200 focus:border-red-500 outline-none text-sm"
-                                        value={entry.targetDate || ''}
-                                        onChange={e => handleEntryChange(entry.id, 'targetDate', e.target.value)}
-                                    />
+                                
+                                {aiState[entry.id]?.suggestions && (
+                                    <div className="bg-white p-3 rounded border border-purple-200 shadow-sm space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-xs font-medium text-slate-600">Select a suggestion to apply:</p>
+                                            <button 
+                                                onClick={() => setAiState(prev => ({ ...prev, [entry.id]: { loading: false, suggestions: null } }))}
+                                                className="text-xs text-slate-500 hover:text-slate-700 underline"
+                                            >
+                                                Dismiss
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {aiState[entry.id].suggestions?.map((s, idx) => (
+                                                <div key={idx} 
+                                                     onClick={() => applySuggestion(entry.id, s)}
+                                                     className="p-3 border border-slate-200 rounded-lg cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-colors text-left"
+                                                >
+                                                    <div className="grid grid-cols-12 gap-2 text-xs text-slate-700">
+                                                        <div className="col-span-2"><strong className="text-slate-900 block mb-1">Clause</strong> {s.clause}</div>
+                                                        <div className="col-span-5"><strong className="text-slate-900 block mb-1">Requirement</strong> {s.requirement}</div>
+                                                        <div className="col-span-5"><strong className="text-slate-900 block mb-1">NC Statement</strong> {s.ncStatement}</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-red-700 mb-1">NC Statement</label>
+                                        <input
+                                            type="text"
+                                            className="w-full px-3 py-2 rounded border border-red-200 focus:border-red-500 outline-none text-sm"
+                                            value={entry.ncStatement || ''}
+                                            onChange={e => handleEntryChange(entry.id, 'ncStatement', e.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-red-700 mb-1">Requirement</label>
+                                        <input
+                                            type="text"
+                                            className="w-full px-3 py-2 rounded border border-red-200 focus:border-red-500 outline-none text-sm"
+                                            value={entry.requirement || ''}
+                                            onChange={e => handleEntryChange(entry.id, 'requirement', e.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-red-700 mb-1">Target Date</label>
+                                        <input
+                                            type="date"
+                                            className="w-full px-3 py-2 rounded border border-red-200 focus:border-red-500 outline-none text-sm"
+                                            value={entry.targetDate || ''}
+                                            onChange={e => handleEntryChange(entry.id, 'targetDate', e.target.value)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         )}
