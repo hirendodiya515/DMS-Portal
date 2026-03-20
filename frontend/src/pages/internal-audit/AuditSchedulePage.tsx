@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Play, Calendar, User } from 'lucide-react';
+import { Plus, Pencil, Trash2, Play, Calendar, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -26,6 +26,8 @@ export default function AuditSchedulePage() {
   const [, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<AuditSchedule | null>(null);
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
+  const [selectedMonthStr, setSelectedMonthStr] = useState<string>('');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -44,14 +46,45 @@ export default function AuditSchedulePage() {
 
   const fetchData = async () => {
     try {
-      const [schedulesRes, departmentsRes, auditorsRes] = await Promise.all([
+      const [schedulesRes, departmentsRes, auditorsRes, plansRes] = await Promise.all([
         api.get('/audit-schedules'),
         api.get('/settings/departments'),
         api.get('/audit-participants?type=auditor'),
+        api.get('/audit-plans').catch(() => ({ data: [] }))
       ]);
       setSchedules(schedulesRes.data);
       setDepartments(departmentsRes.data || []);
       setAuditors(auditorsRes.data || []);
+
+      const monthsSet = new Set<string>();
+      if (plansRes?.data) {
+          plansRes.data.forEach((p: any) => {
+              if (p.isPlanned || p.outcome) {
+                  monthsSet.add(p.month);
+              }
+          });
+      }
+      if (schedulesRes?.data) {
+          schedulesRes.data.forEach((s: AuditSchedule) => {
+              if (s.date) monthsSet.add(s.date.substring(0, 7));
+          });
+      }
+
+      let sortedMonths = Array.from(monthsSet).sort();
+      const today = new Date();
+      const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (sortedMonths.length === 0) {
+          sortedMonths = [currentMonth];
+      }
+      setAvailableMonths(sortedMonths);
+
+      setSelectedMonthStr(prev => {
+          if (prev && sortedMonths.includes(prev)) return prev;
+          if (sortedMonths.includes(currentMonth)) return currentMonth;
+          const futureOrCurrent = sortedMonths.find(m => m >= currentMonth);
+          return futureOrCurrent || sortedMonths[sortedMonths.length - 1] || currentMonth;
+      });
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -127,6 +160,32 @@ export default function AuditSchedulePage() {
       });
   };
 
+  const currentIndex = availableMonths.indexOf(selectedMonthStr);
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex < availableMonths.length - 1;
+
+  const handlePrevMonth = () => {
+      if (canGoPrev) setSelectedMonthStr(availableMonths[currentIndex - 1]);
+  };
+
+  const handleNextMonth = () => {
+      if (canGoNext) setSelectedMonthStr(availableMonths[currentIndex + 1]);
+  };
+
+  const formatMonthYear = (monthStr: string) => {
+      if (!monthStr) return '';
+      const [year, month] = monthStr.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const m = date.toLocaleDateString('en-US', { month: 'short' });
+      const y = year.slice(-2);
+      return `${m}-${y}`;
+  };
+
+  const filteredSchedules = schedules.filter(schedule => {
+      if (!schedule.date) return false;
+      return schedule.date.substring(0, 7) === selectedMonthStr;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -134,15 +193,36 @@ export default function AuditSchedulePage() {
           <h1 className="text-2xl font-bold text-slate-800">Internal Audit Schedule</h1>
           <p className="text-slate-500 text-sm mt-1">Plan and manage upcoming internal audits</p>
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Create Schedule
-          </button>
-        )}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+            <button 
+              onClick={handlePrevMonth} 
+              disabled={!canGoPrev}
+              className="p-1 hover:bg-slate-100 rounded text-slate-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <span className="text-sm font-semibold text-slate-700 min-w-[4.5rem] text-center select-none">
+              {formatMonthYear(selectedMonthStr)}
+            </span>
+            <button 
+              onClick={handleNextMonth} 
+              disabled={!canGoNext}
+              className="p-1 hover:bg-slate-100 rounded text-slate-600 transition-colors disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => handleOpenModal()}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Create Schedule
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -158,7 +238,7 @@ export default function AuditSchedulePage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {schedules.map((item) => (
+            {filteredSchedules.map((item) => (
               <tr key={item.id} className="hover:bg-slate-50/50">
                 <td className="px-6 py-3 font-medium text-slate-700">
                     {new Date(item.date).toLocaleDateString()}
@@ -221,10 +301,10 @@ export default function AuditSchedulePage() {
                 </td>
               </tr>
             ))}
-            {schedules.length === 0 && (
+            {filteredSchedules.length === 0 && (
                 <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                        No schedules found.
+                        No schedules found for this month.
                     </td>
                 </tr>
             )}
