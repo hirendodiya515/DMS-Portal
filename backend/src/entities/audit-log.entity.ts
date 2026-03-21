@@ -7,6 +7,7 @@ import { HiraRisk } from './hira-risk.entity';
 import { EaaRisk } from './eaa-risk.entity';
 import { QraRisk } from './qra-risk.entity';
 import { Pfmea } from './pfmea.entity';
+import { ProductDeviation } from './product-deviation.entity';
 
 export enum AuditAction {
     CREATE = 'create',
@@ -22,6 +23,10 @@ export enum AuditAction {
     MEASUREMENT_ADD = 'measurement_add',
     MEASUREMENT_DELETE = 'measurement_delete',
     CLOSE = 'close',
+    PRODUCT_DEVIATION_CREATE = 'product_deviation_create',
+    PRODUCT_DEVIATION_UPDATE = 'product_deviation_update',
+    PRODUCT_DEVIATION_SIGN = 'product_deviation_sign',
+    PRODUCT_DEVIATION_REJECT = 'product_deviation_reject',
 }
 
 @Entity('audit_logs')
@@ -90,6 +95,13 @@ export class AuditLog {
 
     @Column({ nullable: true })
     pfmeaId: string;
+
+    @ManyToOne(() => ProductDeviation, (deviation) => deviation.auditLogs, { nullable: true })
+    @JoinColumn({ name: 'productDeviationId' })
+    productDeviation: ProductDeviation;
+
+    @Column({ nullable: true })
+    productDeviationId: string;
 
     @Column({ type: 'text', nullable: true })
     details: string;

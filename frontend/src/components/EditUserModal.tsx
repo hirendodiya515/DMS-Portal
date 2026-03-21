@@ -23,6 +23,7 @@ export default function EditUserModal({ isOpen, onClose, onSuccess, user }: Edit
     firstName: '',
     lastName: '',
     email: '',
+    password: '',
     role: '',
     department: '',
     jobRoleId: '',
@@ -62,6 +63,7 @@ export default function EditUserModal({ isOpen, onClose, onSuccess, user }: Edit
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        password: '',
         role: user.role,
         department: user.department || '',
         jobRoleId: (user as any).jobRoleId || '', // Cast to any if type def not updated in this file yet
@@ -77,13 +79,20 @@ export default function EditUserModal({ isOpen, onClose, onSuccess, user }: Edit
     setLoading(true);
 
     try {
-      await api.put(`/users/${user.id}`, {
+      const payload: any = {
         firstName: formData.firstName,
         lastName: formData.lastName,
+        email: formData.email,
         role: formData.role,
         department: formData.department,
         jobRoleId: formData.jobRoleId || null,
-      });
+      };
+      
+      if (formData.password.trim()) {
+        payload.password = formData.password.trim();
+      }
+
+      await api.put(`/users/${user.id}`, payload);
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -137,14 +146,27 @@ export default function EditUserModal({ isOpen, onClose, onSuccess, user }: Edit
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-            <input
-              type="email"
-              disabled
-              value={formData.email}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 cursor-not-allowed"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+              <input
+                type="email"
+                required
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Reset Password (Optional)</label>
+              <input
+                type="text"
+                placeholder="Leave blank to keep current"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

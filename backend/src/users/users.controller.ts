@@ -5,6 +5,7 @@ import { User, UserRole } from '../entities/user.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import * as bcrypt from 'bcrypt';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -15,7 +16,6 @@ export class UsersController {
     ) { }
 
     @Get()
-    @Roles(UserRole.ADMIN)
     async findAll(@Query('relations') relations: string) {
         const relationsArray = relations ? relations.split(',') : [];
         const allowedRelations = ['jobRole'];
@@ -40,6 +40,9 @@ export class UsersController {
     @Put(':id')
     @Roles(UserRole.ADMIN)
     async update(@Param('id') id: string, @Body() updateUserDto: Partial<User>) {
+        if (updateUserDto.password) {
+            updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
+        }
         await this.userRepository.update(id, updateUserDto);
         return this.findOne(id);
     }

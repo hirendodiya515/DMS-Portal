@@ -69,6 +69,9 @@ import { PfmeaWorksheetRow } from './entities/pfmea-worksheet-row.entity';
 import { CustomerFeedback } from './entities/customer-feedback.entity';
 import { CorrectiveActionRequest } from './entities/corrective-action-request.entity';
 import { CustomerFeedbackModule } from './customer-feedback/customer-feedback.module';
+import { ProductDeviation } from './entities/product-deviation.entity';
+import { ProductDeviationResponsible } from './entities/product-deviation-responsible.entity';
+import { ProductDeviationModule } from './product-deviation/product-deviation.module';
 
 @Module({
   imports: [
@@ -92,7 +95,8 @@ import { CustomerFeedbackModule } from './customer-feedback/customer-feedback.mo
           Equipment, CalibrationHistory,
           TrainingCalendar, TrainingAttendance,
           SwotIssue, InterestedParty, StrategicRisk,
-          Pfmea, PfmeaWorksheetRow, CustomerFeedback, CorrectiveActionRequest
+          Pfmea, PfmeaWorksheetRow, CustomerFeedback, CorrectiveActionRequest,
+          ProductDeviation, ProductDeviationResponsible
         ],
         synchronize: true, // Set to false in production
       }),
@@ -126,6 +130,7 @@ import { CustomerFeedbackModule } from './customer-feedback/customer-feedback.mo
     OrgContextModule,
     StrategicRisksModule,
     CustomerFeedbackModule,
+    ProductDeviationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

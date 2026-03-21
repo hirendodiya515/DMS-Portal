@@ -15,6 +15,19 @@ import {
 
 const changeLog = [
   {
+    version: '2.5.0',
+    date: '21 March 2026',
+    title: 'Product Deviation & Workflow Architecture',
+    changes: [
+      'Added the Product Deviation portal where deviations can be formally raised by quality personnel',
+      'Implemented structured task assignment approvals sequentially requiring Responsible, Marketing, Plant Head, and Quality Head signatures',
+      'Integrated dynamic HTML mail triggers seamlessly dispatching targeted updates across each workflow action',
+      'Configured an intelligent auto-mail reminder scheduling system globally adjustable from system settings',
+      'Enabled localized PDF report generation and download options natively for Product Deviations',
+      'Upgraded User Management capabilities allowing Administrators to dynamically reset application passwords and emails'
+    ]
+  },
+  {
     version: '2.4.0',
     date: '19 March 2026',
     title: 'AI Integration for Internal Audits',
@@ -170,7 +183,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v2.4.0
+                    v2.5.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

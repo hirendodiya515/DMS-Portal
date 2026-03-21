@@ -20,6 +20,7 @@ import {
   Info,
   Building,
   SmilePlus,
+  FileWarning,
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 
@@ -83,6 +84,7 @@ export default function Sidebar() {
     { name: "Reports", href: "/reports", icon: BarChart3 },
     { name: "Audit Logs", href: "/audit-logs", icon: FileStack },
     { name: "Customer Satisfaction", href: "/customer-satisfaction", icon: SmilePlus },
+    { name: "Product Deviation", href: "/product-deviation", icon: FileWarning },
     { name: "About", href: "/about", icon: Info },
     // Only show Settings (which includes Users) to Admin
     ...(user?.role === "admin"
