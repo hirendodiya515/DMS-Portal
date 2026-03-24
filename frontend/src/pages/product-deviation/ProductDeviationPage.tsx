@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { SummaryTab } from './SummaryTab';
 import { ListTab } from './ListTab';
 import { SettingsTab } from './SettingsTab';
@@ -6,7 +7,8 @@ import { FileWarning, Settings, List, BarChart2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 
 export default function ProductDeviationPage() {
-  const [activeTab, setActiveTab] = useState<'summary' | 'list' | 'settings'>('summary');
+  const { id } = useParams<{ id: string }>();
+  const [activeTab, setActiveTab] = useState<'summary' | 'list' | 'settings'>(id ? 'list' : 'summary');
   const { user } = useAuthStore();
 
   return (

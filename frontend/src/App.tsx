@@ -83,7 +83,7 @@ function App() {
           
           <Route path="customer-satisfaction" element={<CustomerSatisfactionDashboard />} />
           
-          <Route path="product-deviation" element={<ProductDeviationPage />} />
+          <Route path="product-deviation/:id?" element={<ProductDeviationPage />} />
           
           <Route path="about" element={<AboutPage />} />
           

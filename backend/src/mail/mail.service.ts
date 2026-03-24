@@ -100,6 +100,7 @@ export class MailService {
   async sendProductDeviationAlert(
     recipientEmails: string[],
     deviationData: {
+      id: string;
       serialNumber: string;
       status: string;
       line: string;
@@ -121,7 +122,7 @@ export class MailService {
       : `⚠️ Action Required: Product Deviation - ${deviationData.serialNumber} (Pending: ${deviationData.pendingWith})`;
 
     const color = isClosed ? '#10b981' : '#2563eb';
-    const link = 'http://localhost:5173/product-deviation';
+    const link = `http://localhost:5173/product-deviation/${deviationData.id || ''}`;
 
     const html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">

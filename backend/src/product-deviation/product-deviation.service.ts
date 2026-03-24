@@ -97,6 +97,7 @@ export class ProductDeviationService {
         if (toEmails.length === 0) return;
 
         await this.mailService.sendProductDeviationAlert(toEmails, {
+            id: deviation.id,
             serialNumber: deviation.serialNumber,
             status: deviation.status,
             line: deviation.line,

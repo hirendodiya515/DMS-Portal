@@ -1,18 +1,32 @@
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../lib/api';
 import { Plus, Eye, FileText } from 'lucide-react';
 import { DeviationDetailsModal } from './DeviationDetailsModal';
 import { generateDeviationPdf } from './generateDeviationPdf';
 
 export function ListTab() {
-  const [deviations, setDeviations] = useState([]);
+  const [deviations, setDeviations] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDeviationId, setSelectedDeviationId] = useState<string | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
 
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+
   useEffect(() => {
     fetchDeviations();
   }, []);
+
+  useEffect(() => {
+    if (id && deviations.length > 0) {
+      const targetDev = deviations.find((d: any) => d.id === id);
+      if (targetDev && !isModalOpen) {
+        handleView(targetDev.id);
+        navigate('/product-deviation', { replace: true });
+      }
+    }
+  }, [id, deviations]);
 
   const fetchDeviations = async () => {
     try {
