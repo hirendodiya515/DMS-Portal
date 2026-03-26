@@ -61,10 +61,13 @@ export default function Sidebar() {
       icon: GraduationCap,
       children: [
         { name: "Gap Analysis", href: "/competency/dashboard" },
-        { name: "Employees", href: "/competency/employees" },
-        { name: "Job Roles", href: "/competency/roles" },
-        { name: "Competencies", href: "/competency/master" },
+        { name: "Assessment", href: "/competency/employees" },
+        ...(user?.role !== "viewer" ? [
+          { name: "Job Roles", href: "/competency/roles" },
+          { name: "Competencies", href: "/competency/master" },
+        ] : []),
         { name: "Training", href: "/competency/training" },
+        ...(user?.role === "admin" ? [{ name: "Settings", href: "/competency/settings" }] : []),
       ],
     },
     {

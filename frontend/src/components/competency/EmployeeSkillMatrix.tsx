@@ -32,7 +32,6 @@ interface Competency {
 
 export default function EmployeeSkillMatrix() {
     const { user: currentUser } = useAuthStore();
-    const canRate = currentUser?.role === 'admin' || currentUser?.role === 'reviewer';
 
     const [users, setUsers] = useState<User[]>([]);
     const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
@@ -45,12 +44,22 @@ export default function EmployeeSkillMatrix() {
     const [searchTerm, setSearchTerm] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('All');
     const [departments, setDepartments] = useState<string[]>([]);
+    const [competencyAdmins, setCompetencyAdmins] = useState<string[]>([]);
+    
+    const isGodMode = currentUser?.role === 'admin' || (currentUser?.id && competencyAdmins.includes(currentUser.id));
+    const canRate = isGodMode || currentUser?.role === 'reviewer' || currentUser?.role === 'dept_head';
 
     useEffect(() => {
         loadUsers();
         loadCompetencies();
         loadDepartments();
     }, []);
+
+    useEffect(() => {
+        if (!isGodMode && currentUser?.department) {
+            setDepartmentFilter(currentUser.department);
+        }
+    }, [isGodMode, currentUser]);
 
     useEffect(() => {
         filterUsers();
@@ -69,6 +78,11 @@ export default function EmployeeSkillMatrix() {
              // Re-using the same endpoints as utilized in MasterDataSettings
              const res = await api.get('/settings/departments');
              setDepartments(res.data || []);
+             
+             const adminRes = await api.get('/settings/competency_admins');
+             if (adminRes.data && Array.isArray(adminRes.data)) {
+                 setCompetencyAdmins(adminRes.data);
+             }
         } catch (error) {
             console.error('Failed to load departments', error);
         }
@@ -93,14 +107,19 @@ export default function EmployeeSkillMatrix() {
 
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            result = result.filter(u => 
+            result = result.filter((u: User) => 
                 u.name.toLowerCase().includes(term) || 
                 u.designation?.toLowerCase().includes(term)
             );
         }
 
         if (departmentFilter !== 'All') {
-            result = result.filter(u => u.department === departmentFilter);
+            result = result.filter((u: User) => u.department === departmentFilter);
+        }
+
+        // Final Security Filter: If not God-Mode, never show other departments
+        if (!isGodMode && currentUser?.department) {
+            result = result.filter((u: User) => u.department === currentUser.department);
         }
 
         setFilteredUsers(result);
@@ -143,13 +162,13 @@ export default function EmployeeSkillMatrix() {
         if (!selectedUser || !canRate) return;
         
         // Optimistic update
-        setSkills(prev => {
-            const existing = prev.find(s => s.competencyId === competencyId);
+        setSkills((prev: Skill[]) => {
+            const existing = prev.find((s: Skill) => s.competencyId === competencyId);
             if (existing) {
-                return prev.map(s => s.competencyId === competencyId ? { ...s, currentLevel: level } : s);
+                return prev.map((s: Skill) => s.competencyId === competencyId ? { ...s, currentLevel: level } : s);
             } else {
                 // Find competency details for full object
-                const comp = allCompetencies.find(c => c.id === competencyId);
+                const comp = allCompetencies.find((c: Competency) => c.id === competencyId);
                 if (!comp) return prev;
                 return [...prev, { competencyId, currentLevel: level, competency: comp }];
             }
@@ -167,7 +186,7 @@ export default function EmployeeSkillMatrix() {
     };
 
     // Group competencies by category
-    const competenciesByCategory = allCompetencies.reduce((acc, curr) => {
+    const competenciesByCategory = allCompetencies.reduce((acc: Record<string, Competency[]>, curr: Competency) => {
         const cat = curr.category || 'Other';
         if (!acc[cat]) acc[cat] = [];
         acc[cat].push(curr);
@@ -178,7 +197,7 @@ export default function EmployeeSkillMatrix() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
            <div className="md:col-span-1 border rounded-lg overflow-hidden bg-white h-[calc(100vh-8rem)] flex flex-col shadow-sm">
                 <div className="p-4 border-b bg-gray-50 space-y-3">
-                    <h3 className="font-semibold text-slate-800">Employees</h3>
+                    <h3 className="font-semibold text-slate-800">Assessment</h3>
                     
                     {/* Search */}
                     <div className="relative">
@@ -194,8 +213,9 @@ export default function EmployeeSkillMatrix() {
                     {/* Department Filter */}
                     <select
                         value={departmentFilter}
+                        disabled={!isGodMode}
                         onChange={(e) => setDepartmentFilter(e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-500"
                     >
                         <option value="All">All Departments</option>
                         {departments.map((dept) => (
@@ -211,7 +231,7 @@ export default function EmployeeSkillMatrix() {
                     {filteredUsers.length === 0 ? (
                         <div className="p-4 text-center text-slate-400 text-sm">No employees found</div>
                     ) : (
-                        filteredUsers.map(user => (
+                        filteredUsers.map((user: User) => (
                             <div
                                 key={user.id}
                                 onClick={() => setSelectedUser(user)}
@@ -251,8 +271,8 @@ export default function EmployeeSkillMatrix() {
                                     <div key={category}>
                                         <h3 className="font-semibold text-lg text-gray-800 mb-3 border-b pb-2">{category}</h3>
                                         <div className="max-w-3xl"> 
-                                            {comps.map(comp => {
-                                                const userSkill = skills.find(s => s.competencyId === comp.id);
+                                            {comps.map((comp: Competency) => {
+                                                const userSkill = skills.find((s: Skill) => s.competencyId === comp.id);
                                                 const currentLevel = userSkill?.currentLevel || 0;
                                                 return (
                                                     <div key={comp.id} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 px-2 rounded">

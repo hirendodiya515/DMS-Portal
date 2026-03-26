@@ -56,6 +56,7 @@ import { EaaRisksModule } from './risks/eaa/eaa-risks.module';
 import { QraRisksModule } from './risks/qra/qra-risks.module';
 import { TrainingCalendar } from './entities/training-calendar.entity';
 import { TrainingAttendance } from './entities/training-attendance.entity';
+import { AnnualTrainingPlan } from './entities/annual-training-plan.entity';
 import { TrainingCalendarModule } from './training-calendar/training-calendar.module';
 
 import { ScheduleModule } from '@nestjs/schedule';
@@ -93,7 +94,7 @@ import { ProductDeviationModule } from './product-deviation/product-deviation.mo
           Risk, RiskAssessmentItem, HiraRisk, EaaRisk, QraRisk, AuditPlan, AuditParticipant, AuditSchedule, AuditExecution, OrgNode, Flowchart,
           Competency, JobRole, CompetencyRequirement, EmployeeSkill, TrainingProgram, TrainingPlan,
           Equipment, CalibrationHistory,
-          TrainingCalendar, TrainingAttendance,
+          TrainingCalendar, TrainingAttendance, AnnualTrainingPlan,
           SwotIssue, InterestedParty, StrategicRisk,
           Pfmea, PfmeaWorksheetRow, CustomerFeedback, CorrectiveActionRequest,
           ProductDeviation, ProductDeviationResponsible

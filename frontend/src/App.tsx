@@ -28,6 +28,7 @@ import EmployeeSkillMatrix from './components/competency/EmployeeSkillMatrix';
 import SkillAssessmentPage from './pages/SkillAssessmentPage';
 import GapAnalysisDashboard from './components/competency/GapAnalysisDashboard';
 import TrainingManager from './components/competency/TrainingManager';
+import CompetencySettings from './components/competency/CompetencySettings';
 import CalibrationEquipmentPage from './pages/CalibrationEquipmentPage';
 import AboutPage from './pages/AboutPage';
 import ContextOfOrgPage from './pages/ContextOfOrgPage';
@@ -65,6 +66,7 @@ function App() {
           <Route path="competency/roles" element={<JobRoleManager />} />
           <Route path="competency/master" element={<CompetencyList />} />
           <Route path="competency/training" element={<TrainingManager />} />
+          <Route path="competency/settings" element={<CompetencySettings />} />
           
           {/* Internal Audit Routes */}
           <Route path="internal-audit/plan" element={<AuditPlanPage />} />

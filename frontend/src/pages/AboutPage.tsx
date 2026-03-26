@@ -15,6 +15,19 @@ import {
 
 const changeLog = [
   {
+    version: '2.6.0',
+    date: '26 March 2026',
+    title: 'Competency & Training Ecosystem Expansion',
+    changes: [
+      'Introduced a new digital Training Attendance form with integrated Feedback & Department tracking',
+      'Launched the Training Dashboard for real-time monitoring of personnel development metrics',
+      'Implemented "Plan vs Actual" matrix for annual training oversight and compliance tracking',
+      'Added a comprehensive Analytics page with department-wise performance and feedback breakdown',
+      'Created a new Competency Settings page to delegate "God-Mode" administrative rights to selected HR personnel',
+      'Enforced strict department-level data isolation for standard managers and viewers'
+    ]
+  },
+  {
     version: '2.5.0',
     date: '21 March 2026',
     title: 'Product Deviation & Workflow Architecture',
@@ -183,7 +196,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v2.5.0
+                    v2.6.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

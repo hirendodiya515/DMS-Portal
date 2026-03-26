@@ -23,6 +23,9 @@ export class TrainingCalendar {
   @Column({ nullable: true })
   endTime: string; // "11:00"
 
+  @Column({ nullable: true })
+  department: string;
+
   @Column({ unique: true })
   qrToken: string; // UUID used as QR identifier
 

@@ -33,4 +33,10 @@ export class TrainingAttendance {
 
   @CreateDateColumn()
   markedAt: Date;
+
+  @Column({ type: 'jsonb', nullable: true })
+  feedback: any;
+
+  @Column({ nullable: true })
+  department: string;
 }

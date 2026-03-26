@@ -20,6 +20,10 @@ export class CreateTrainingCalendarDto {
   @IsOptional()
   @IsString()
   endTime?: string; // "11:00"
+
+  @IsOptional()
+  @IsString()
+  department?: string;
 }
 
 export class UpdateTrainingCalendarDto {
@@ -46,4 +50,8 @@ export class UpdateTrainingCalendarDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  department?: string;
 }
