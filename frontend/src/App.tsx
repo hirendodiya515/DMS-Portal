@@ -20,6 +20,7 @@ import AuditorsPage from './pages/internal-audit/AuditorsPage';
 import AuditorSchedulePage from './pages/internal-audit/AuditSchedulePage';
 import PerformAuditPage from './pages/internal-audit/PerformAuditPage';
 import AuditSummaryPage from './pages/internal-audit/AuditSummaryPage';
+import NCTrackingPage from './pages/internal-audit/NCTrackingPage';
 import OrgChartPage from './pages/OrgChartPage';
 import FlowchartPage from './pages/FlowchartPage';
 import CompetencyList from './components/competency/CompetencyList';
@@ -75,7 +76,7 @@ function App() {
           <Route path="internal-audit/checksheet" element={<div className="text-center text-slate-500 mt-20">Internal Audit - Checksheet coming soon...</div>} />
           <Route path="internal-audit/perform" element={<PerformAuditPage />} />
           <Route path="internal-audit/summary" element={<AuditSummaryPage />} />
-          <Route path="internal-audit/nc-tracking" element={<div className="text-center text-slate-500 mt-20">Internal Audit - NC Tracking coming soon...</div>} />
+          <Route path="internal-audit/nc-tracking" element={<NCTrackingPage />} />
           
           {/* Calibration & Equipment Route */}
           <Route path="calibration-equipment" element={<CalibrationEquipmentPage />} />

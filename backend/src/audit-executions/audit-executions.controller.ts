@@ -17,6 +17,22 @@ export class AuditExecutionsController {
     return this.service.getSummary(startDate, endDate);
   }
 
+  @Get('nc-list')
+  @UseGuards(JwtAuthGuard)
+  getNCList() {
+    return this.service.getNCList();
+  }
+
+  @Patch(':id/nc/:entryId')
+  @UseGuards(JwtAuthGuard)
+  updateNC(
+    @Param('id') executionId: string,
+    @Param('entryId') entryId: string,
+    @Body() body: any
+  ) {
+    return this.service.updateNC(executionId, entryId, body);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   findOne(@Param('id') id: string) {

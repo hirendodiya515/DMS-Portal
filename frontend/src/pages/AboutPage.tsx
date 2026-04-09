@@ -15,6 +15,19 @@ import {
 
 const changeLog = [
   {
+    version: '2.7.0',
+    date: '09 April 2026',
+    title: 'Internal Audit NC Tracking & Workflow Automation',
+    changes: [
+      'Launched a centralized NC Tracking Dashboard with real-time analytics for department-wise distribution and status monitoring',
+      'Implemented a secure multi-stage closure workflow: Auditee submission -> Auditor review -> Final Closure or Resend for correction',
+      'Added a full NC detail "Eye" view to provide a transparent audit trail with complete observation, requirement, and action history',
+      'Optimized the module for all screen sizes with a responsive, scrollable closure modal and pinned action footers',
+      'Enhanced data visualization with interactive charts for status breakdown and audit plan-wise trends',
+      'Refined the UI with professional styling, including calibrated border radius and opaque sticky headers for seamless scrolling'
+    ]
+  },
+  {
     version: '2.6.0',
     date: '26 March 2026',
     title: 'Competency & Training Ecosystem Expansion',
@@ -196,7 +209,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v2.6.0
+                    v2.7.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

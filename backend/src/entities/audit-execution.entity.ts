@@ -11,6 +11,13 @@ export interface AuditEntry {
   ncStatement?: string;
   requirement?: string;
   targetDate?: string;
+  ncStatus?: 'Open' | 'Awaiting Review' | 'Closed';
+  auditeeCompletionDate?: string;
+  rootCause?: string;
+  correctiveAction?: string;
+  pointToCheckInNextAudit?: string;
+  closedDate?: string;
+  closedBy?: string;
 }
 
 @Entity('audit_executions')

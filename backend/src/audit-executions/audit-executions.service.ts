@@ -156,4 +156,53 @@ export class AuditExecutionsService {
   async remove(id: string) {
     return this.repository.delete(id);
   }
+
+  async getNCList() {
+    const executions = await this.repository.find({
+      where: { status: 'Submitted' },
+      relations: ['schedule', 'schedule.auditors'],
+    });
+
+    const ncList: any[] = [];
+    executions.forEach(exec => {
+      if (!exec.entries) return;
+      exec.entries.forEach(entry => {
+        if (entry.status === 'NC') {
+          ncList.push({
+            executionId: exec.id,
+            date: exec.date,
+            department: exec.schedule?.department || 'N/A',
+            auditors: exec.schedule?.auditors || [],
+            ...entry,
+            ncStatus: entry.ncStatus || 'Open',
+          });
+        }
+      });
+    });
+
+    return ncList;
+  }
+
+  async updateNC(executionId: string, entryId: string, data: any) {
+    const execution = await this.repository.findOneBy({ id: executionId });
+    if (!execution || !execution.entries) {
+      throw new Error('Execution or entries not found');
+    }
+
+    const entryIndex = execution.entries.findIndex(e => e.id === entryId);
+    if (entryIndex === -1) {
+      throw new Error('NC Entry not found');
+    }
+
+    execution.entries[entryIndex] = {
+      ...execution.entries[entryIndex],
+      ...data,
+    };
+
+    if (data.ncStatus === 'Closed' && !execution.entries[entryIndex].closedDate) {
+      execution.entries[entryIndex].closedDate = new Date().toISOString();
+    }
+
+    return this.repository.save(execution);
+  }
 }
