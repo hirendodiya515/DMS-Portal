@@ -73,6 +73,9 @@ import { CustomerFeedbackModule } from './customer-feedback/customer-feedback.mo
 import { ProductDeviation } from './entities/product-deviation.entity';
 import { ProductDeviationResponsible } from './entities/product-deviation-responsible.entity';
 import { ProductDeviationModule } from './product-deviation/product-deviation.module';
+import { ProcessDeviation } from './entities/process-deviation.entity';
+import { ProcessDeviationResponsible } from './entities/process-deviation-responsible.entity';
+import { ProcessDeviationModule } from './process-deviation/process-deviation.module';
 
 @Module({
   imports: [
@@ -97,7 +100,8 @@ import { ProductDeviationModule } from './product-deviation/product-deviation.mo
           TrainingCalendar, TrainingAttendance, AnnualTrainingPlan,
           SwotIssue, InterestedParty, StrategicRisk,
           Pfmea, PfmeaWorksheetRow, CustomerFeedback, CorrectiveActionRequest,
-          ProductDeviation, ProductDeviationResponsible
+          ProductDeviation, ProductDeviationResponsible,
+          ProcessDeviation, ProcessDeviationResponsible
         ],
         synchronize: true, // Set to false in production
       }),
@@ -132,6 +136,7 @@ import { ProductDeviationModule } from './product-deviation/product-deviation.mo
     StrategicRisksModule,
     CustomerFeedbackModule,
     ProductDeviationModule,
+    ProcessDeviationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

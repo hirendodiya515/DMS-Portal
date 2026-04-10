@@ -15,6 +15,20 @@ import {
 
 const changeLog = [
   {
+    version: '2.8.0',
+    date: '10 April 2026',
+    title: 'Process Deviation Management & 5-Step Approval Workflow',
+    changes: [
+      'Launched the specialized Process Deviation module with isolated data architecture and dedicated lifecycle tracking',
+      'Implemented a robust 5-step digital approval workflow: Functional Head -> QA Head -> Plant Head -> Process Head -> CEO',
+      'Introduced dynamic field rebranding: "Parameter Under Deviation" and "Specification of Parameter" for precise process documentation',
+      'Integrated department-aware logic to automatically route deviations to the correct Functional Head based on User Management data',
+      'Enabled comprehensive Audit Trails capturing every signature, remark, and state transition with millisecond precision',
+      'Automated high-priority workflow email alerts for each stage to ensure seamless handovers between departments',
+      'Upgraded localized PDF report generation to support the new 5-tier signature blocks and rebranding'
+    ]
+  },
+  {
     version: '2.7.0',
     date: '09 April 2026',
     title: 'Internal Audit NC Tracking & Workflow Automation',
@@ -209,7 +223,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v2.7.0
+                    v2.8.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

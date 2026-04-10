@@ -35,6 +35,7 @@ import AboutPage from './pages/AboutPage';
 import ContextOfOrgPage from './pages/ContextOfOrgPage';
 import CustomerSatisfactionDashboard from './pages/customer-feedback/CustomerSatisfactionDashboard';
 import ProductDeviationPage from './pages/product-deviation/ProductDeviationPage';
+import ProcessDeviationPage from './pages/process-deviation/ProcessDeviationPage';
 
 import './index.css';
 
@@ -87,6 +88,7 @@ function App() {
           <Route path="customer-satisfaction" element={<CustomerSatisfactionDashboard />} />
           
           <Route path="product-deviation/:id?" element={<ProductDeviationPage />} />
+          <Route path="process-deviation/:id?" element={<ProcessDeviationPage />} />
           
           <Route path="about" element={<AboutPage />} />
           

@@ -191,4 +191,99 @@ export class MailService {
 
     return this.sendMail(recipientEmails, subject, html, "Deviation - DMS");
   }
+
+  async sendProcessDeviationAlert(
+    recipientEmails: string[],
+    deviationData: {
+      id: string;
+      serialNumber: string;
+      status: string;
+      line: string;
+      creationDate: string;
+      startDate: string;
+      endDate: string;
+      parameterUnderDeviation: string;
+      specificationOfParameter: string;
+      createdBy: string;
+      natureOfDeviation: string;
+      description: string;
+      pendingWith: string;
+      submittedBy?: string;
+    },
+  ) {
+    const isClosed = deviationData.status === 'CLOSED';
+    const subject = isClosed
+      ? `✅ Notification: Process Deviation Closed - ${deviationData.serialNumber}`
+      : `⚠️ Action Required: Process Deviation - ${deviationData.serialNumber} (Pending: ${deviationData.pendingWith})`;
+
+    const color = isClosed ? '#10b981' : '#f59e0b'; // Amber for process
+    const link = `http://localhost:5173/process-deviation/${deviationData.id || ''}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+        <div style="background-color: ${color}; color: white; padding: 20px; text-align: center;">
+          <h2 style="margin: 0;">Process Deviation Alert</h2>
+          <p style="margin: 5px 0 0 0; opacity: 0.9;">${deviationData.serialNumber} - ${deviationData.status}</p>
+        </div>
+        <div style="padding: 20px;">
+          <p>Hello,</p>
+          <p style="margin: 0; color: #4b5563; font-size: 14px;">This is an automated notification regarding a Process Deviation.</p>
+          
+          <div style="background-color: #f8fafc; border-left: 4px solid ${color}; padding: 12px 16px; margin: 24px 0; border-radius: 4px;">
+            ${deviationData.submittedBy ? `<p style="margin: 0 0 8px 0; color: #1e293b; font-weight: 500;">Submitted By: <span style="color: #64748b; font-weight: 400;">${deviationData.submittedBy}</span></p>` : ''}
+            <p style="margin: 0; color: #1e293b; font-weight: 500;">Pending Action With: <span style="color: ${color};">${deviationData.pendingWith}</span></p>
+          </div>
+
+          <h3 style="color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Deviation Details</h3>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; width: 25%; background-color: #f1f5f9;">Serial Number</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; width: 25%;">${deviationData.serialNumber}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; width: 25%; background-color: #f1f5f9;">Status</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; width: 25%; font-weight: bold; color: ${color};">${deviationData.status}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Line</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.line}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Creation Date</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.creationDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Start Date</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.startDate}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">End Date</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.endDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Parameter Under Deviation</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.parameterUnderDeviation}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Specification of Parameter</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.specificationOfParameter}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Created By</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.createdBy}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Nature of Deviation</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.natureOfDeviation}</td>
+            </tr>
+          </table>
+
+          <h3 style="color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Description of Deviation</h3>
+          <div style="background-color: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 25px;">
+            ${deviationData.description}
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${link}" style="background-color: ${color}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">View Deviation Portal</a>
+          </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;">
+            <p>This is an automated message from the DMS Portal. Please do not reply to this email.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return this.sendMail(recipientEmails, subject, html, "Process Deviation - DMS");
+  }
 }

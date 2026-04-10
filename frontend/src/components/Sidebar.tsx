@@ -88,6 +88,7 @@ export default function Sidebar() {
     { name: "Audit Logs", href: "/audit-logs", icon: FileStack },
     { name: "Customer Satisfaction", href: "/customer-satisfaction", icon: SmilePlus },
     { name: "Product Deviation", href: "/product-deviation", icon: FileWarning },
+    { name: "Process Deviation", href: "/process-deviation", icon: FileWarning },
     { name: "About", href: "/about", icon: Info },
     // Only show Settings (which includes Users) to Admin
     ...(user?.role === "admin"

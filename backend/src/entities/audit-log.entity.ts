@@ -8,6 +8,7 @@ import { EaaRisk } from './eaa-risk.entity';
 import { QraRisk } from './qra-risk.entity';
 import { Pfmea } from './pfmea.entity';
 import { ProductDeviation } from './product-deviation.entity';
+import { ProcessDeviation } from './process-deviation.entity';
 
 export enum AuditAction {
     CREATE = 'create',
@@ -27,6 +28,10 @@ export enum AuditAction {
     PRODUCT_DEVIATION_UPDATE = 'product_deviation_update',
     PRODUCT_DEVIATION_SIGN = 'product_deviation_sign',
     PRODUCT_DEVIATION_REJECT = 'product_deviation_reject',
+    PROCESS_DEVIATION_CREATE = 'process_deviation_create',
+    PROCESS_DEVIATION_UPDATE = 'process_deviation_update',
+    PROCESS_DEVIATION_SIGN = 'process_deviation_sign',
+    PROCESS_DEVIATION_REJECT = 'process_deviation_reject',
 }
 
 @Entity('audit_logs')
@@ -102,6 +107,13 @@ export class AuditLog {
 
     @Column({ nullable: true })
     productDeviationId: string;
+
+    @ManyToOne(() => ProcessDeviation, (deviation) => deviation.auditLogs, { nullable: true })
+    @JoinColumn({ name: 'processDeviationId' })
+    processDeviation: ProcessDeviation;
+
+    @Column({ nullable: true })
+    processDeviationId: string;
 
     @Column({ type: 'text', nullable: true })
     details: string;
