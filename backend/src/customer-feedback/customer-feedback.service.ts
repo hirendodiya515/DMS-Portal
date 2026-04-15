@@ -20,34 +20,84 @@ export class CustomerFeedbackService {
     });
   }
 
-  async createFeedback(data: Partial<CustomerFeedback>) {
-    // Insert feedback
-    const feedback = this.feedbackRepo.create(data);
-    const savedFeedback = await this.feedbackRepo.save(feedback);
+  async createFeedback(payload: any) {
+    const { basicInfo, quality, competitiveness, others, overallSatisfaction, suggestion, qualityAverage } = payload;
 
-    // Calculate if CAR is needed (any score <= 2)
-    const ratings = {
-      'Quality': data.qualityRating,
-      'Delivery': data.deliveryRating,
-      'Packaging': data.packagingRating,
-      'Support': data.supportRating,
-      'Response Time': data.responseRating,
-      'Complaint Handling': data.complaintRating,
-      'Documentation': data.documentationRating,
-      'Overall': data.overallRating
+    // Map nested UI structure to flat Entity structure (Updated)
+    const feedbackData: Partial<CustomerFeedback> = {
+      // Basic Info
+      companyName: basicInfo.customerName,
+      plantLocation: basicInfo.plantLocation,
+      officeLocation: basicInfo.officeLocation,
+      annualCapacity: basicInfo.annualCapacity,
+      contactPerson: basicInfo.representativeName,
+      representativeName: basicInfo.representativeName,
+      representativeMail: basicInfo.representativeMail,
+      email: basicInfo.representativeMail,
+      representativeDesignation: basicInfo.representativeDesignation,
+      brlRepresentativeName: basicInfo.brlRepresentativeName || null,
+      
+      // Quality Section (Updated field names)
+      thicknessDimensionQualityRating: quality.thicknessDimensionQuality.rating,
+      thicknessDimensionQualityComment: quality.thicknessDimensionQuality.comment,
+      surfaceVisualQualityRating: quality.surfaceVisualQuality.rating,
+      surfaceVisualQualityComment: quality.surfaceVisualQuality.comment,
+      breakagesRating: quality.breakages.rating,
+      breakagesComment: quality.breakages.comment,
+      edgeGrindingQualityRating: quality.edgeGrindingQuality.rating,
+      edgeGrindingQualityComment: quality.edgeGrindingQuality.comment,
+      arCoatingQualityRating: quality.arCoatingQuality.rating,
+      arCoatingQualityComment: quality.arCoatingQuality.comment,
+      packingLoadingQualityRating: quality.packingLoadingQuality.rating,
+      packingLoadingQualityComment: quality.packingLoadingQuality.comment,
+      qualityAverage: qualityAverage,
+
+      // Competitiveness Section (Updated field name)
+      pricingRating: competitiveness.pricing.rating,
+      pricingComment: competitiveness.pricing.comment,
+      deliveryLeadTimeRating: competitiveness.deliveryLeadTime.rating,
+      deliveryLeadTimeComment: competitiveness.deliveryLeadTime.comment,
+      afterSalesServiceResponseRating: competitiveness.afterSalesServiceResponse.rating,
+      afterSalesServiceResponseComment: competitiveness.afterSalesServiceResponse.comment,
+      salesTeamApproachRating: competitiveness.salesTeamApproach.rating,
+      salesTeamApproachComment: competitiveness.salesTeamApproach.comment,
+
+      // Others & Satisfaction
+      procuredOtherThanBorosil: others.procuredOtherThanBorosil,
+      procurementReason: others.procurementReason,
+      expectations: others.expectations,
+      preferredChoice: others.preferredChoice,
+      recommendation: others.recommendation,
+      overallSatisfaction: overallSatisfaction,
+      suggestion: suggestion,
     };
 
-    const lowRatings = Object.entries(ratings).filter(([_, score]) => Number(score) <= 2);
+    const feedback = this.feedbackRepo.create(feedbackData);
+    const savedFeedback = await this.feedbackRepo.save(feedback);
 
-    if (lowRatings.length > 0) {
-      for (const [category, score] of lowRatings) {
+    // Automation: Auto-generate CARs for any low scores (<= 2) in all rated categories (Updated)
+    const allRatings = [
+      { label: 'Thickness & Dimension', score: quality.thicknessDimensionQuality.rating },
+      { label: 'Surface & Visual', score: quality.surfaceVisualQuality.rating },
+      { label: 'Breakages', score: quality.breakages.rating },
+      { label: 'Edge Grinding', score: quality.edgeGrindingQuality.rating },
+      { label: 'Coating', score: quality.arCoatingQuality.rating },
+      { label: 'Packing & Loading', score: quality.packingLoadingQuality.rating },
+      { label: 'Pricing', score: competitiveness.pricing.rating },
+      { label: 'Delivery & Lead Time', score: competitiveness.deliveryLeadTime.rating },
+      { label: 'After Sales Service', score: competitiveness.afterSalesServiceResponse.rating },
+      { label: 'Sales Team Approach', score: competitiveness.salesTeamApproach.rating },
+    ];
+
+    for (const item of allRatings) {
+      if (item.score > 0 && item.score <= 2) {
         const car = this.carRepo.create({
           feedbackId: savedFeedback.id,
-          customerName: data.companyName,
-          issueDescription: `Low rating (${score}) in ${category}`,
-          score: Number(score),
-          actionOwner: 'Sales Head', // Default owner
-          deadline: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // +15 days
+          customerName: basicInfo.customerName,
+          issueDescription: `Critical Low Score (${item.score}/5) in ${item.label}`,
+          score: item.score,
+          actionOwner: 'Sales & Quality Head',
+          deadline: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15 Day Closure
           status: 'Open'
         });
         await this.carRepo.save(car);
@@ -61,115 +111,65 @@ export class CustomerFeedbackService {
     const allFeedback = await this.feedbackRepo.find();
     
     if (allFeedback.length === 0) {
-      return {
-        averageScore: 0,
-        csi: 0,
-        totalResponses: 0,
-        totalCars: 0,
-        categoryAverages: {
-          quality: 0,
-          delivery: 0,
-          packaging: 0,
-          support: 0,
-          response: 0,
-          complaint: 0,
-          documentation: 0,
-          overall: 0,
-        },
-        monthlyTrend: [],
-      };
+      return { averageScore: 0, csi: 0, totalResponses: 0, totalCars: 0, categoryAverages: {}, monthlyTrend: [] };
     }
 
     const totalResponses = allFeedback.length;
-    let totalScore = 0;
-    const maxScorePerResponse = 40; // 8 categories * 5
     
-    const categorySums = {
-      quality: 0,
-      delivery: 0,
-      packaging: 0,
-      support: 0,
-      response: 0,
-      complaint: 0,
-      documentation: 0,
-      overall: 0,
-    };
+    // Improved Stats: Calculate averages for key sections
+    const qualitySum = allFeedback.reduce((acc, f) => acc + (parseFloat(f.qualityAverage) || 0), 0);
+    const avgQuality = qualitySum / totalResponses;
 
-    allFeedback.forEach((f) => {
-      const respScore = 
-        f.qualityRating + 
-        f.deliveryRating + 
-        f.packagingRating + 
-        f.supportRating + 
-        f.responseRating + 
-        f.complaintRating + 
-        f.documentationRating + 
-        f.overallRating;
-
-      totalScore += respScore;
-      
-      categorySums.quality += f.qualityRating;
-      categorySums.delivery += f.deliveryRating;
-      categorySums.packaging += f.packagingRating;
-      categorySums.support += f.supportRating;
-      categorySums.response += f.responseRating;
-      categorySums.complaint += f.complaintRating;
-      categorySums.documentation += f.documentationRating;
-      categorySums.overall += f.overallRating;
-    });
-
-    const averageScore = totalScore / totalResponses / 8; // Average rating out of 5
-    const csi = (totalScore / (totalResponses * maxScorePerResponse)) * 100;
+    const competitivenessSum = allFeedback.reduce((acc, f) => {
+      const compSum = (f.pricingRating + f.deliveryLeadTimeRating + f.afterSalesServiceResponseRating + f.salesTeamApproachRating) / 4;
+      return acc + compSum;
+    }, 0);
+    const avgCompetitiveness = competitivenessSum / totalResponses;
 
     const totalCars = await this.carRepo.count();
 
-    // Calculate monthly trend
-    const monthlyTrendMap = new Map<string, { total: number, count: number }>();
-    allFeedback.forEach(f => {
-      const monthYear = `${f.createdAt.getFullYear()}-${String(f.createdAt.getMonth() + 1).padStart(2, '0')}`;
-      const avgRespScore = (
-        f.qualityRating + f.deliveryRating + f.packagingRating + 
-        f.supportRating + f.responseRating + f.complaintRating + 
-        f.documentationRating + f.overallRating
-      ) / 8;
-
-      if (!monthlyTrendMap.has(monthYear)) {
-        monthlyTrendMap.set(monthYear, { total: 0, count: 0 });
-      }
-      const data = monthlyTrendMap.get(monthYear)!;
-      data.total += avgRespScore;
-      data.count += 1;
-    });
-
-    const monthlyTrend = Array.from(monthlyTrendMap.entries())
-      .map(([month, data]) => ({
-        month,
-        score: Number((data.total / data.count).toFixed(2))
-      }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-
     return {
-      averageScore: Number(averageScore.toFixed(2)),
-      csi: Number(csi.toFixed(2)),
+      averageScore: Number(((avgQuality + avgCompetitiveness) / 2).toFixed(2)),
+      csi: Number((((avgQuality + avgCompetitiveness) / 10) * 100).toFixed(2)), // Normalized to 100
       totalResponses,
       totalCars,
       categoryAverages: {
-        quality: Number((categorySums.quality / totalResponses).toFixed(2)),
-        delivery: Number((categorySums.delivery / totalResponses).toFixed(2)),
-        packaging: Number((categorySums.packaging / totalResponses).toFixed(2)),
-        support: Number((categorySums.support / totalResponses).toFixed(2)),
-        response: Number((categorySums.response / totalResponses).toFixed(2)),
-        complaint: Number((categorySums.complaint / totalResponses).toFixed(2)),
-        documentation: Number((categorySums.documentation / totalResponses).toFixed(2)),
-        overall: Number((categorySums.overall / totalResponses).toFixed(2)),
+        quality: Number(avgQuality.toFixed(2)),
+        competitiveness: Number(avgCompetitiveness.toFixed(2))
       },
-      monthlyTrend,
+      // Calculate Monthly Trend for the last 6 months
+      monthlyTrend: Array.from({ length: 6 }).map((_, i) => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - (5 - i));
+        const monthName = d.toLocaleString('default', { month: 'short' });
+        const year = d.getFullYear();
+        
+        // Filter feedback for this specific month/year
+        const monthFeedback = allFeedback.filter(f => {
+          const fDate = new Date(f.createdAt);
+          return fDate.getMonth() === d.getMonth() && fDate.getFullYear() === year;
+        });
+
+        const monthAvg = monthFeedback.length > 0 
+          ? monthFeedback.reduce((acc, f) => {
+              const q = parseFloat(f.qualityAverage) || 0;
+              const c = (f.pricingRating + f.deliveryLeadTimeRating + f.afterSalesServiceResponseRating + f.salesTeamApproachRating) / 4;
+              return acc + ((q + c) / 2);
+            }, 0) / monthFeedback.length
+          : 0;
+
+        return {
+          month: monthName,
+          score: Number(monthAvg.toFixed(2))
+        };
+      })
     };
   }
 
   async getCars() {
      return this.carRepo.find({
        order: { createdAt: 'DESC' },
+       relations: ['feedback']
      });
   }
 }

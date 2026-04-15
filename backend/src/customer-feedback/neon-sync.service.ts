@@ -17,7 +17,6 @@ export class NeonSyncService {
     @InjectRepository(CorrectiveActionRequest)
     private readonly carRepo: Repository<CorrectiveActionRequest>,
   ) {
-    // Only create pool if NEON_DATABASE_URL is set
     if (process.env.NEON_DATABASE_URL) {
       this.neonPool = new Pool({
         connectionString: process.env.NEON_DATABASE_URL,
@@ -26,7 +25,6 @@ export class NeonSyncService {
     }
   }
 
-  // Runs at midnight every night
   @Cron('0 0 * * *')
   async scheduledSync() {
     this.logger.log('Starting nightly sync from NeonDB...');
@@ -42,7 +40,6 @@ export class NeonSyncService {
   async runSync(): Promise<{ synced: number; cars: number; errors: string[] }> {
     if (!this.neonPool) {
       const msg = 'NEON_DATABASE_URL not configured. Skipping sync.';
-      this.logger.warn(msg);
       return { synced: 0, cars: 0, errors: [msg] };
     }
 
@@ -52,16 +49,11 @@ export class NeonSyncService {
     let cars = 0;
 
     try {
-      // Fetch all feedback from NeonDB
-      const feedbackResult = await client.query(
-        `SELECT * FROM customer_feedback ORDER BY created_at ASC`
-      );
+      const feedbackResult = await client.query(`SELECT * FROM customer_feedback ORDER BY created_at ASC`);
       const neonFeedback = feedbackResult.rows;
-      this.logger.log(`Found ${neonFeedback.length} records in NeonDB`);
 
       for (const row of neonFeedback) {
         try {
-          // Upsert to local PostgreSQL (skip if already exists by id)
           await this.feedbackRepo
             .createQueryBuilder()
             .insert()
@@ -69,22 +61,61 @@ export class NeonSyncService {
             .values({
               id: row.id,
               companyName: row.company_name,
+              plantLocation: row.plant_location,
+              officeLocation: row.office_location,
+              annualCapacity: row.annual_capacity,
               contactPerson: row.contact_person,
+              representativeName: row.representative_name,
+              representativeMail: row.representative_mail,
+              representativeDesignation: row.representative_designation,
+              brlRepresentativeName: row.brl_representative_name,
               email: row.email,
               product: row.product,
+              
+              // Quality (Updated field names)
               qualityRating: row.quality_rating,
-              deliveryRating: row.delivery_rating,
-              packagingRating: row.packaging_rating,
-              supportRating: row.support_rating,
-              responseRating: row.response_rating,
-              complaintRating: row.complaint_rating,
-              documentationRating: row.documentation_rating,
-              overallRating: row.overall_rating,
+              thicknessDimensionQualityRating: row.thickness_dimension_quality_rating,
+              thicknessDimensionQualityComment: row.thickness_dimension_quality_comment,
+              surfaceVisualQualityRating: row.surface_visual_quality_rating,
+              surfaceVisualQualityComment: row.surface_visual_quality_comment,
+              breakagesRating: row.breakages_rating,
+              breakagesComment: row.breakages_comment,
+              edgeGrindingQualityRating: row.edge_grinding_quality_rating,
+              edgeGrindingQualityComment: row.edge_grinding_quality_comment,
+              arCoatingQualityRating: row.ar_coating_quality_rating,
+              arCoatingQualityComment: row.ar_coating_quality_comment,
+              packingLoadingQualityRating: row.packing_loading_quality_rating,
+              packingLoadingQualityComment: row.packing_loading_quality_comment,
+              qualityAverage: row.quality_average,
+
+              // Competitiveness (Updated field name)
+              pricingRating: row.pricing_rating,
+              pricingComment: row.pricing_comment,
+              deliveryLeadTimeRating: row.delivery_lead_time_rating,
+              deliveryLeadTimeComment: row.delivery_lead_time_comment,
+              afterSalesServiceResponseRating: row.after_sales_service_response_rating,
+              afterSalesServiceResponseComment: row.after_sales_service_response_comment,
+              salesTeamApproachRating: row.sales_team_approach_rating,
+              salesTeamApproachComment: row.sales_team_approach_comment,
+
+              // Insights
+              procuredOtherThanBorosil: row.procured_other_than_borosil,
+              procurementReason: row.procurement_reason,
+              expectations: row.expectations,
+              preferredChoice: row.preferred_choice,
               recommendation: row.recommendation,
+              overallSatisfaction: row.overall_satisfaction,
               suggestion: row.suggestion,
               createdAt: row.created_at,
             })
-            .orIgnore() // Skip if ID already exists (idempotent)
+            .orUpdate(
+              [
+                'company_name', 'plant_location', 'office_location', 'annual_capacity',
+                'representative_name', 'representative_mail', 'representative_designation',
+                'brl_representative_name'
+              ],
+              ['id']
+            )
             .execute();
 
           synced++;
@@ -93,13 +124,9 @@ export class NeonSyncService {
         }
       }
 
-      // Fetch all CARs from NeonDB
-      const carsResult = await client.query(
-        `SELECT * FROM corrective_action_requests ORDER BY created_at ASC`
-      );
-      const neonCars = carsResult.rows;
-
-      for (const row of neonCars) {
+      // Sync CARs (mostly unchanged but ensures logic holds)
+      const carsResult = await client.query(`SELECT * FROM corrective_action_requests ORDER BY created_at ASC`);
+      for (const row of carsResult.rows) {
         try {
           await this.carRepo
             .createQueryBuilder()
@@ -118,19 +145,13 @@ export class NeonSyncService {
             })
             .orIgnore()
             .execute();
-
           cars++;
         } catch (err: any) {
           errors.push(`CAR ${row.id}: ${err.message}`);
         }
       }
 
-      this.logger.log(`Sync complete: ${synced} feedback, ${cars} CARs synced.`);
       return { synced, cars, errors };
-
-    } catch (error: any) {
-      this.logger.error('Sync failed:', error.message);
-      return { synced, cars, errors: [error.message] };
     } finally {
       client.release();
     }

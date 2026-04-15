@@ -15,6 +15,20 @@ import {
 
 const changeLog = [
   {
+    version: '2.9.0',
+    date: '15 April 2026',
+    title: 'Customer Feedback Ecosystem & Advanced Analytics',
+    changes: [
+      'Digitalized "BRL Representative Name" integration across the full-stack ecosystem (UI Form, Backend, and Database)',
+      'Upgraded the Satisfaction Dashboard with an interactive Comparison Line Chart and context-aware tooltips',
+      'Implemented real-time live search logic filtering by Company, Contact, and BRL Representative',
+      'Introduced a professional-grade PDF Report layout with persistent headers and structured data grids',
+      'Launched the "Export All" CSV engine for comprehensive feedback data extraction and offline analysis',
+      'Engineered an intelligent rolling-average algorithm for the 6-month Satisfaction Trend visualizer',
+      'Optimized the Feedback UI layout for balanced field grouping and improved data entry experience'
+    ]
+  },
+  {
     version: '2.8.0',
     date: '10 April 2026',
     title: 'Process Deviation Management & 5-Step Approval Workflow',
@@ -223,7 +237,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v2.8.0
+                    v2.9.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

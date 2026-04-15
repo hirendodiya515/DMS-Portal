@@ -6,3 +6,4 @@
 .env.production.local
 **/.env
 **/.env.*
+customer-feedback-ui.zip
