@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import DocumentsPage from './pages/DocumentsPage';
+import CategoryWiseDocuments from './pages/CategoryWiseDocuments';
 import DocumentDetailPage from './pages/DocumentDetailPage';
 import SettingsPage from './pages/SettingsPage';
 import ReportsPage from './pages/ReportsPage';
@@ -47,6 +48,7 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="documents" element={<DocumentsPage />} />
+          <Route path="documents-category" element={<CategoryWiseDocuments />} />
           <Route path="documents/:id" element={<DocumentDetailPage />} />
           <Route path="org-chart" element={<OrgChartPage />} />
           <Route path="objectives" element={<ObjectivesPage />} />

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Users, Database, FileText } from 'lucide-react';
+import { Users, Database, FileText, LayoutGrid } from 'lucide-react';
 import UsersPage from './UsersPage';
 import MasterDataSettings from '../components/MasterDataSettings';
 import DepartmentRequirements from '../components/DepartmentRequirements';
+import CategoryVisibilitySettings from '../components/CategoryVisibilitySettings';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
@@ -40,6 +41,17 @@ export default function SettingsPage() {
               Doc Requirements
             </button>
             <button
+              onClick={() => setActiveTab('visibility')}
+              className={`py-4 px-6 inline-flex items-center gap-2 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'visibility'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              Category Visibility
+            </button>
+            <button
               onClick={() => setActiveTab('users')}
               className={`py-4 px-6 inline-flex items-center gap-2 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'users'
@@ -56,6 +68,7 @@ export default function SettingsPage() {
         <div className="p-6">
           {activeTab === 'general' && <MasterDataSettings />}
           {activeTab === 'requirements' && <DepartmentRequirements />}
+          {activeTab === 'visibility' && <CategoryVisibilitySettings />}
           {activeTab === 'users' && <UsersPage embedded />}
         </div>
       </div>

@@ -39,7 +39,14 @@ export default function Sidebar() {
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "Documents", href: "/documents", icon: FileText },
+    { 
+      name: "Documents", 
+      icon: FileText,
+      children: [
+        { name: "All Documents", href: "/documents" },
+        { name: "Category View", href: "/documents-category" },
+      ]
+    },
     { name: "Context of Organization", href: "/context-organization", icon: Building },
     { name: "Organization Chart", href: "/org-chart", icon: Network },
     { name: "Flowchart", href: "/flowchart", icon: GitBranch },
