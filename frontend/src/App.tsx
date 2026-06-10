@@ -37,6 +37,7 @@ import ContextOfOrgPage from './pages/ContextOfOrgPage';
 import CustomerSatisfactionDashboard from './pages/customer-feedback/CustomerSatisfactionDashboard';
 import ProductDeviationPage from './pages/product-deviation/ProductDeviationPage';
 import ProcessDeviationPage from './pages/process-deviation/ProcessDeviationPage';
+import MocPage from './pages/MocPage';
 
 import './index.css';
 
@@ -92,6 +93,7 @@ function App() {
           <Route path="product-deviation/:id?" element={<ProductDeviationPage />} />
           <Route path="process-deviation/:id?" element={<ProcessDeviationPage />} />
           
+          <Route path="moc" element={<MocPage />} />
           <Route path="about" element={<AboutPage />} />
           
         </Route>

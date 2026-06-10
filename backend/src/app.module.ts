@@ -76,6 +76,8 @@ import { ProductDeviationModule } from './product-deviation/product-deviation.mo
 import { ProcessDeviation } from './entities/process-deviation.entity';
 import { ProcessDeviationResponsible } from './entities/process-deviation-responsible.entity';
 import { ProcessDeviationModule } from './process-deviation/process-deviation.module';
+import { MocRecord } from './entities/moc-record.entity';
+import { MocModule } from './moc/moc.module';
 
 @Module({
   imports: [
@@ -101,7 +103,8 @@ import { ProcessDeviationModule } from './process-deviation/process-deviation.mo
           SwotIssue, InterestedParty, StrategicRisk,
           Pfmea, PfmeaWorksheetRow, CustomerFeedback, CorrectiveActionRequest,
           ProductDeviation, ProductDeviationResponsible,
-          ProcessDeviation, ProcessDeviationResponsible
+          ProcessDeviation, ProcessDeviationResponsible,
+          MocRecord
         ],
         synchronize: true, // Set to false in production
       }),
@@ -137,6 +140,7 @@ import { ProcessDeviationModule } from './process-deviation/process-deviation.mo
     CustomerFeedbackModule,
     ProductDeviationModule,
     ProcessDeviationModule,
+    MocModule,
   ],
   controllers: [AppController],
   providers: [AppService],

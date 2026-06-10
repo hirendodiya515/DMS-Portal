@@ -9,6 +9,7 @@ import { QraRisk } from './qra-risk.entity';
 import { Pfmea } from './pfmea.entity';
 import { ProductDeviation } from './product-deviation.entity';
 import { ProcessDeviation } from './process-deviation.entity';
+import { MocRecord } from './moc-record.entity';
 
 export enum AuditAction {
     CREATE = 'create',
@@ -114,6 +115,13 @@ export class AuditLog {
 
     @Column({ nullable: true })
     processDeviationId: string;
+
+    @ManyToOne(() => MocRecord, { nullable: true, onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'mocId' })
+    moc: MocRecord;
+
+    @Column({ nullable: true })
+    mocId: string;
 
     @Column({ type: 'text', nullable: true })
     details: string;

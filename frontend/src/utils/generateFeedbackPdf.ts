@@ -9,7 +9,7 @@ export const generateFeedbackPdf = (feedback: any) => {
   const greenColor: [number, number, number] = [21, 128, 61];
   const amberColor: [number, number, number] = [217, 119, 6];
 
-  const drawHeader = (pageNum: number) => {
+  const drawHeader = (_pageNum: number) => {
     doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.rect(0, 0, 210, 35, 'F');
     doc.setTextColor(255, 255, 255);

@@ -15,6 +15,32 @@ import {
 
 const changeLog = [
   {
+    version: '3.1.0',
+    date: '10 June 2026',
+    title: 'Product Deviation Ecosystem & Searchable Operator Assignment',
+    changes: [
+      'Launched the standalone Product Deviation portal built on React, TypeScript, and Tailwind CSS v4',
+      'Configured a custom static hosting configuration on a dedicated port (5176) sharing the main API service and database',
+      'Implemented a searchable selection dropdown with dynamic name and email filtering for assigning responsible operators (supporting 50+ users)',
+      'Added high-visibility selected user pills with direct removal click triggers to streamline operator assignments',
+      'Upgraded the dashboard with a custom search filter defensive engine to eliminate runtime script exceptions on null database properties',
+      'Standardized corporate branding by replacing header icons with high-resolution Borosil Logo assets'
+    ]
+  },
+  {
+    version: '3.0.0',
+    date: '21 May 2026',
+    title: 'Management of Change (MOC) Ecosystem & Multi-Tier Approvals',
+    changes: [
+      'Launched the full-scale Management of Change (MOC) module featuring automated sequential change control tracking',
+      'Engineered a strict 7-stage sequential validation pipeline: Creator Raise -> HOD Review -> Plant Head -> CEO Approval -> EHS Clearance -> QA Approval -> Finalized',
+      'Created custom Authorized Approver settings allowing administrators to dynamically delegate email accounts for Plant Head, CEO, EHS, and QA roles',
+      'Implemented the Change Audit & Activity Register tab rendering high-density, chronological system audit trails of all creation, submission, approval, rejection, and deletion actions',
+      'Designed a premium, flat Overview interface using ultra-compact horizontal stage pipelines, flat stats grids, and low-profile inline launcher bars',
+      'Added secure cascading deletion controls strictly restricted to administrators with regulatory audit log preservation'
+    ]
+  },
+  {
     version: '2.9.0',
     date: '15 April 2026',
     title: 'Customer Feedback Ecosystem & Advanced Analytics',
@@ -237,7 +263,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v2.9.0
+                    v3.1.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>
