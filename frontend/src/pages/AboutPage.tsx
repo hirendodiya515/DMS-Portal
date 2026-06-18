@@ -15,6 +15,19 @@ import {
 
 const changeLog = [
   {
+    version: '3.2.0',
+    date: '18 June 2026',
+    title: 'Interested Parties Merging, Responsible Department Mapping & Global Search',
+    changes: [
+      'Engineered an intelligent visual merging UX for duplicate Interested Party entries using dynamic HTML rowSpan grouping',
+      'Added a new "Responsible" column mapping interested party needs to specific departments loaded from settings',
+      'Integrated real-time search filtering on both SWOT analysis issues and Interested Parties tables',
+      'Added a datalist suggestion list to the Party Name input in the form to prevent spelling errors during multiple need entries',
+      'Enforced delete confirmation security prompts on interested parties aligned with safety requirements',
+      'Completed full API integration for deleting interested party records from the Postgres database'
+    ]
+  },
+  {
     version: '3.1.0',
     date: '10 June 2026',
     title: 'Product Deviation Ecosystem & Searchable Operator Assignment',
@@ -263,7 +276,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v3.1.0
+                    v3.2.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

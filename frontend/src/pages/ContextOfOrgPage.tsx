@@ -22,6 +22,7 @@ interface Party {
   needs: string;
   risk: 'Low' | 'Medium' | 'High';
   actions: string[];
+  responsible?: string;
 }
 
 export default function ContextOfOrgPage() {
@@ -36,6 +37,9 @@ export default function ContextOfOrgPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [parties, setParties] = useState<Party[]>([]);
   const [scopeText, setScopeText] = useState("");
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [issuesSearchTerm, setIssuesSearchTerm] = useState("");
 
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin';
@@ -46,13 +50,15 @@ export default function ContextOfOrgPage() {
 
   const fetchData = async () => {
     try {
-      const [issuesRes, partiesRes, scopeRes] = await Promise.all([
+      const [issuesRes, partiesRes, scopeRes, deptsRes] = await Promise.all([
         api.get('/org-context/issues'),
         api.get('/org-context/parties'),
-        api.get('/org-context/scope')
+        api.get('/org-context/scope'),
+        api.get('/settings/departments').catch(() => ({ data: [] }))
       ]);
       setIssues(issuesRes.data);
       setParties(partiesRes.data);
+      setDepartments(deptsRes.data || []);
       
       const scopeData = scopeRes.data;
       if (scopeData && typeof scopeData === 'string') {
@@ -188,8 +194,15 @@ export default function ContextOfOrgPage() {
      setNewParty(prev => ({ ...prev, actions: prev.actions?.filter((_, i) => i !== index) }));
   };
 
-  const handleDeleteParty = (id: string) => {
-    setParties(parties.filter(p => p.id !== id));
+  const handleDeleteParty = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this interested party requirement?')) return;
+    try {
+      await api.delete(`/org-context/parties/${id}`);
+      setParties(parties.filter(p => p.id !== id));
+    } catch (error) {
+      console.error('Failed to delete interested party:', error);
+      alert('Failed to delete interested party. Please try again.');
+    }
   };
 
   const handleSaveScope = () => {
@@ -244,158 +257,240 @@ export default function ContextOfOrgPage() {
         {/* Tab Content */}
         <div className="p-6 bg-slate-50/50 min-h-[500px]">
           <AnimatePresence mode="wait">
-            {activeTab === 'swot' && (
-              <motion.div
-                key="swot"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6"
-              >
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-slate-800">SWOT Analysis</h2>
-                  {isAdmin && (
-                    <button onClick={() => { setEditingIssueId(null); setNewIssue({ category: 'strength', impact: 'low', standards: ['ISO 9001'] }); setIsAddIssueOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
-                      <Plus className="w-4 h-4" />
-                      Add Issue
-                    </button>
-                  )}
-                </div>
+            {activeTab === 'swot' && (() => {
+              const filteredIssues = issues.filter(i => {
+                const term = issuesSearchTerm.toLowerCase();
+                return (
+                  i.text.toLowerCase().includes(term) ||
+                  i.standards.some(std => std.toLowerCase().includes(term)) ||
+                  i.impact.toLowerCase().includes(term)
+                );
+              });
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Strengths */}
-                  <div className="bg-white rounded-xl border border-emerald-100 shadow-sm overflow-hidden flex flex-col h-full">
-                    <div className="bg-emerald-50 px-4 py-3 border-b border-emerald-100 flex items-center justify-between">
-                      <h3 className="font-semibold text-emerald-800 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        Strengths (Internal)
-                      </h3>
-                      <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
-                    </div>
-                    <div className="p-4 space-y-3 flex-1">
-                      {issues.filter(i => i.category === 'strength').map(issue => (
-                        <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} />
-                      ))}
-                      {issues.filter(i => i.category === 'strength').length === 0 && (
-                        <p className="text-sm text-slate-400 text-center py-4">No strengths recorded.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Weaknesses */}
-                  <div className="bg-white rounded-xl border border-rose-100 shadow-sm overflow-hidden flex flex-col h-full">
-                    <div className="bg-rose-50 px-4 py-3 border-b border-rose-100 flex items-center justify-between">
-                      <h3 className="font-semibold text-rose-800 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                        Weaknesses (Internal)
-                      </h3>
-                      <span className="bg-rose-100 text-rose-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
-                    </div>
-                    <div className="p-4 space-y-3 flex-1">
-                      {issues.filter(i => i.category === 'weakness').map(issue => (
-                         <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
-                      ))}
-                      {issues.filter(i => i.category === 'weakness').length === 0 && (
-                        <p className="text-sm text-slate-400 text-center py-4">No weaknesses recorded.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Opportunities */}
-                  <div className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden flex flex-col h-full">
-                    <div className="bg-blue-50 px-4 py-3 border-b border-blue-100 flex items-center justify-between">
-                      <h3 className="font-semibold text-blue-800 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                        Opportunities (External)
-                      </h3>
-                      <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
-                    </div>
-                    <div className="p-4 space-y-3 flex-1">
-                       {issues.filter(i => i.category === 'opportunity').map(issue => (
-                         <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
-                      ))}
-                       {issues.filter(i => i.category === 'opportunity').length === 0 && (
-                        <p className="text-sm text-slate-400 text-center py-4">No opportunities recorded.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Threats */}
-                  <div className="bg-white rounded-xl border border-amber-100 shadow-sm overflow-hidden flex flex-col h-full">
-                    <div className="bg-amber-50 px-4 py-3 border-b border-amber-100 flex items-center justify-between">
-                      <h3 className="font-semibold text-amber-800 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                        Threats (External)
-                      </h3>
-                      <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
-                    </div>
-                    <div className="p-4 space-y-3 flex-1">
-                      {issues.filter(i => i.category === 'threat').map(issue => (
-                         <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
-                      ))}
-                      {issues.filter(i => i.category === 'threat').length === 0 && (
-                        <p className="text-sm text-slate-400 text-center py-4">No threats recorded.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {activeTab === 'stakeholders' && (
-              <motion.div
-                key="stakeholders"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-4"
-              >
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold text-slate-800">Interested Parties</h2>
-                  {isAdmin && (
-                    <button onClick={() => { setEditingPartyId(null); setNewParty({ risk: 'Medium', standards: ['ISO 9001'], actions: [] }); setIsAddPartyOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
-                      <Plus className="w-4 h-4" />
-                      Add Party
-                    </button>
-                  )}
-                </div>
-                
-                <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse min-w-[800px]">
-                      <thead>
-                     { parties.length > 0 && 
-                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
-                          <th className="px-6 py-4 font-medium w-[20%]">Interested Party</th>
-                          <th className="px-6 py-4 font-medium w-[15%]">Standards</th>
-                          <th className="px-6 py-4 font-medium w-[25%] whitespace-normal">Needs & Expectations</th>
-                          <th className="px-6 py-4 font-medium w-[10%]">Risk</th>
-                          <th className="px-6 py-4 font-medium w-[25%]">Mitigations / Actions</th>
-                          {isAdmin && <th className="px-6 py-4 font-medium w-[5%] text-right">Actions</th>}
-                        </tr>
-                      }
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {parties.map(party => (
-                          <PartyRow 
-                            key={party.id}
-                            party={party}
-                            onDelete={isAdmin ? () => handleDeleteParty(party.id) : undefined}
-                            onEdit={isAdmin ? () => openEditPartyModal(party) : undefined}
-                            isAdmin={isAdmin}
-                          />
-                        ))}
-                        {parties.length === 0 && (
-                           <tr>
-                             <td colSpan={6} className="px-6 py-8 text-center text-slate-500 text-sm">No interested parties added yet.</td>
-                           </tr>
+              return (
+                <motion.div
+                  key="swot"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <h2 className="text-xl font-semibold text-slate-800">Internal & External Issues <p className="text-xs text-slate-500 mt-1">Document no.: L1/4.1</p></h2>
+                    <div className="flex items-center gap-3">
+                      <div className="relative min-w-[280px]">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        </span>
+                        <input 
+                          type="text"
+                          placeholder="Search issues or standards..."
+                          value={issuesSearchTerm}
+                          onChange={e => setIssuesSearchTerm(e.target.value)}
+                          className="pl-9 pr-4 py-2 w-full text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        />
+                        {issuesSearchTerm && (
+                          <button onClick={() => setIssuesSearchTerm("")} className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600">
+                            <X className="w-4 h-4" />
+                          </button>
                         )}
-                      </tbody>
-                    </table>
+                      </div>
+                      {isAdmin && (
+                        <button onClick={() => { setEditingIssueId(null); setNewIssue({ category: 'strength', impact: 'low', standards: ['ISO 9001'] }); setIsAddIssueOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm shrink-0">
+                          <Plus className="w-4 h-4" />
+                          Add Issue
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Strengths */}
+                    <div className="bg-white rounded-xl border border-emerald-100 shadow-sm overflow-hidden flex flex-col h-full">
+                      <div className="bg-emerald-50 px-4 py-3 border-b border-emerald-100 flex items-center justify-between">
+                        <h3 className="font-semibold text-emerald-800 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          Strengths (Internal)
+                        </h3>
+                        <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
+                      </div>
+                      <div className="p-4 space-y-3 flex-1">
+                        {filteredIssues.filter(i => i.category === 'strength').map(issue => (
+                          <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} />
+                        ))}
+                        {filteredIssues.filter(i => i.category === 'strength').length === 0 && (
+                          <p className="text-sm text-slate-400 text-center py-4">No strengths recorded.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Weaknesses */}
+                    <div className="bg-white rounded-xl border border-rose-100 shadow-sm overflow-hidden flex flex-col h-full">
+                      <div className="bg-rose-50 px-4 py-3 border-b border-rose-100 flex items-center justify-between">
+                        <h3 className="font-semibold text-rose-800 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                          Weaknesses (Internal)
+                        </h3>
+                        <span className="bg-rose-100 text-rose-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
+                      </div>
+                      <div className="p-4 space-y-3 flex-1">
+                        {filteredIssues.filter(i => i.category === 'weakness').map(issue => (
+                           <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
+                        ))}
+                        {filteredIssues.filter(i => i.category === 'weakness').length === 0 && (
+                          <p className="text-sm text-slate-400 text-center py-4">No weaknesses recorded.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Opportunities */}
+                    <div className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden flex flex-col h-full">
+                      <div className="bg-blue-50 px-4 py-3 border-b border-blue-100 flex items-center justify-between">
+                        <h3 className="font-semibold text-blue-800 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                          Opportunities (External)
+                        </h3>
+                        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
+                      </div>
+                      <div className="p-4 space-y-3 flex-1">
+                         {filteredIssues.filter(i => i.category === 'opportunity').map(issue => (
+                           <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
+                        ))}
+                         {filteredIssues.filter(i => i.category === 'opportunity').length === 0 && (
+                          <p className="text-sm text-slate-400 text-center py-4">No opportunities recorded.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Threats */}
+                    <div className="bg-white rounded-xl border border-amber-100 shadow-sm overflow-hidden flex flex-col h-full">
+                      <div className="bg-amber-50 px-4 py-3 border-b border-amber-100 flex items-center justify-between">
+                        <h3 className="font-semibold text-amber-800 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                          Threats (External)
+                        </h3>
+                        <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
+                      </div>
+                      <div className="p-4 space-y-3 flex-1">
+                        {filteredIssues.filter(i => i.category === 'threat').map(issue => (
+                           <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
+                        ))}
+                        {filteredIssues.filter(i => i.category === 'threat').length === 0 && (
+                          <p className="text-sm text-slate-400 text-center py-4">No threats recorded.</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
+            {activeTab === 'stakeholders' && (() => {
+              // Filter and group parties
+              const filteredParties = parties.filter(p => {
+                const term = searchTerm.toLowerCase();
+                return (
+                  p.name.toLowerCase().includes(term) ||
+                  p.needs.toLowerCase().includes(term) ||
+                  (p.responsible && p.responsible.toLowerCase().includes(term)) ||
+                  (p.actions && p.actions.some(act => act.toLowerCase().includes(term)))
+                );
+              });
+
+              // Group parties by name case-insensitively while preserving order
+              const groupedPartiesList: { name: string; items: Party[] }[] = [];
+              filteredParties.forEach(p => {
+                const nameKey = p.name.trim().toLowerCase();
+                let group = groupedPartiesList.find(g => g.name.toLowerCase() === nameKey);
+                if (!group) {
+                  group = { name: p.name.trim(), items: [] };
+                  groupedPartiesList.push(group);
+                }
+                group.items.push(p);
+              });
+
+              return (
+                <motion.div
+                  key="stakeholders"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-800">Interested Parties<p className="text-xs text-slate-500 mt-1">Document no.: L1/4.2</p></h2>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="relative min-w-[280px]">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        </span>
+                        <input 
+                          type="text"
+                          placeholder="Search party, need, action..."
+                          value={searchTerm}
+                          onChange={e => setSearchTerm(e.target.value)}
+                          className="pl-9 pr-4 py-2 w-full text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                        />
+                        {searchTerm && (
+                          <button onClick={() => setSearchTerm("")} className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600">
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      {isAdmin && (
+                        <button onClick={() => { setEditingPartyId(null); setNewParty({ risk: 'Medium', standards: ['ISO 9001'], actions: [] }); setIsAddPartyOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm shrink-0">
+                          <Plus className="w-4 h-4" />
+                          Add Party
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse min-w-[800px]">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
+                            <th className="px-6 py-4 font-medium w-[18%]">Interested Party</th>
+                            <th className="px-6 py-4 font-medium w-[12%]">Standards</th>
+                            <th className="px-6 py-4 font-medium w-[23%] whitespace-normal">Needs & Expectations</th>
+                            <th className="px-6 py-4 font-medium w-[10%]">Risk</th>
+                            <th className="px-6 py-4 font-medium w-[22%]">Mitigations / Actions</th>
+                            <th className="px-6 py-4 font-medium w-[10%]">Responsible</th>
+                            {isAdmin && <th className="px-6 py-4 font-medium w-[5%] text-right">Actions</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {groupedPartiesList.map(group => {
+                            return group.items.map((party, index) => (
+                              <PartyRow 
+                                key={party.id}
+                                party={party}
+                                isFirst={index === 0}
+                                rowSpan={group.items.length}
+                                isLastOfGroup={index === group.items.length - 1}
+                                onDelete={isAdmin ? () => handleDeleteParty(party.id) : undefined}
+                                onEdit={isAdmin ? () => openEditPartyModal(party) : undefined}
+                                isAdmin={isAdmin}
+                              />
+                            ));
+                          })}
+                          {groupedPartiesList.length === 0 && (
+                             <tr>
+                               <td colSpan={isAdmin ? 7 : 6} className="px-6 py-8 text-center text-slate-500 text-sm">
+                                 {searchTerm ? "No matching interested parties found." : "No interested parties added yet."}
+                               </td>
+                             </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })()}
 
             {activeTab === 'scope' && (
               <motion.div
@@ -406,7 +501,7 @@ export default function ContextOfOrgPage() {
                 className="space-y-6"
               >
                 <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-slate-800">IMS Scope Statement</h2>
+                  <h2 className="text-xl font-semibold text-slate-800">IMS Scope Statement<p className="text-xs text-slate-500 mt-1">Document no.: L1/4.3</p></h2>
                   {isAdmin && (
                     <button onClick={() => { setTempScopeText(scopeText); setIsEditScopeOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium shadow-sm">
                       Edit Document
@@ -537,7 +632,19 @@ export default function ContextOfOrgPage() {
                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
                  <div>
                    <label className="block text-sm font-medium text-slate-700 mb-1">Party Name</label>
-                   <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={newParty.name || ''} onChange={e => setNewParty({...newParty, name: e.target.value})} placeholder="e.g. Investors, Community" />
+                   <input 
+                     type="text" 
+                     list="existing-party-names"
+                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                     value={newParty.name || ''} 
+                     onChange={e => setNewParty({...newParty, name: e.target.value})} 
+                     placeholder="e.g. Employees, Customer, Suppliers" 
+                   />
+                   <datalist id="existing-party-names">
+                     {Array.from(new Set(parties.map(p => p.name.trim()))).map(name => (
+                       <option key={name} value={name} />
+                     ))}
+                   </datalist>
                  </div>
                  <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Applicable Standards</label>
@@ -562,12 +669,21 @@ export default function ContextOfOrgPage() {
                    <textarea rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newParty.needs || ''} onChange={e => setNewParty({...newParty, needs: e.target.value})} placeholder="What do they expect from the IMS?"></textarea>
                  </div>
                  <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
-                    <div className="col-span-2">
+                    <div>
                        <label className="block text-sm font-medium text-slate-700 mb-1">Risk if Unmet</label>
                        <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-semibold text-slate-700" value={newParty.risk} onChange={e => setNewParty({...newParty, risk: e.target.value as any})}>
                          <option value="Low">Low Risk</option>
                          <option value="Medium">Medium Risk</option>
                          <option value="High">High Risk</option>
+                       </select>
+                    </div>
+                    <div>
+                       <label className="block text-sm font-medium text-slate-700 mb-1">Responsible Department</label>
+                       <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-slate-700" value={newParty.responsible || ''} onChange={e => setNewParty({...newParty, responsible: e.target.value})}>
+                         <option value="">Select Department</option>
+                         {departments.map(d => (
+                           <option key={d} value={d}>{d}</option>
+                         ))}
                        </select>
                     </div>
                     <div className="col-span-2 space-y-2">
@@ -775,24 +891,49 @@ const IssueCard = ({ issue, convertible = false, onConvert, onDelete, onEdit }: 
   );
 };
 
-const PartyRow = ({ party, onDelete, onEdit, isAdmin }: { party: Party, onDelete?: () => void, onEdit?: () => void, isAdmin?: boolean }) => {
+const PartyRow = ({ 
+  party, 
+  onDelete, 
+  onEdit, 
+  isAdmin,
+  isFirst,
+  rowSpan,
+  isLastOfGroup
+}: { 
+  party: Party, 
+  onDelete?: () => void, 
+  onEdit?: () => void, 
+  isAdmin?: boolean,
+  isFirst: boolean,
+  rowSpan: number,
+  isLastOfGroup: boolean
+}) => {
   return (
-    <tr className="hover:bg-slate-50/50 transition-colors group align-top">
-      <td className="px-6 py-4">
-        <span className="font-medium text-slate-800 break-words">{party.name}</span>
-      </td>
+    <tr className={`hover:bg-slate-50/30 transition-colors group align-top ${
+      isLastOfGroup ? 'border-b-2 border-slate-200/60' : ''
+    }`}>
+      {isFirst && (
+        <td 
+          className="px-6 py-5 font-semibold text-slate-900 break-words border-r border-slate-100 bg-slate-50/20 align-middle text-center" 
+          rowSpan={rowSpan}
+        >
+          <span className="inline-block px-3 py-1 bg-blue-50/50 text-blue-900 border border-blue-100/50 rounded-lg text-sm font-bold shadow-sm">
+            {party.name}
+          </span>
+        </td>
+      )}
       <td className="px-6 py-4">
         <div className="flex gap-1 flex-wrap">
           {party.standards?.map((s: string) => <StandardBadge key={s} standard={s} />)}
         </div>
       </td>
-      <td className="px-6 py-4 text-sm text-slate-600 whitespace-pre-wrap break-words leading-relaxed">
+      <td className="px-6 py-4 text-sm text-slate-600 whitespace-pre-wrap break-words leading-relaxed font-medium">
         {party.needs}
       </td>
       <td className="px-6 py-4">
-        <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full ${
-          party.risk === 'High' ? 'bg-red-100 text-red-700' : 
-          party.risk === 'Medium' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+        <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full shadow-sm border ${
+          party.risk === 'High' ? 'bg-red-50 text-red-700 border-red-100' : 
+          party.risk === 'Medium' ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-green-50 text-green-700 border-green-100'
         }`}>
           {party.risk}
         </span>
@@ -808,16 +949,25 @@ const PartyRow = ({ party, onDelete, onEdit, isAdmin }: { party: Party, onDelete
            <span className="text-slate-400 italic">No mitigations specified</span>
          )}
       </td>
+      <td className="px-6 py-4">
+        {party.responsible ? (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
+            {party.responsible}
+          </span>
+        ) : (
+          <span className="text-slate-400 italic text-xs">-</span>
+        )}
+      </td>
       {isAdmin && (
         <td className="px-6 py-4 text-right">
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
             {onEdit && (
-              <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit Party">
+              <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100 shadow-sm hover:shadow" title="Edit Party">
                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
               </button>
             )}
             {onDelete && (
-              <button onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Party">
+              <button onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100 shadow-sm hover:shadow" title="Delete Party">
                  <Trash2 className="w-4 h-4" />
               </button>
             )}

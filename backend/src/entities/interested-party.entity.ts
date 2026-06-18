@@ -20,6 +20,9 @@ export class InterestedParty {
   @Column('simple-array', { nullable: true })
   actions: string[];
 
+  @Column({ nullable: true })
+  responsible: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
