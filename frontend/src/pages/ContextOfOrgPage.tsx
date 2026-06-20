@@ -13,6 +13,7 @@ interface Issue {
   impact: 'low' | 'medium' | 'high';
   standards: string[];
   isConverted?: boolean;
+  createdAt?: string;
 }
 
 interface Party {
@@ -40,6 +41,20 @@ export default function ContextOfOrgPage() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [issuesSearchTerm, setIssuesSearchTerm] = useState("");
+  const [swotViewMode, setSwotViewMode] = useState<'grid' | 'table'>('grid');
+  const [selectedStandard, setSelectedStandard] = useState<string>('all');
+  const [selectedState, setSelectedState] = useState<string>('all');
+  const [swotSortField, setSwotSortField] = useState<string>('displayId');
+  const [swotSortDirection, setSwotSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSwotSort = (field: string) => {
+    if (swotSortField === field) {
+      setSwotSortDirection(swotSortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSwotSortField(field);
+      setSwotSortDirection('asc');
+    }
+  };
 
   const { user } = useAuthStore();
   const isAdmin = user?.role === 'admin';
@@ -258,14 +273,85 @@ export default function ContextOfOrgPage() {
         <div className="p-6 bg-slate-50/50 min-h-[500px]">
           <AnimatePresence mode="wait">
             {activeTab === 'swot' && (() => {
-              const filteredIssues = issues.filter(i => {
+              // 1. Map stable IDs oldest-to-newest based on all issues
+              const issuesWithStableIds = [...issues].reverse().map((issue, idx) => ({
+                ...issue,
+                displayId: `ISS-${String(idx + 1).padStart(2, '0')}`
+              })).reverse();
+
+              // 2. Filter issues
+              const filteredIssues = issuesWithStableIds.filter(i => {
+                // Text Search Filter
                 const term = issuesSearchTerm.toLowerCase();
-                return (
+                const matchesText = 
                   i.text.toLowerCase().includes(term) ||
-                  i.standards.some(std => std.toLowerCase().includes(term)) ||
-                  i.impact.toLowerCase().includes(term)
-                );
+                  i.category.toLowerCase().includes(term) ||
+                  i.impact.toLowerCase().includes(term) ||
+                  i.standards.some(std => std.toLowerCase().includes(term));
+
+                // ISO Standard Filter
+                const matchesStandard = 
+                  selectedStandard === "all" ||
+                  i.standards.includes(selectedStandard);
+
+                // State Filter
+                const matchesState = 
+                  selectedState === "all" ||
+                  (selectedState === "evaluated" && i.isConverted) ||
+                  (selectedState === "draft" && !i.isConverted);
+
+                return matchesText && matchesStandard && matchesState;
               });
+
+              // 3. Sort issues for Tabular View
+              const sortedIssues = [...filteredIssues].sort((a, b) => {
+                let valA: any = '';
+                let valB: any = '';
+
+                switch (swotSortField) {
+                  case 'displayId':
+                    valA = a.displayId;
+                    valB = b.displayId;
+                    break;
+                  case 'category':
+                    valA = a.category;
+                    valB = b.category;
+                    break;
+                  case 'text':
+                    valA = a.text;
+                    valB = b.text;
+                    break;
+                  case 'standards':
+                    valA = a.standards.join(', ');
+                    valB = b.standards.join(', ');
+                    break;
+                  case 'impact':
+                    const impactWeight = { low: 1, medium: 2, high: 3 };
+                    valA = impactWeight[a.impact] || 0;
+                    valB = impactWeight[b.impact] || 0;
+                    break;
+                  case 'isConverted':
+                    valA = a.isConverted ? 1 : 0;
+                    valB = b.isConverted ? 1 : 0;
+                    break;
+                  default:
+                    valA = a.createdAt;
+                    valB = b.createdAt;
+                }
+
+                if (valA < valB) return swotSortDirection === 'asc' ? -1 : 1;
+                if (valA > valB) return swotSortDirection === 'asc' ? 1 : -1;
+                return 0;
+              });
+
+              const renderSortIndicator = (field: string) => {
+                if (swotSortField !== field) {
+                  return <span className="text-slate-300 ml-1 group-hover/th:opacity-100 opacity-0 transition-opacity">↕</span>;
+                }
+                return swotSortDirection === 'asc' 
+                  ? <span className="text-blue-600 ml-1">▲</span> 
+                  : <span className="text-blue-600 ml-1">▼</span>;
+              };
 
               return (
                 <motion.div
@@ -278,23 +364,32 @@ export default function ContextOfOrgPage() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <h2 className="text-xl font-semibold text-slate-800">Internal & External Issues <p className="text-xs text-slate-500 mt-1">Document no.: L1/4.1</p></h2>
                     <div className="flex items-center gap-3">
-                      <div className="relative min-w-[280px]">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                        </span>
-                        <input 
-                          type="text"
-                          placeholder="Search issues or standards..."
-                          value={issuesSearchTerm}
-                          onChange={e => setIssuesSearchTerm(e.target.value)}
-                          className="pl-9 pr-4 py-2 w-full text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
-                        />
-                        {issuesSearchTerm && (
-                          <button onClick={() => setIssuesSearchTerm("")} className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600">
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
+                      {/* View Selector Switch */}
+                      <div className="flex items-center bg-slate-200/60 p-1 rounded-lg border border-slate-300 shadow-sm shrink-0">
+                        <button 
+                          onClick={() => setSwotViewMode('grid')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            swotViewMode === 'grid' 
+                              ? 'bg-white text-blue-600 shadow-sm' 
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <LayoutDashboard className="w-3.5 h-3.5" />
+                          Grid View
+                        </button>
+                        <button 
+                          onClick={() => setSwotViewMode('table')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            swotViewMode === 'table' 
+                              ? 'bg-white text-blue-600 shadow-sm' 
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                          Tabular View
+                        </button>
                       </div>
+
                       {isAdmin && (
                         <button onClick={() => { setEditingIssueId(null); setNewIssue({ category: 'strength', impact: 'low', standards: ['ISO 9001'] }); setIsAddIssueOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm shrink-0">
                           <Plus className="w-4 h-4" />
@@ -304,83 +399,253 @@ export default function ContextOfOrgPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Strengths */}
-                    <div className="bg-white rounded-xl border border-emerald-100 shadow-sm overflow-hidden flex flex-col h-full">
-                      <div className="bg-emerald-50 px-4 py-3 border-b border-emerald-100 flex items-center justify-between">
-                        <h3 className="font-semibold text-emerald-800 flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          Strengths (Internal)
-                        </h3>
-                        <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
-                      </div>
-                      <div className="p-4 space-y-3 flex-1">
-                        {filteredIssues.filter(i => i.category === 'strength').map(issue => (
-                          <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} />
-                        ))}
-                        {filteredIssues.filter(i => i.category === 'strength').length === 0 && (
-                          <p className="text-sm text-slate-400 text-center py-4">No strengths recorded.</p>
-                        )}
-                      </div>
+                  {/* Search and Filters Bar */}
+                  <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-sm flex flex-col md:flex-row items-center gap-3">
+                    <div className="relative flex-1 w-full">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                      </span>
+                      <input 
+                        type="text"
+                        placeholder="Search issues, standard IDs, keywords..."
+                        value={issuesSearchTerm}
+                        onChange={e => setIssuesSearchTerm(e.target.value)}
+                        className="pl-9 pr-8 py-2 w-full text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                      />
+                      {issuesSearchTerm && (
+                        <button onClick={() => setIssuesSearchTerm("")} className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600">
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
 
-                    {/* Weaknesses */}
-                    <div className="bg-white rounded-xl border border-rose-100 shadow-sm overflow-hidden flex flex-col h-full">
-                      <div className="bg-rose-50 px-4 py-3 border-b border-rose-100 flex items-center justify-between">
-                        <h3 className="font-semibold text-rose-800 flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                          Weaknesses (Internal)
-                        </h3>
-                        <span className="bg-rose-100 text-rose-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
-                      </div>
-                      <div className="p-4 space-y-3 flex-1">
-                        {filteredIssues.filter(i => i.category === 'weakness').map(issue => (
-                           <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
-                        ))}
-                        {filteredIssues.filter(i => i.category === 'weakness').length === 0 && (
-                          <p className="text-sm text-slate-400 text-center py-4">No weaknesses recorded.</p>
-                        )}
-                      </div>
-                    </div>
+                    <div className="flex gap-2 w-full md:w-auto shrink-0">
+                      <select 
+                        value={selectedStandard}
+                        onChange={e => setSelectedStandard(e.target.value)}
+                        className="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 w-full md:w-auto"
+                      >
+                        <option value="all">All ISO Standards</option>
+                        <option value="ISO 9001">ISO 9001</option>
+                        <option value="ISO 14001">ISO 14001</option>
+                        <option value="ISO 45001">ISO 45001</option>
+                      </select>
 
-                    {/* Opportunities */}
-                    <div className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden flex flex-col h-full">
-                      <div className="bg-blue-50 px-4 py-3 border-b border-blue-100 flex items-center justify-between">
-                        <h3 className="font-semibold text-blue-800 flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                          Opportunities (External)
-                        </h3>
-                        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
-                      </div>
-                      <div className="p-4 space-y-3 flex-1">
-                         {filteredIssues.filter(i => i.category === 'opportunity').map(issue => (
-                           <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
-                        ))}
-                         {filteredIssues.filter(i => i.category === 'opportunity').length === 0 && (
-                          <p className="text-sm text-slate-400 text-center py-4">No opportunities recorded.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Threats */}
-                    <div className="bg-white rounded-xl border border-amber-100 shadow-sm overflow-hidden flex flex-col h-full">
-                      <div className="bg-amber-50 px-4 py-3 border-b border-amber-100 flex items-center justify-between">
-                        <h3 className="font-semibold text-amber-800 flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                          Threats (External)
-                        </h3>
-                        <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
-                      </div>
-                      <div className="p-4 space-y-3 flex-1">
-                        {filteredIssues.filter(i => i.category === 'threat').map(issue => (
-                           <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
-                        ))}
-                        {filteredIssues.filter(i => i.category === 'threat').length === 0 && (
-                          <p className="text-sm text-slate-400 text-center py-4">No threats recorded.</p>
-                        )}
-                      </div>
+                      <select 
+                        value={selectedState}
+                        onChange={e => setSelectedState(e.target.value)}
+                        className="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 w-full md:w-auto"
+                      >
+                        <option value="all">All States</option>
+                        <option value="evaluated">Evaluated (Escalated)</option>
+                        <option value="draft">Draft (Pending Action)</option>
+                      </select>
                     </div>
                   </div>
+
+                  {swotViewMode === 'table' ? (
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse min-w-[1100px]">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs tracking-wider uppercase font-bold select-none">
+                              <th onClick={() => handleSwotSort('displayId')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                                <div className="flex items-center gap-1">
+                                  ID {renderSortIndicator('displayId')}
+                                </div>
+                              </th>
+                              <th onClick={() => handleSwotSort('category')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                                <div className="flex items-center gap-1">
+                                  CATEGORY / MATRIX {renderSortIndicator('category')}
+                                </div>
+                              </th>
+                              <th onClick={() => handleSwotSort('text')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                                <div className="flex items-center gap-1">
+                                  ISSUE DESCRIPTION {renderSortIndicator('text')}
+                                </div>
+                              </th>
+                              <th onClick={() => handleSwotSort('standards')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                                <div className="flex items-center gap-1">
+                                  APPLICABLE STANDARDS {renderSortIndicator('standards')}
+                                </div>
+                              </th>
+                              <th onClick={() => handleSwotSort('impact')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                                <div className="flex items-center gap-1">
+                                  GENERAL IMPACT {renderSortIndicator('impact')}
+                                </div>
+                              </th>
+                              <th onClick={() => handleSwotSort('isConverted')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                                <div className="flex items-center gap-1">
+                                  IMS STATUS {renderSortIndicator('isConverted')}
+                                </div>
+                              </th>
+                              <th className="px-6 py-4 text-right">ACTIONS</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {sortedIssues.map((issue) => (
+                              <tr key={issue.id} className="hover:bg-slate-50/50 transition-colors align-middle">
+                                <td className="px-6 py-4 text-sm font-semibold text-slate-400 whitespace-nowrap">
+                                  {issue.displayId}
+                                </td>
+                                <td className="px-6 py-4 text-sm font-bold text-slate-800 uppercase whitespace-nowrap">
+                                  {issue.category}
+                                </td>
+                                <td className="px-6 py-4 text-sm text-slate-700 leading-relaxed font-medium min-w-[320px] max-w-[500px] break-words whitespace-normal">
+                                  {issue.text}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex gap-1 flex-wrap">
+                                    {issue.standards?.map(std => <StandardBadge key={std} standard={std} />)}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-sm font-bold text-slate-700 uppercase whitespace-nowrap">
+                                  {issue.impact}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {issue.isConverted ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                      Evaluated (Escalated)
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                                      Draft (Pending Action)
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-right whitespace-nowrap">
+                                  <div className="flex items-center justify-end gap-2">
+                                    {issue.isConverted ? (
+                                      <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1 bg-emerald-50 border border-emerald-100 px-2.5 py-1.5 rounded-lg shrink-0">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                        Linked to Risks
+                                      </span>
+                                    ) : (
+                                      <button 
+                                        onClick={() => handleConvertToRisk(issue)}
+                                        className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg hover:bg-indigo-100 hover:text-indigo-800 transition-colors flex items-center gap-1 shadow-sm shrink-0"
+                                      >
+                                        <svg className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500" viewBox="0 0 24 24" fill="currentColor">
+                                          <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        Escalate to Risks
+                                      </button>
+                                    )}
+
+                                    {isAdmin && (
+                                      <div className="flex gap-1 border-l border-slate-200 pl-2">
+                                        <button 
+                                          onClick={() => openEditIssueModal(issue)}
+                                          className="p-1 px-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors rounded-md" 
+                                          title="Edit Issue"
+                                        >
+                                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                        </button>
+                                        <button 
+                                          onClick={() => handleDeleteIssue(issue.id)}
+                                          className="p-1 px-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-md" 
+                                          title="Delete Issue"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                            {sortedIssues.length === 0 && (
+                              <tr>
+                                <td colSpan={7} className="px-6 py-8 text-center text-slate-500 text-sm">
+                                  No internal & external issues found.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Strengths */}
+                      <div className="bg-white rounded-xl border border-emerald-100 shadow-sm overflow-hidden flex flex-col h-full">
+                        <div className="bg-emerald-50 px-4 py-3 border-b border-emerald-100 flex items-center justify-between">
+                          <h3 className="font-semibold text-emerald-800 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            Strengths (Internal)
+                          </h3>
+                          <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
+                        </div>
+                        <div className="p-4 space-y-3 flex-1">
+                          {filteredIssues.filter(i => i.category === 'strength').map(issue => (
+                            <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} />
+                          ))}
+                          {filteredIssues.filter(i => i.category === 'strength').length === 0 && (
+                            <p className="text-sm text-slate-400 text-center py-4">No strengths recorded.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Weaknesses */}
+                      <div className="bg-white rounded-xl border border-rose-100 shadow-sm overflow-hidden flex flex-col h-full">
+                        <div className="bg-rose-50 px-4 py-3 border-b border-rose-100 flex items-center justify-between">
+                          <h3 className="font-semibold text-rose-800 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                            Weaknesses (Internal)
+                          </h3>
+                          <span className="bg-rose-100 text-rose-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
+                        </div>
+                        <div className="p-4 space-y-3 flex-1">
+                          {filteredIssues.filter(i => i.category === 'weakness').map(issue => (
+                             <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
+                          ))}
+                          {filteredIssues.filter(i => i.category === 'weakness').length === 0 && (
+                            <p className="text-sm text-slate-400 text-center py-4">No weaknesses recorded.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Opportunities */}
+                      <div className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden flex flex-col h-full">
+                        <div className="bg-blue-50 px-4 py-3 border-b border-blue-100 flex items-center justify-between">
+                          <h3 className="font-semibold text-blue-800 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                            Opportunities (External)
+                          </h3>
+                          <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
+                        </div>
+                        <div className="p-4 space-y-3 flex-1">
+                           {filteredIssues.filter(i => i.category === 'opportunity').map(issue => (
+                             <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
+                          ))}
+                           {filteredIssues.filter(i => i.category === 'opportunity').length === 0 && (
+                            <p className="text-sm text-slate-400 text-center py-4">No opportunities recorded.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Threats */}
+                      <div className="bg-white rounded-xl border border-amber-100 shadow-sm overflow-hidden flex flex-col h-full">
+                        <div className="bg-amber-50 px-4 py-3 border-b border-amber-100 flex items-center justify-between">
+                          <h3 className="font-semibold text-amber-800 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                            Threats (External)
+                          </h3>
+                          <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
+                        </div>
+                        <div className="p-4 space-y-3 flex-1">
+                          {filteredIssues.filter(i => i.category === 'threat').map(issue => (
+                             <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
+                          ))}
+                          {filteredIssues.filter(i => i.category === 'threat').length === 0 && (
+                            <p className="text-sm text-slate-400 text-center py-4">No threats recorded.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               );
             })()}
@@ -450,16 +715,16 @@ export default function ContextOfOrgPage() {
                   
                   <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse min-w-[800px]">
+                      <table className="w-full text-left border-collapse min-w-[1150px]">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
-                            <th className="px-6 py-4 font-medium w-[18%]">Interested Party</th>
-                            <th className="px-6 py-4 font-medium w-[12%]">Standards</th>
-                            <th className="px-6 py-4 font-medium w-[23%] whitespace-normal">Needs & Expectations</th>
-                            <th className="px-6 py-4 font-medium w-[10%]">Risk</th>
-                            <th className="px-6 py-4 font-medium w-[22%]">Mitigations / Actions</th>
-                            <th className="px-6 py-4 font-medium w-[10%]">Responsible</th>
-                            {isAdmin && <th className="px-6 py-4 font-medium w-[5%] text-right">Actions</th>}
+                            <th className="px-6 py-4 font-medium">Interested Party</th>
+                            <th className="px-6 py-4 font-medium">Standards</th>
+                            <th className="px-6 py-4 font-medium">Needs & Expectations</th>
+                            <th className="px-6 py-4 font-medium">Risk</th>
+                            <th className="px-6 py-4 font-medium">Mitigations / Actions</th>
+                            <th className="px-6 py-4 font-medium">Responsible</th>
+                            {isAdmin && <th className="px-6 py-4 font-medium text-right">Actions</th>}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -914,7 +1179,7 @@ const PartyRow = ({
     }`}>
       {isFirst && (
         <td 
-          className="px-6 py-5 font-semibold text-slate-900 break-words border-r border-slate-100 bg-slate-50/20 align-middle text-center" 
+          className="px-6 py-5 font-semibold text-slate-900 break-words border-r border-slate-100 bg-slate-50/20 align-middle text-center whitespace-nowrap" 
           rowSpan={rowSpan}
         >
           <span className="inline-block px-3 py-1 bg-blue-50/50 text-blue-900 border border-blue-100/50 rounded-lg text-sm font-bold shadow-sm">
@@ -922,15 +1187,15 @@ const PartyRow = ({
           </span>
         </td>
       )}
-      <td className="px-6 py-4">
+      <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex gap-1 flex-wrap">
           {party.standards?.map((s: string) => <StandardBadge key={s} standard={s} />)}
         </div>
       </td>
-      <td className="px-6 py-4 text-sm text-slate-600 whitespace-pre-wrap break-words leading-relaxed font-medium">
+      <td className="px-6 py-4 text-sm text-slate-600 break-words leading-relaxed font-medium min-w-[250px] max-w-[400px] whitespace-normal">
         {party.needs}
       </td>
-      <td className="px-6 py-4">
+      <td className="px-6 py-4 whitespace-nowrap">
         <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full shadow-sm border ${
           party.risk === 'High' ? 'bg-red-50 text-red-700 border-red-100' : 
           party.risk === 'Medium' ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-green-50 text-green-700 border-green-100'
@@ -938,18 +1203,18 @@ const PartyRow = ({
           {party.risk}
         </span>
       </td>
-      <td className="px-6 py-4 text-sm text-slate-600">
+      <td className="px-6 py-4 text-sm text-slate-600 min-w-[250px] max-w-[400px] whitespace-normal">
          {party.actions && party.actions.length > 0 ? (
             <ul className="list-disc list-inside space-y-1.5 marker:text-slate-400">
                {party.actions.map((act, i) => (
-                  <li key={i} className="leading-relaxed whitespace-pre-wrap break-words">{act}</li>
+                  <li key={i} className="leading-relaxed break-words">{act}</li>
                ))}
             </ul>
          ) : (
            <span className="text-slate-400 italic">No mitigations specified</span>
          )}
       </td>
-      <td className="px-6 py-4">
+      <td className="px-6 py-4 whitespace-nowrap">
         {party.responsible ? (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
             {party.responsible}
@@ -959,7 +1224,7 @@ const PartyRow = ({
         )}
       </td>
       {isAdmin && (
-        <td className="px-6 py-4 text-right">
+        <td className="px-6 py-4 text-right whitespace-nowrap">
           <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
             {onEdit && (
               <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100 shadow-sm hover:shadow" title="Edit Party">

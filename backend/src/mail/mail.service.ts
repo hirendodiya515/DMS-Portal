@@ -97,6 +97,73 @@ export class MailService {
     return this.sendMail(recipientEmails, subject, html);
   }
 
+  async sendConsolidatedCalibrationAlert(
+    recipientEmails: string[],
+    data: {
+      status: 'UPCOMING' | 'DUE';
+      department: string;
+      equipments: Array<{
+        name: string;
+        equipmentNumber: string;
+        nextCalibrationDate: string;
+      }>;
+    },
+  ) {
+    const isDue = data.status === 'DUE';
+    const subject = isDue
+      ? `🚨 ALERT: Equipment Calibration OVERDUE - ${data.department} Department`
+      : `📅 Notification: Upcoming Equipment Calibration - ${data.department} Department`;
+
+    const color = isDue ? '#d32f2f' : '#f57c00';
+    const statusText = isDue ? 'OVERDUE' : 'UPCOMING';
+
+    const rowsHtml = data.equipments
+      .map(
+        (eq) => `
+        <tr>
+          <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: left;">${eq.name}</td>
+          <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: left;">${eq.equipmentNumber}</td>
+          <td style="padding: 10px; border: 1px solid #e2e8f0; text-align: left;">${eq.nextCalibrationDate}</td>
+        </tr>
+      `,
+      )
+      .join('');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 650px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+        <div style="background-color: ${color}; color: white; padding: 20px; text-align: center;">
+          <h2 style="margin: 0;">Calibration Alert</h2>
+          <p style="margin: 5px 0 0 0; opacity: 0.9;">${data.department} Department - ${statusText}</p>
+        </div>
+        <div style="padding: 20px;">
+          <p>Hello,</p>
+          <p>This is an automated notification regarding the calibration status of the following equipment in the <strong>${data.department}</strong> department:</p>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+            <thead>
+              <tr style="background-color: #f1f5f9; font-weight: bold;">
+                <th style="padding: 10px; border: 1px solid #e2e8f0; text-align: left;">Equipment Name</th>
+                <th style="padding: 10px; border: 1px solid #e2e8f0; text-align: left;">Equipment Number</th>
+                <th style="padding: 10px; border: 1px solid #e2e8f0; text-align: left;">Next Calibration Due</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <p>Please take the necessary actions to ensure the equipment is calibrated on time.</p>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;">
+            <p>This is an automated message from the DMS Portal. Please do not reply to this email.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return this.sendMail(recipientEmails, subject, html);
+  }
+
   async sendProductDeviationAlert(
     recipientEmails: string[],
     deviationData: {

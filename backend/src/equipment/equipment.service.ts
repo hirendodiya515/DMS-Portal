@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Equipment, CalibrationStatus } from '../entities/equipment.entity';
+import { Equipment, CalibrationStatus, EquipmentStatus } from '../entities/equipment.entity';
 import { CalibrationHistory } from '../entities/calibration-history.entity';
 import { CreateEquipmentDto, UpdateEquipmentDto, CreateCalibrationHistoryDto } from './dto/equipment.dto';
 
@@ -130,6 +130,9 @@ export class EquipmentService {
     let calibrationUpcoming = 0;
 
     allEquipment.forEach(eq => {
+      if (eq.status === EquipmentStatus.MAINTENANCE || eq.status === EquipmentStatus.INACTIVE) {
+        return;
+      }
       const status = eq.getCalibrationStatus();
       if (status === CalibrationStatus.OK) calibrationOk++;
       else if (status === CalibrationStatus.DUE) calibrationDue++;
@@ -153,6 +156,9 @@ export class EquipmentService {
     oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
 
     const upcomingEquipment = allEquipment.filter(eq => {
+      if (eq.status === EquipmentStatus.MAINTENANCE || eq.status === EquipmentStatus.INACTIVE) {
+        return false;
+      }
       const nextDue = new Date(eq.nextCalibrationDate);
       return nextDue >= today && nextDue <= oneMonthLater;
     });
@@ -191,13 +197,15 @@ export class EquipmentService {
       calibrationUpcoming,
       departmentSummary,
       upcomingCalibrations: weeklyData,
-      allCalibrations: allEquipment.map((eq) => ({
-        id: eq.id,
-        name: eq.name,
-        department: eq.department,
-        nextCalibrationDate: eq.nextCalibrationDate,
-        status: eq.getCalibrationStatus(),
-      })),
+      allCalibrations: allEquipment
+        .filter(eq => eq.status !== EquipmentStatus.MAINTENANCE && eq.status !== EquipmentStatus.INACTIVE)
+        .map((eq) => ({
+          id: eq.id,
+          name: eq.name,
+          department: eq.department,
+          nextCalibrationDate: eq.nextCalibrationDate,
+          status: eq.getCalibrationStatus(),
+        })),
     };
   }
 

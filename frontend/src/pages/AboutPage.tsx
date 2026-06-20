@@ -15,6 +15,19 @@ import {
 
 const changeLog = [
   {
+    version: '3.3.0',
+    date: '19 June 2026',
+    title: 'Calibration Management Enhancements & Alert Consolidation',
+    changes: [
+      'Consolidated daily calibration alert notifications by grouping instruments by Department and Status (Upcoming vs Overdue) into a single summary email',
+      'Formatted consolidated emails with clean screen-friendly HTML tables and distinct urgency color themes',
+      'Restructured department view list header to display "Calibration register - [Department Name]" and added standard Document Number identifier (MR/L4/015)',
+      'Suppressed daily upcoming/overdue calibration alerts for equipment marked under "Maintenance" or "Inactive" status',
+      'Updated equipment list table, detail display, and history records to format dates to dd-mmm-yy format (e.g. 19-Jun-26)',
+      'Rendered grey "Inactive" calibration status badges on the equipment dashboard for maintenance/inactive instruments'
+    ]
+  },
+  {
     version: '3.2.0',
     date: '18 June 2026',
     title: 'Interested Parties Merging, Responsible Department Mapping & Global Search',
@@ -24,7 +37,9 @@ const changeLog = [
       'Integrated real-time search filtering on both SWOT analysis issues and Interested Parties tables',
       'Added a datalist suggestion list to the Party Name input in the form to prevent spelling errors during multiple need entries',
       'Enforced delete confirmation security prompts on interested parties aligned with safety requirements',
-      'Completed full API integration for deleting interested party records from the Postgres database'
+      'Completed full API integration for deleting interested party records from the Postgres database',
+      'Created a Layout Selector Switch on the SWOT tab to toggle between SWOT Grid View and a high-fidelity SWOT Tabular View',
+      'Integrated ISO Standard and IMS Status dropdown filters on the SWOT page'
     ]
   },
   {
@@ -276,7 +291,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v3.2.0
+                    v3.3.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

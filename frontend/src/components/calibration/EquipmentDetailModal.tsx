@@ -1,5 +1,16 @@
 import { X } from 'lucide-react';
 
+const formatDate = (dateInput: string | Date | undefined | null) => {
+  if (!dateInput) return '-';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return '-';
+  const day = String(date.getDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[date.getMonth()];
+  const year = String(date.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+};
+
 interface Equipment {
   id: string;
   equipmentNumber: string;
@@ -30,6 +41,9 @@ export default function EquipmentDetailModal({ isOpen, onClose, equipment }: Pro
   if (!isOpen) return null;
 
   const getCalibrationStatus = () => {
+    if (equipment.status === 'maintenance' || equipment.status === 'inactive') {
+      return { label: 'Inactive', color: 'text-slate-600 bg-slate-100' };
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const nextDue = new Date(equipment.nextCalibrationDate);
@@ -121,7 +135,7 @@ export default function EquipmentDetailModal({ isOpen, onClose, equipment }: Pro
                   <div>
                     <p className="text-xs text-slate-500">Purchase Date</p>
                     <p className="text-sm font-medium text-slate-800">
-                      {new Date(equipment.purchaseDate).toLocaleDateString()}
+                      {formatDate(equipment.purchaseDate)}
                     </p>
                   </div>
                 )}
@@ -129,14 +143,14 @@ export default function EquipmentDetailModal({ isOpen, onClose, equipment }: Pro
                   <div>
                     <p className="text-xs text-slate-500">Last Calibration</p>
                     <p className="text-sm font-medium text-slate-800">
-                      {new Date(equipment.lastCalibrationDate).toLocaleDateString()}
+                      {formatDate(equipment.lastCalibrationDate)}
                     </p>
                   </div>
                 )}
                 <div>
                   <p className="text-xs text-slate-500">Next Calibration Due</p>
                   <p className="text-sm font-medium text-slate-800">
-                    {new Date(equipment.nextCalibrationDate).toLocaleDateString()}
+                    {formatDate(equipment.nextCalibrationDate)}
                   </p>
                 </div>
                 <div>

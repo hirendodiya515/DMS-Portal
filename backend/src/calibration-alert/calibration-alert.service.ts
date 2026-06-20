@@ -7,6 +7,15 @@ import { User, UserRole } from '../entities/user.entity';
 import { Notification } from '../entities/notification.entity';
 import { MailService } from '../mail/mail.service';
 
+function formatDate(dateInput: Date | string): string {
+  const date = new Date(dateInput);
+  const day = String(date.getDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[date.getMonth()];
+  const year = String(date.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+}
+
 @Injectable()
 export class CalibrationAlertService {
   private readonly logger = new Logger(CalibrationAlertService.name);
@@ -36,9 +45,16 @@ export class CalibrationAlertService {
       relations: ['createdBy'],
     });
 
+    const groups = new Map<string, { department: string; status: CalibrationStatus; equipments: Equipment[] }>();
+
     for (const equipment of allEquipment) {
       const status = equipment.getCalibrationStatus();
       
+      // Skip equipment under maintenance or inactive
+      if (status === CalibrationStatus.INACTIVE) {
+        continue;
+      }
+
       // We only care about UPCOMING and DUE statuses for alerts
       if (status === CalibrationStatus.OK) {
         // Reset lastAlertStatus if it was previously set and is now OK (e.g. after calibration)
@@ -59,27 +75,31 @@ export class CalibrationAlertService {
         continue;
       }
 
-      await this.sendAlertForEquipment(equipment, status);
+      // Group by department and status
+      const key = `${equipment.department.toLowerCase()}__${status}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          department: equipment.department,
+          status,
+          equipments: [],
+        };
+        groups.set(key, group);
+      }
+      group.equipments.push(equipment);
+    }
+
+    // Process and send consolidated alerts
+    for (const group of groups.values()) {
+      await this.sendConsolidatedAlert(group.department, group.status, group.equipments);
     }
   }
 
-  private async sendAlertForEquipment(equipment: Equipment, status: CalibrationStatus) {
+  private async sendConsolidatedAlert(department: string, status: CalibrationStatus, equipments: Equipment[]) {
     try {
-      const department = equipment.department;
-      this.logger.debug(`Processing alerts for ${equipment.equipmentNumber} (${equipment.name}) in ${department}`);
+      this.logger.debug(`Processing consolidated alerts for ${equipments.length} equipment in ${department} (${status})`);
 
       // 1. Identify Recipients by Category
-      
-      // Find Creator
-      const creator = await this.userRepository.findOne({ where: { id: equipment.createdById } });
-      
-      // Find Department Creator, Reviewers & HODs (Case-insensitive department search)
-      const deptUsers = await this.userRepository.createQueryBuilder('user')
-        .where('LOWER(user.department) = LOWER(:dept)', { dept: department })
-        .andWhere('user.role IN (:...roles)', { roles: [UserRole.CREATOR, UserRole.REVIEWER, UserRole.DEPT_HEAD] })
-        .getMany();
-
-      // Combine and label for logging
       const recipientMap = new Map<string, { user: User, roles: string[] }>();
 
       const addRecipient = (user: User, roleLabel: string) => {
@@ -95,7 +115,24 @@ export class CalibrationAlertService {
         }
       };
 
-      if (creator) addRecipient(creator, 'Specific Creator');
+      // Add all creators of the specific equipment in this group
+      for (const eq of equipments) {
+        if (eq.createdBy) {
+          addRecipient(eq.createdBy, 'Specific Creator');
+        } else {
+          const creator = await this.userRepository.findOne({ where: { id: eq.createdById } });
+          if (creator) {
+            addRecipient(creator, 'Specific Creator');
+          }
+        }
+      }
+
+      // Find Department Creator, Reviewers & HODs (Case-insensitive department search)
+      const deptUsers = await this.userRepository.createQueryBuilder('user')
+        .where('LOWER(user.department) = LOWER(:dept)', { dept: department })
+        .andWhere('user.role IN (:...roles)', { roles: [UserRole.CREATOR, UserRole.REVIEWER, UserRole.DEPT_HEAD] })
+        .getMany();
+
       deptUsers.forEach(u => {
         let roleLabel = 'Reviewer';
         if (u.role === UserRole.DEPT_HEAD) roleLabel = 'HOD';
@@ -105,46 +142,56 @@ export class CalibrationAlertService {
       });
 
       if (recipientMap.size === 0) {
-        this.logger.warn(`No valid recipients found for equipment ${equipment.equipmentNumber}`);
+        this.logger.warn(`No valid recipients found for department ${department}`);
         return;
       }
 
       // 2. Send Email and In-App Notifications
       const recipientEmails = Array.from(recipientMap.values()).map(r => r.user.email);
-      const recipientRoles = Array.from(recipientMap.values()).map(r => `${r.user.firstName} (${r.roles.join('+')})`);
 
       try {
         // Send Consolidated Email
-        await this.mailService.sendCalibrationAlert(recipientEmails, {
-          equipmentName: equipment.name,
-          equipmentNumber: equipment.equipmentNumber,
-          nextCalibrationDate: new Date(equipment.nextCalibrationDate).toLocaleDateString(),
+        await this.mailService.sendConsolidatedCalibrationAlert(recipientEmails, {
           status: status === CalibrationStatus.DUE ? 'DUE' : 'UPCOMING',
-          department: equipment.department,
+          department: department,
+          equipments: equipments.map(eq => ({
+            name: eq.name,
+            equipmentNumber: eq.equipmentNumber,
+            nextCalibrationDate: formatDate(eq.nextCalibrationDate),
+          })),
         });
 
-        // Create In-App Notifications for each user
-        const notifications = Array.from(recipientMap.keys()).map(userId => {
-          return this.notificationRepository.create({
-            userId: userId,
-            message: `Calibration ${status === CalibrationStatus.DUE ? 'OVERDUE' : 'UPCOMING'} for equipment: ${equipment.equipmentNumber} (${equipment.name})`,
-            isRead: false,
-          });
-        });
-        await this.notificationRepository.save(notifications);
+        // Create In-App Notifications for each user and equipment
+        const notifications: Notification[] = [];
+        for (const eq of equipments) {
+          for (const userId of recipientMap.keys()) {
+            notifications.push(
+              this.notificationRepository.create({
+                userId: userId,
+                message: `Calibration ${status === CalibrationStatus.DUE ? 'OVERDUE' : 'UPCOMING'} for equipment: ${eq.equipmentNumber} (${eq.name})`,
+                isRead: false,
+              })
+            );
+          }
+        }
+        if (notifications.length > 0) {
+          await this.notificationRepository.save(notifications);
+        }
 
-        this.logger.log(`[Alert Sent] Eq: ${equipment.equipmentNumber} | Recipients: ${recipientEmails.join(', ')} | Details: ${recipientRoles.join(', ')}`);
+        this.logger.log(`[Consolidated Alert Sent] Dept: ${department} | Status: ${status} | Count: ${equipments.length} | Recipients: ${recipientEmails.join(', ')}`);
       } catch (error) {
-        this.logger.error(`Failed to send consolidated alert for ${equipment.equipmentNumber}: ${error.message}`);
+        this.logger.error(`Failed to send consolidated alert for department ${department}: ${error.message}`);
       }
 
       // 3. Update Equipment tracking fields
-      equipment.lastAlertSentAt = new Date();
-      equipment.lastAlertStatus = status;
-      await this.equipmentRepository.save(equipment);
+      for (const eq of equipments) {
+        eq.lastAlertSentAt = new Date();
+        eq.lastAlertStatus = status;
+        await this.equipmentRepository.save(eq);
+      }
 
     } catch (error) {
-      this.logger.error(`Critical error in sendAlertForEquipment for ${equipment.equipmentNumber}: ${error.message}`);
+      this.logger.error(`Critical error in sendConsolidatedAlert for department ${department}: ${error.message}`);
     }
   }
 }

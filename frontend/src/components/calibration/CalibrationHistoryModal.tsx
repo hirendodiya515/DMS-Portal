@@ -3,6 +3,17 @@ import { X, Upload, Trash2, FileText } from 'lucide-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 
+const formatDate = (dateInput: string | Date | undefined | null) => {
+  if (!dateInput) return '-';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return '-';
+  const day = String(date.getDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[date.getMonth()];
+  const year = String(date.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+};
+
 interface Equipment {
   id: string;
   equipmentNumber: string;
@@ -335,7 +346,7 @@ export default function CalibrationHistoryModal({ isOpen, onClose, equipment, on
                         <div className="flex items-center gap-4 mb-2">
                           <div>
                             <p className="text-sm font-semibold text-slate-800">
-                              {new Date(record.calibrationDate).toLocaleDateString()}
+                              {formatDate(record.calibrationDate)}
                             </p>
                             <p className="text-xs text-slate-500">Calibration Date</p>
                           </div>
@@ -367,7 +378,7 @@ export default function CalibrationHistoryModal({ isOpen, onClose, equipment, on
 
                         <p className="text-xs text-slate-400 mt-2">
                           Uploaded by {record.uploadedBy.firstName} {record.uploadedBy.lastName} on{' '}
-                          {new Date(record.createdAt).toLocaleDateString()}
+                          {formatDate(record.createdAt)}
                         </p>
                       </div>
 

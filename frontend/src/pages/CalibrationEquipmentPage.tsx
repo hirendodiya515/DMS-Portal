@@ -7,6 +7,17 @@ import EquipmentDetailModal from '../components/calibration/EquipmentDetailModal
 import CalibrationHistoryModal from '../components/calibration/CalibrationHistoryModal';
 import CalibrationCalendarModal from '../components/calibration/CalibrationCalendarModal';
 
+const formatDate = (dateInput: string | Date | undefined | null) => {
+  if (!dateInput) return '-';
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return '-';
+  const day = String(date.getDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[date.getMonth()];
+  const year = String(date.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+};
+
 interface Equipment {
   id: string;
   equipmentNumber: string;
@@ -354,8 +365,12 @@ export default function CalibrationEquipmentPage() {
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">{selectedDepartment} Equipment</h1>
-            <p className="text-slate-500 text-sm mt-1">{equipmentList.length} total equipment</p>
+            <h1 className="text-2xl font-bold text-slate-800">Calibration register - {selectedDepartment}</h1>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-slate-500 text-sm mt-1">
+              <span className="font-medium text-slate-600">Document no.: MR/L4/015</span>
+              <span className="hidden sm:inline text-slate-300">|</span>
+              <span>{equipmentList.length} total equipment</span>
+            </div>
           </div>
         </div>
         {checkAccess(selectedDepartment || undefined) && (
@@ -402,7 +417,8 @@ export default function CalibrationEquipmentPage() {
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredEquipment.map((equipment, index) => {
-                const calibStatus = getCalibrationStatus(equipment.nextCalibrationDate, equipment.alertDaysBeforeDue);
+                const isInactive = equipment.status === 'maintenance' || equipment.status === 'inactive';
+                const calibStatus = isInactive ? 'inactive' : getCalibrationStatus(equipment.nextCalibrationDate, equipment.alertDaysBeforeDue);
                 return (
                   <tr key={equipment.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm text-slate-600">{index + 1}</td>
@@ -411,19 +427,21 @@ export default function CalibrationEquipmentPage() {
                     <td className="px-6 py-4 text-sm text-slate-600">{equipment.line || '-'}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">{equipment.equipmentId}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {new Date(equipment.nextCalibrationDate).toLocaleDateString()}
+                      {formatDate(equipment.nextCalibrationDate)}
                     </td>
                     <td className="px-6 py-4">
                       <span
                         className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          calibStatus === 'ok'
+                          calibStatus === 'inactive'
+                            ? 'bg-slate-100 text-slate-700'
+                            : calibStatus === 'ok'
                             ? 'bg-green-100 text-green-700'
                             : calibStatus === 'upcoming'
                             ? 'bg-yellow-100 text-yellow-700'
                             : 'bg-red-100 text-red-700'
                         }`}
                       >
-                        {calibStatus === 'ok' ? 'OK' : calibStatus === 'upcoming' ? 'Upcoming' : 'Due'}
+                        {calibStatus === 'inactive' ? 'Inactive' : calibStatus === 'ok' ? 'OK' : calibStatus === 'upcoming' ? 'Upcoming' : 'Due'}
                       </span>
                     </td>
                     <td className="px-6 py-4">

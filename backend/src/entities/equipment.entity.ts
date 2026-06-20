@@ -21,6 +21,7 @@ export enum CalibrationStatus {
   OK = 'ok',           // Within calibration date
   DUE = 'due',         // Overdue
   UPCOMING = 'upcoming', // Within alert days
+  INACTIVE = 'inactive', // Under maintenance or inactive
 }
 
 @Entity('equipment')
@@ -101,6 +102,10 @@ export class Equipment {
 
   // Helper method to calculate calibration status
   getCalibrationStatus(): CalibrationStatus {
+    if (this.status === EquipmentStatus.MAINTENANCE || this.status === EquipmentStatus.INACTIVE) {
+      return CalibrationStatus.INACTIVE;
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
