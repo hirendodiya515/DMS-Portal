@@ -78,6 +78,7 @@ import { ProcessDeviationResponsible } from './entities/process-deviation-respon
 import { ProcessDeviationModule } from './process-deviation/process-deviation.module';
 import { MocRecord } from './entities/moc-record.entity';
 import { MocModule } from './moc/moc.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -141,6 +142,7 @@ import { MocModule } from './moc/moc.module';
     ProductDeviationModule,
     ProcessDeviationModule,
     MocModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

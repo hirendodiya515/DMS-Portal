@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
+import FloatingAiChat from './FloatingAiChat';
 
 export default function Layout() {
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -21,6 +22,7 @@ export default function Layout() {
                     <Outlet />
                 </main>
             </div>
+            <FloatingAiChat />
         </div>
     );
 }
