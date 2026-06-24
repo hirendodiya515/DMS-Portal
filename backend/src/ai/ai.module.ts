@@ -3,7 +3,9 @@ import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiService } from './ai.service';
 import { AiController } from './ai.controller';
+import { KnowledgeBaseService } from './knowledge-base.service';
 import { Document } from '../entities/document.entity';
+import { DocumentVersion } from '../entities/document-version.entity';
 import { Equipment } from '../entities/equipment.entity';
 import { AuditPlan } from '../entities/audit-plan.entity';
 import { AuditSchedule } from '../entities/audit-schedule.entity';
@@ -14,12 +16,18 @@ import { SwotIssue } from '../entities/swot-issue.entity';
 import { ProductDeviation } from '../entities/product-deviation.entity';
 import { ProcessDeviation } from '../entities/process-deviation.entity';
 import { MocRecord } from '../entities/moc-record.entity';
+import { AuditParticipant } from '../entities/audit-participant.entity';
+import { HiraRisk } from '../entities/hira-risk.entity';
+import { EaaRisk } from '../entities/eaa-risk.entity';
+import { QraRisk } from '../entities/qra-risk.entity';
+import { InterestedParty } from '../entities/interested-party.entity';
 
 @Module({
     imports: [
         HttpModule,
         TypeOrmModule.forFeature([
             Document, 
+            DocumentVersion,
             Equipment, 
             AuditPlan, 
             AuditSchedule, 
@@ -29,11 +37,16 @@ import { MocRecord } from '../entities/moc-record.entity';
             SwotIssue,
             ProductDeviation,
             ProcessDeviation,
-            MocRecord
+            MocRecord,
+            AuditParticipant,
+            HiraRisk,
+            EaaRisk,
+            QraRisk,
+            InterestedParty
         ]),
     ],
     controllers: [AiController],
-    providers: [AiService],
-    exports: [AiService],
+    providers: [AiService, KnowledgeBaseService],
+    exports: [AiService, KnowledgeBaseService],
 })
 export class AiModule {}

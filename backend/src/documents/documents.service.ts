@@ -7,6 +7,7 @@ import { DocumentVersion } from '../entities/document-version.entity';
 import { AuditLog, AuditAction } from '../entities/audit-log.entity';
 
 import { NotificationsService } from '../notifications/notifications.service';
+import { KnowledgeBaseService } from '../ai/knowledge-base.service';
 
 @Injectable()
 export class DocumentsService {
@@ -20,6 +21,7 @@ export class DocumentsService {
         @InjectRepository(AuditLog)
         private auditRepository: Repository<AuditLog>,
         private notificationsService: NotificationsService,
+        private kbService: KnowledgeBaseService,
     ) { }
 
     @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -156,6 +158,11 @@ export class DocumentsService {
 
         // Finally delete the document
         await this.documentRepository.remove(document);
+
+        // Rebuild vector index in the background
+        this.kbService.rebuildIndex().catch(err => {
+            this.logger.error(`Failed to auto-rebuild vector index after deletion: ${err.message}`);
+        });
         
         return { message: 'Document deleted successfully' };
     }
@@ -208,6 +215,11 @@ export class DocumentsService {
             `Good news! Your document "${document.title}" has been approved.`,
             document.id
         );
+
+        // Rebuild vector index in the background
+        this.kbService.rebuildIndex().catch(err => {
+            this.logger.error(`Failed to auto-rebuild vector index after approval: ${err.message}`);
+        });
 
         return document;
     }

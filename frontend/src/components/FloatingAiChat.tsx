@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquareCode, Sparkles, Send, X, RotateCcw, Bot, User, Minimize2 } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
 import api from '../lib/api';
 
 interface Message {
@@ -64,11 +65,22 @@ const ROUTE_CONTEXTS: Record<string, { context: string; starters: string[] }> = 
     }
 };
 
+const formatModelName = (name: string): string => {
+    if (!name) return 'Local AI';
+    const baseName = name.split(':')[0];
+    return baseName
+        .split(/[-_]/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+        .replace(/([a-zA-Z]+)(\d+)/g, '$1 $2');
+};
+
 export default function FloatingAiChat() {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [modelName, setModelName] = useState('Local AI');
     const location = useLocation();
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -86,7 +98,7 @@ export default function FloatingAiChat() {
 
     const currentRouteConfig = getRouteConfig(location.pathname);
 
-    // Load initial greeting / session history
+    // Load initial greeting / session history and fetch active model name
     useEffect(() => {
         const savedHistory = sessionStorage.getItem('dms_ai_chat_history');
         if (savedHistory) {
@@ -96,21 +108,43 @@ export default function FloatingAiChat() {
                     ...msg,
                     timestamp: new Date(msg.timestamp)
                 })));
-                return;
             } catch (e) {
                 console.error("Failed to parse chat history", e);
             }
+        } else {
+            // Default greeting
+            setMessages([
+                {
+                    id: 'greeting',
+                    sender: 'ai',
+                    text: "Hello! I am your **DMS Copilot** powered by **Local AI** locally. I can help you search documents, explain policies, audit procedures, or guide you through this portal. All conversation data is processed 100% locally and privately.",
+                    timestamp: new Date()
+                }
+            ]);
         }
 
-        // Default greeting
-        setMessages([
-            {
-                id: 'greeting',
-                sender: 'ai',
-                text: "Hello! I am your **DMS Copilot** powered by **Google Gemma 4** locally. I can help you search documents, explain policies, audit procedures, or guide you through this portal. All conversation data is processed 100% locally and privately.",
-                timestamp: new Date()
+        const fetchModelName = async () => {
+            try {
+                const response = await api.get('/ai/model');
+                if (response.data && response.data.model) {
+                    const formatted = formatModelName(response.data.model);
+                    setModelName(formatted);
+                    
+                    // Also update greeting message if it's still using the default/fallback placeholder
+                    setMessages(prev => prev.map(msg => 
+                        msg.id === 'greeting' && (msg.text.includes('**Local AI**') || msg.text.includes('**Google Gemma 4**'))
+                            ? {
+                                ...msg,
+                                text: `Hello! I am your **DMS Copilot** powered by **${formatted}** locally. I can help you search documents, explain policies, audit procedures, or guide you through this portal. All conversation data is processed 100% locally and privately.`
+                              }
+                            : msg
+                    ));
+                }
+            } catch (error) {
+                console.error("Failed to fetch active model name:", error);
             }
-        ]);
+        };
+        fetchModelName();
     }, []);
 
     // Save history to sessionStorage
@@ -134,33 +168,85 @@ export default function FloatingAiChat() {
             timestamp: new Date()
         };
 
+        const aiMessageId = `msg-${Date.now()}-ai`;
+        const aiPlaceholder: Message = {
+            id: aiMessageId,
+            sender: 'ai',
+            text: '', // Start with empty string
+            timestamp: new Date()
+        };
+
         const updatedHistory = [...messages, userMessage];
-        saveChatHistory(updatedHistory);
+        setMessages([...updatedHistory, aiPlaceholder]);
         setInputValue('');
         setIsLoading(true);
 
+        let accumulatedText = '';
+
         try {
-            const response = await api.post('/ai/chat', {
-                message: text,
-                context: `Current page: ${location.pathname}. Context: ${currentRouteConfig.context}`
+            const token = useAuthStore.getState().token;
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            
+            const response = await fetch(`${baseUrl}/ai/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    message: text,
+                    context: `Current page: ${location.pathname}. Context: ${currentRouteConfig.context}`
+                })
             });
 
-            const aiResponse: Message = {
-                id: `msg-${Date.now()}-ai`,
-                sender: 'ai',
-                text: response.data?.response || "I could not generate a response. Please check local model status.",
-                timestamp: new Date()
-            };
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
-            saveChatHistory([...updatedHistory, aiResponse]);
-        } catch (error: any) {
-            const errorMessage: Message = {
-                id: `msg-${Date.now()}-ai`,
+            const reader = response.body?.getReader();
+            if (!reader) {
+                throw new Error("Response body is not readable");
+            }
+
+            const decoder = new TextDecoder('utf-8');
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value, { stream: true });
+                accumulatedText += chunk;
+                
+                // Update messages state dynamically in real-time
+                setMessages(prev => prev.map(msg => 
+                    msg.id === aiMessageId ? { ...msg, text: accumulatedText } : msg
+                ));
+            }
+            
+            // Save the complete session history to sessionStorage
+            sessionStorage.setItem('dms_ai_chat_history', JSON.stringify([...updatedHistory, {
+                id: aiMessageId,
                 sender: 'ai',
-                text: "⚠️ System connection error. Ensure the local AI backend service is online and running.",
+                text: accumulatedText,
                 timestamp: new Date()
-            };
-            saveChatHistory([...updatedHistory, errorMessage]);
+            }]));
+
+        } catch (error: any) {
+            console.error("Streaming error:", error);
+            const errorText = accumulatedText 
+                ? accumulatedText + "\n\n⚠️ Stream connection interrupted. Ensure backend is online."
+                : "⚠️ System connection error. Ensure the local AI backend service is online and running.";
+            
+            setMessages(prev => prev.map(msg => 
+                msg.id === aiMessageId ? { ...msg, text: errorText } : msg
+            ));
+            
+            sessionStorage.setItem('dms_ai_chat_history', JSON.stringify([...updatedHistory, {
+                id: aiMessageId,
+                sender: 'ai',
+                text: errorText,
+                timestamp: new Date()
+            }]));
         } finally {
             setIsLoading(false);
         }
@@ -242,7 +328,7 @@ export default function FloatingAiChat() {
                                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                         </span>
                                     </h3>
-                                    <span className="text-[10px] text-slate-300">Gemma 4 Local (Online)</span>
+                                    <span className="text-[10px] text-slate-300">{modelName} Local (Online)</span>
                                 </div>
                             </div>
                             
@@ -266,40 +352,44 @@ export default function FloatingAiChat() {
 
                         {/* Message Panel */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
-                            {messages.map((msg) => (
-                                <div 
-                                    key={msg.id} 
-                                    className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                                >
-                                    {msg.sender === 'ai' && (
-                                        <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 shadow-sm">
-                                            <Bot size={15} />
-                                        </div>
-                                    )}
+                            {messages.map((msg) => {
+                                // Skip empty placeholder messages from showing up as empty bubbles
+                                if (msg.sender === 'ai' && !msg.text) return null;
+                                return (
                                     <div 
-                                        className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm shadow-sm ${
-                                            msg.sender === 'user' 
-                                                ? 'bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white rounded-tr-none' 
-                                                : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'
-                                        }`}
+                                        key={msg.id} 
+                                        className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                                     >
-                                        <div className="break-words leading-relaxed whitespace-pre-wrap">
-                                            {renderMessageText(msg.text)}
+                                        {msg.sender === 'ai' && (
+                                            <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 shadow-sm">
+                                                <Bot size={15} />
+                                            </div>
+                                        )}
+                                        <div 
+                                            className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-sm shadow-sm ${
+                                                msg.sender === 'user' 
+                                                    ? 'bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white rounded-tr-none' 
+                                                    : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'
+                                            }`}
+                                        >
+                                            <div className="break-words leading-relaxed whitespace-pre-wrap">
+                                                {renderMessageText(msg.text)}
+                                            </div>
+                                            <div className={`text-[9px] mt-1.5 text-right ${msg.sender === 'user' ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
                                         </div>
-                                        <div className={`text-[9px] mt-1.5 text-right ${msg.sender === 'user' ? 'text-indigo-200' : 'text-slate-400'}`}>
-                                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </div>
+                                        {msg.sender === 'user' && (
+                                            <div className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 shadow-sm">
+                                                <User size={15} />
+                                            </div>
+                                        )}
                                     </div>
-                                    {msg.sender === 'user' && (
-                                        <div className="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shrink-0 shadow-sm">
-                                            <User size={15} />
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                );
+                            })}
 
-                            {/* Typing Indicator */}
-                            {isLoading && (
+                            {/* Typing Indicator - only show while waiting for the first stream chunk */}
+                            {isLoading && (messages.length === 0 || !messages[messages.length - 1].text) && (
                                 <div className="flex gap-2.5 justify-start">
                                     <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 shadow-sm">
                                         <Bot size={15} />

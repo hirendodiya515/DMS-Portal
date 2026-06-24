@@ -15,6 +15,19 @@ import {
 
 const changeLog = [
   {
+    version: '3.4.0',
+    date: '24 June 2026',
+    title: 'Local AI Agent Integration & Streaming Copilot',
+    changes: [
+      'Launched the DMS AI Copilot, a floating interactive chat assistant processed 100% locally and privately',
+      'Configured real-time chunked HTTP streaming to render AI responses word-by-word in the UI for a faster user experience',
+      'Engineered a dynamic model detection system that retrieves and displays the active local model (e.g. Gemma 2, Llama 3) configured on the Ollama service',
+      'Built a document indexing engine that extracts and vectorizes content from uploaded PDF and Word documents',
+      'Added dynamic page routing context, auto-injecting relevant starter suggestions based on the module the user is viewing',
+      'Integrated an admin manual trigger to rebuild the knowledge base index'
+    ]
+  },
+  {
     version: '3.3.0',
     date: '19 June 2026',
     title: 'Calibration Management Enhancements & Alert Consolidation',
@@ -291,7 +304,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v3.3.0
+                    v3.4.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

@@ -7,11 +7,13 @@ import { DocumentVersion } from '../entities/document-version.entity';
 import { AuditLog } from '../entities/audit-log.entity';
 
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([Document, DocumentVersion, AuditLog]),
-        NotificationsModule
+        NotificationsModule,
+        AiModule
     ],
     controllers: [DocumentsController],
     providers: [DocumentsService],

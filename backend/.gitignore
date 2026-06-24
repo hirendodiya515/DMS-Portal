@@ -57,3 +57,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Uploads
 /uploads
+
+# Dynamic knowledge base index files
+/knowledge_base
+

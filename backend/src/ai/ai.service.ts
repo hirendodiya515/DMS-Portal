@@ -4,6 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
+import * as fs from 'fs';
+import * as path from 'path';
+import { KnowledgeBaseService } from './knowledge-base.service';
 import { Document } from '../entities/document.entity';
 import { Equipment } from '../entities/equipment.entity';
 import { AuditPlan } from '../entities/audit-plan.entity';
@@ -15,6 +18,11 @@ import { SwotIssue } from '../entities/swot-issue.entity';
 import { ProductDeviation } from '../entities/product-deviation.entity';
 import { ProcessDeviation } from '../entities/process-deviation.entity';
 import { MocRecord } from '../entities/moc-record.entity';
+import { AuditParticipant } from '../entities/audit-participant.entity';
+import { HiraRisk } from '../entities/hira-risk.entity';
+import { EaaRisk } from '../entities/eaa-risk.entity';
+import { QraRisk } from '../entities/qra-risk.entity';
+import { InterestedParty } from '../entities/interested-party.entity';
 
 @Injectable()
 export class AiService {
@@ -25,6 +33,7 @@ export class AiService {
     constructor(
         private readonly httpService: HttpService,
         private readonly configService: ConfigService,
+        private readonly kbService: KnowledgeBaseService,
         @InjectRepository(Document)
         private readonly docRepo: Repository<Document>,
         @InjectRepository(Equipment)
@@ -47,6 +56,16 @@ export class AiService {
         private readonly procDevRepo: Repository<ProcessDeviation>,
         @InjectRepository(MocRecord)
         private readonly mocRepo: Repository<MocRecord>,
+        @InjectRepository(AuditParticipant)
+        private readonly participantRepo: Repository<AuditParticipant>,
+        @InjectRepository(HiraRisk)
+        private readonly hiraRepo: Repository<HiraRisk>,
+        @InjectRepository(EaaRisk)
+        private readonly eaaRepo: Repository<EaaRisk>,
+        @InjectRepository(QraRisk)
+        private readonly qraRepo: Repository<QraRisk>,
+        @InjectRepository(InterestedParty)
+        private readonly interestedRepo: Repository<InterestedParty>,
     ) {
         this.ollamaUrl = this.configService.get<string>('OLLAMA_URL') || 'http://localhost:11434';
         // Default to gemma4:e4b which is the lightweight 4B variant optimized for consumer/edge devices
@@ -57,18 +76,49 @@ export class AiService {
         const queryLower = message.toLowerCase();
         const contextParts: string[] = [];
 
-        // 1. Audit check
-        if (queryLower.includes('audit') || queryLower.includes('schedule') || queryLower.includes('plan')) {
+        // 1. Audit / Participant Check
+        if (
+            queryLower.includes('audit') || 
+            queryLower.includes('schedule') || 
+            queryLower.includes('plan') || 
+            queryLower.includes('auditor') || 
+            queryLower.includes('auditee')
+        ) {
             try {
-                // Fetch top 10 audit schedules
+                // Fetch all registered participants (Auditors and Auditees)
+                const participants = await this.participantRepo.find();
+                const auditors = participants.filter(p => p.type === 'auditor');
+                const auditees = participants.filter(p => p.type === 'auditee');
+
+                let auditText = `### Registered Auditors (Total: ${auditors.length}):\n` +
+                    auditors.map(a => `- Name: ${a.name}, Email: ${a.email}, Remarks: ${a.remarks || 'None'}, Certificate: ${a.certificateName || 'N/A'}`).join('\n') + '\n\n' +
+                    `### Registered Auditees (Total: ${auditees.length}):\n` +
+                    auditees.map(a => `- Name: ${a.name}, Email: ${a.email}, Department: ${a.department || 'N/A'}`).join('\n');
+
+                // Filter auditees matching any specific department keyword in query
+                const deptKeywords = ['tempering', 'furnace', 'cutting', 'packing', 'production', 'purchase', 'sales', 'utility', 'maintenance', 'hr', 'stores', 'qa', 'qc'];
+                const matchedDepts = deptKeywords.filter(d => queryLower.includes(d));
+                if (matchedDepts.length > 0) {
+                    auditText += `\n\n### Filtered Auditees Matching Query:`;
+                    for (const dept of matchedDepts) {
+                        const filtered = auditees.filter(a => a.department && a.department.toLowerCase().includes(dept));
+                        if (filtered.length > 0) {
+                            auditText += `\nFor ${dept.toUpperCase()}:\n` + filtered.map(a => `- Name: ${a.name}, Email: ${a.email}, Department: ${a.department}`).join('\n');
+                        } else {
+                            auditText += `\nFor ${dept.toUpperCase()}: No specific auditees registered.`;
+                        }
+                    }
+                }
+
+                // Fetch top 15 audit schedules
                 const schedules = await this.schedRepo.find({
+                    relations: ['auditors'],
                     order: { date: 'ASC' },
-                    take: 10,
+                    take: 15,
                 });
                 if (schedules.length > 0) {
-                    contextParts.push('### Upcoming & Past Audit Schedules:\n' + 
-                        schedules.map(s => `- Department: ${s.department}, Date: ${new Date(s.date).toLocaleDateString()}, Scope: ${s.scope}, Status: ${s.status}`).join('\n')
-                    );
+                    auditText += '\n\n### Upcoming & Past Audit Schedules:\n' + 
+                        schedules.map(s => `- Department: ${s.department}, Date: ${new Date(s.date).toLocaleDateString()}, Scope: ${s.scope}, Status: ${s.status}, Assigned Auditors: ${s.auditors && s.auditors.length > 0 ? s.auditors.map(a => a.name).join(', ') : 'None'}`).join('\n');
                 }
 
                 // Fetch top 10 audit plans
@@ -76,19 +126,19 @@ export class AiService {
                     take: 10,
                 });
                 if (plans.length > 0) {
-                    contextParts.push('### Month-wise Audit Plans:\n' +
-                        plans.map(p => `- Department: ${p.department}, Month: ${p.month}, Status: ${p.isPlanned ? 'Planned' : 'Unplanned'}, Outcome: ${p.outcome || 'Pending'}`).join('\n')
-                    );
+                    auditText += '\n\n### Month-wise Audit Plans:\n' +
+                        plans.map(p => `- Department: ${p.department}, Month: ${p.month}, Status: ${p.isPlanned ? 'Planned' : 'Unplanned'}, Outcome: ${p.outcome || 'Pending'}`).join('\n');
                 }
+
+                contextParts.push(auditText);
             } catch (e) {
-                this.logger.error('Failed to query audits for AI context', e.message);
+                this.logger.error('Failed to query audits or participants for AI context', e.message);
             }
         }
 
         // 2. Equipment & Calibration check
         if (queryLower.includes('calibrat') || queryLower.includes('equipment') || queryLower.includes('instrument') || queryLower.includes('maintenance')) {
             try {
-                // Fetch top 10 equipment
                 const equipment = await this.eqRepo.find({
                     order: { nextCalibrationDate: 'ASC' },
                     take: 10,
@@ -106,7 +156,6 @@ export class AiService {
         // 3. Document check
         if (queryLower.includes('document') || queryLower.includes('sop') || queryLower.includes('policy') || queryLower.includes('procedure')) {
             try {
-                // Fetch top 10 documents
                 const docs = await this.docRepo.find({
                     order: { updatedAt: 'DESC' },
                     take: 10,
@@ -121,18 +170,63 @@ export class AiService {
             }
         }
 
-        // 4. Risk check
-        if (queryLower.includes('risk') || queryLower.includes('hira') || queryLower.includes('hazard')) {
+        // 4. Risks & Severity Rating (HIRA / EAA / QRA / Furnace)
+        if (
+            queryLower.includes('risk') || 
+            queryLower.includes('hira') || 
+            queryLower.includes('hazard') || 
+            queryLower.includes('eaa') || 
+            queryLower.includes('qra') || 
+            queryLower.includes('furnace') ||
+            queryLower.includes('threat')
+        ) {
             try {
-                // Fetch top 10 risks
-                const risks = await this.riskRepo.find({
-                    take: 10,
-                });
+                // Fetch general risks
+                const risks = await this.riskRepo.find({ take: 10 });
+                let riskText = '';
                 if (risks.length > 0) {
-                    contextParts.push('### System Risks & Hazard Assessments:\n' +
-                        risks.map(r => `- Number: ${r.riskNumber}, Title: ${r.title}, Type: ${r.type}`).join('\n')
-                    );
+                    riskText += '### System Risks & Hazard Assessments:\n' +
+                        risks.map(r => `- Number: ${r.riskNumber}, Title: ${r.title}, Type: ${r.type}`).join('\n') + '\n\n';
                 }
+
+                // Fetch HIRA risks
+                const hiraRisks = await this.hiraRepo.find({ take: 50 });
+                const hiraHigh = hiraRisks.filter(r => r.maxRiskLevel === 'high' || r.maxRiskLevel === 'critical').length;
+                const hiraMed = hiraRisks.filter(r => r.maxRiskLevel === 'medium').length;
+                const hiraLow = hiraRisks.filter(r => r.maxRiskLevel === 'low').length;
+
+                riskText += `### HIRA (Occupational Safety) Risks Summary:\n` +
+                    `- Total Registered HIRA Risks: ${hiraRisks.length}\n` +
+                    `- Critical/High ("Red" Risks): ${hiraHigh}\n` +
+                    `- Medium (Amber Risks): ${hiraMed}\n` +
+                    `- Low (Green Risks): ${hiraLow}\n`;
+
+                // Fetch EAA risks
+                const eaaRisks = await this.eaaRepo.find({ take: 20 });
+                riskText += `\n### EAA (Environmental Aspects) Risks (Total: ${eaaRisks.length}):\n` +
+                    eaaRisks.slice(0, 10).map(r => `- Number: ${r.riskNumber}, Process: ${r.process}, Area: ${r.area || 'N/A'}, Max Level: ${r.maxRiskLevel}`).join('\n');
+
+                // Filter HIRA/EAA/QRA risks matching specific keywords (e.g. "furnace" or "tempering")
+                const kwList = ['furnace', 'tempering', 'cutting', 'packing', 'electrical', 'chemical', 'lifting'];
+                const matchedKws = kwList.filter(k => queryLower.includes(k));
+                if (matchedKws.length > 0) {
+                    riskText += `\n\n### Filtered HIRA Risks Matching Query:`;
+                    for (const kw of matchedKws) {
+                        const matches = hiraRisks.filter(r => 
+                            (r.department && r.department.toLowerCase().includes(kw)) ||
+                            (r.activity && r.activity.toLowerCase().includes(kw)) ||
+                            (r.task && r.task.toLowerCase().includes(kw))
+                        );
+                        if (matches.length > 0) {
+                            riskText += `\nFor keyword "${kw}":\n` + 
+                                matches.map(m => `- RiskNo: ${m.riskNumber}, Activity: ${m.activity}, Task: ${m.task || 'N/A'}, Dept: ${m.department}, RiskLevel: ${m.maxRiskLevel.toUpperCase()}`).join('\n');
+                        } else {
+                            riskText += `\nFor keyword "${kw}": No HIRA risks registered.`;
+                        }
+                    }
+                }
+
+                contextParts.push(riskText);
             } catch (e) {
                 this.logger.error('Failed to query risks for AI context', e.message);
             }
@@ -174,22 +268,64 @@ export class AiService {
         }
 
         // 7. SWOT check
-        if (queryLower.includes('swot') || queryLower.includes('strength') || queryLower.includes('weakness') || queryLower.includes('opportunity') || queryLower.includes('threat')) {
+        if (queryLower.includes('swot') || queryLower.includes('strength') || queryLower.includes('weakness') || queryLower.includes('opportunity') || queryLower.includes('threat') || queryLower.includes('context')) {
             try {
                 const swots = await this.swotRepo.find({
-                    take: 15,
+                    take: 40,
                 });
                 if (swots.length > 0) {
-                    contextParts.push('### SWOT Analysis (Context of Organization):\n' +
-                        swots.map(s => `- Category: ${s.category.toUpperCase()}, Text: ${s.text}, Impact: ${s.impact.toUpperCase()}, Standards: ${s.standards ? s.standards.join(', ') : 'None'}`).join('\n')
-                    );
+                    const strengths = swots.filter(s => s.category === 'strength');
+                    const weaknesses = swots.filter(s => s.category === 'weakness');
+                    const opportunities = swots.filter(s => s.category === 'opportunity');
+                    const threats = swots.filter(s => s.category === 'threat');
+
+                    let swotText = `### SWOT Analysis Summary (Total: ${swots.length}):\n` +
+                        `- Strengths: ${strengths.length}, Weaknesses: ${weaknesses.length}, Opportunities: ${opportunities.length}, Threats: ${threats.length}\n\n`;
+
+                    if (queryLower.includes('threat') || queryLower.includes('impact') || queryLower.includes('context')) {
+                        swotText += `### SWOT Threats:\n` +
+                            threats.map(t => `- Threat: ${t.text}, Impact: ${t.impact.toUpperCase()}, Standards: ${t.standards ? t.standards.join(', ') : 'None'}`).join('\n') + '\n\n';
+                    }
+                    if (queryLower.includes('opportunity') || queryLower.includes('context')) {
+                        swotText += `### SWOT Opportunities:\n` +
+                            opportunities.map(o => `- Opportunity: ${o.text}, Impact: ${o.impact.toUpperCase()}, Standards: ${o.standards ? o.standards.join(', ') : 'None'}`).join('\n') + '\n\n';
+                    }
+                    if (queryLower.includes('strength') || queryLower.includes('weakness') || queryLower.includes('context')) {
+                        swotText += `### SWOT Strengths & Weaknesses:\n` +
+                            swots.filter(s => s.category === 'strength' || s.category === 'weakness')
+                                 .map(s => `- Category: ${s.category.toUpperCase()}, Text: ${s.text}, Impact: ${s.impact.toUpperCase()}`).join('\n');
+                    }
+
+                    contextParts.push(swotText);
                 }
             } catch (e) {
                 this.logger.error('Failed to query SWOT issues for AI context', e.message);
             }
         }
 
-        // 8. Deviation check
+        // 8. Interested Parties (Needs & Expectations of Employees, Customers, etc.)
+        if (
+            queryLower.includes('need') || 
+            queryLower.includes('expectation') || 
+            queryLower.includes('interested') || 
+            queryLower.includes('party') || 
+            queryLower.includes('parties') || 
+            queryLower.includes('employee')
+        ) {
+            try {
+                const ipList = await this.interestedRepo.find({ take: 30 });
+                if (ipList.length > 0) {
+                    contextParts.push(
+                        `### Interested Parties (Needs & Expectations):\n` +
+                        ipList.map(ip => `- Party Name: ${ip.name}\n  Needs: ${ip.needs}\n  Risk Rating: ${ip.risk}\n  Actions: ${ip.actions && ip.actions.length > 0 ? ip.actions.join(', ') : 'None'}\n  Responsible: ${ip.responsible || 'N/A'}`).join('\n\n')
+                    );
+                }
+            } catch (e) {
+                this.logger.error('Failed to query Interested Parties for AI context', e.message);
+            }
+        }
+
+        // 9. Deviation check
         if (queryLower.includes('deviation') || queryLower.includes('non-conformance') || queryLower.includes('defect') || queryLower.includes('reject')) {
             try {
                 const prodDevs = await this.prodDevRepo.find({
@@ -214,7 +350,7 @@ export class AiService {
             }
         }
 
-        // 9. MOC check
+        // 10. MOC check
         if (queryLower.includes('moc') || queryLower.includes('change') || queryLower.includes('management of change')) {
             try {
                 const mocs = await this.mocRepo.find({
@@ -237,6 +373,18 @@ export class AiService {
         return `\nRetrieved System Database Information:\n${contextParts.join('\n\n')}\n`;
     }
 
+    private getLocalRules(): string {
+        try {
+            const filePath = path.join(process.cwd(), 'dms_rules.md');
+            if (fs.existsSync(filePath)) {
+                return fs.readFileSync(filePath, 'utf8');
+            }
+        } catch (e) {
+            this.logger.error('Failed to read dms_rules.md', e.message);
+        }
+        return '';
+    }
+
     /**
      * Sends a chat prompt to local Gemma 4 model running on Ollama
      * @param message User query
@@ -244,6 +392,11 @@ export class AiService {
      */
     async chat(message: string, context?: string): Promise<{ response: string; model: string }> {
         const dbContext = await this.getDatabaseContext(message);
+        const localRules = this.getLocalRules();
+        const kbMatches = await this.kbService.search(message, 5);
+        const kbContext = kbMatches.length > 0
+            ? `\nRetrieved Local Knowledge Base Documents:\n${kbMatches.map((m, i) => `[Document Snippet ${i + 1}]:\n${m}`).join('\n\n')}\n`
+            : '';
 
         const systemPrompt = `You are the DMS Copilot, an expert AI Consultant in Integrated Management Systems (IMS) specializing in ISO 9001:2015 (Quality), ISO 14001:2015 (Environmental), and ISO 45001:2018 (Occupational Health & Safety).
 
@@ -260,8 +413,32 @@ Your goal is to assist users with documents, audits, calibration, risk managemen
 
 Be highly professional, structured, and compliant. Cite specific ISO clauses where relevant to reinforce compliance. Always reassure the user that all data is stored 100% locally and processed securely offline on premises.
 
+**Crucial App-Specific Instructions:**
+When users ask how to upload a new document or how to revise an existing document, you MUST guide them using the exact user-interface flow of this DMS application instead of giving generic answers:
+
+1. **How to Upload a New Document**:
+   - Navigate to the **Documents** page by clicking "Documents" in the sidebar navigation (or go to \`/documents\`).
+   - Click the blue **"Create Document"** button (with the **Plus** icon) at the top-right corner of the page.
+   - This opens the **Create Document Modal**. You must fill in the following details:
+     - **Document Name / Title**
+     - **Document Number** (e.g. for SOP numbering codes)
+     - **Document Type** (select from the dropdown: SOP, Policy, Procedure, etc.)
+     - **Departments** (select the department scope)
+     - **Description**
+   - Click the file upload area to select or drag your file.
+   - Click the **"Upload"** / **"Create"** button to submit.
+
+2. **How to Revise an Existing Document**:
+   - Navigate to the **Documents** page (\`/documents\`).
+   - Find your document in the table list and click on its name to open the **Document Detail Page** (e.g., \`/documents/:id\`).
+   - In the top-right corner, click on the **"Revise Document"** button (if the document is approved) or **"Upload New Version"** button (if it is a draft or rejected).
+   - This opens the **Upload Version Modal**.
+   - Upload the new file version, enter your change/revision notes, and click submit.
+
 Current Application Context:
 ${context || 'No specific page context provided.'}
+${localRules ? `\nLocal DMS System Rules & Policies:\n${localRules}\n` : ''}
+${kbContext}
 ${dbContext}
 
 Please respond to the user's message accordingly.`;
@@ -352,5 +529,134 @@ Please respond to the user's message accordingly.`;
                 model: this.modelName,
             };
         }
+    }
+
+    /**
+     * Sends a chat prompt to local Gemma 4 model running on Ollama and streams the response
+     * @param message User query
+     * @param context Optional system/page context to guide the model
+     * @param onChunk Callback function invoked for every generated token chunk
+     */
+    async chatStream(message: string, context: string, onChunk: (chunk: string) => void): Promise<void> {
+        const dbContext = await this.getDatabaseContext(message);
+        const localRules = this.getLocalRules();
+        const kbMatches = await this.kbService.search(message, 5);
+        const kbContext = kbMatches.length > 0
+            ? `\nRetrieved Local Knowledge Base Documents:\n${kbMatches.map((m, i) => `[Document Snippet ${i + 1}]:\n${m}`).join('\n\n')}\n`
+            : '';
+
+        const systemPrompt = `You are the DMS Copilot, an expert AI Consultant in Integrated Management Systems (IMS) specializing in ISO 9001:2015 (Quality), ISO 14001:2015 (Environmental), and ISO 45001:2018 (Occupational Health & Safety).
+
+Your goal is to assist users with documents, audits, calibration, risk management, SWOT context, objectives, deviations, and management of change (MOC) by framing your responses through the lens of ISO compliance:
+- Frame audits in context of **ISO Clause 9.2 (Internal Audit)**.
+- Frame risk assessments (HIRA, EAA, QRA) in context of **ISO Clause 6.1 (Actions to address risks and opportunities)**.
+- Frame equipment and calibration in context of **ISO 9001 Clause 7.1.5 (Monitoring and measuring resources)**.
+- Frame organization chart and roles in context of **ISO Clause 5.3 (Organizational roles, responsibilities and authorities)**.
+- Frame document control (SOPs, drafts, reviews, approvals) in context of **ISO Clause 7.5 (Documented information)**.
+- Frame SWOT analysis in context of **ISO Clause 4.1 (Understanding the organization and its context)**.
+- Frame quality, safety, and environmental objectives in context of **ISO Clause 6.2 (Objectives and planning to achieve them)**.
+- Frame product and process deviations in context of **ISO Clause 8.7 (Control of nonconforming outputs)** and **Clause 10.2 (Nonconformity and corrective action)**.
+- Frame Management of Change (MOC) in context of **ISO Clause 6.3 (Planning of changes)** and **Clause 8.5.6 (Control of changes)**.
+
+Be highly professional, structured, and compliant. Cite specific ISO clauses where relevant to reinforce compliance. Always reassure the user that all data is stored 100% locally and processed securely offline on premises.
+
+**Crucial App-Specific Instructions:**
+When users ask how to upload a new document or how to revise an existing document, you MUST guide them using the exact user-interface flow of this DMS application instead of giving generic answers:
+
+1. **How to Upload a New Document**:
+   - Navigate to the **Documents** page by clicking "Documents" in the sidebar navigation (or go to \`/documents\`).
+   - Click the blue **"Create Document"** button (with the **Plus** icon) at the top-right corner of the page.
+   - This opens the **Create Document Modal**. You must fill in the following details:
+     - **Document Name / Title**
+     - **Document Number** (e.g. for SOP numbering codes)
+     - **Document Type** (select from the dropdown: SOP, Policy, Procedure, etc.)
+     - **Departments** (select the department scope)
+     - **Description**
+   - Click the file upload area to select or drag your file.
+   - Click the **"Upload"** / **"Create"** button to submit.
+
+2. **How to Revise an Existing Document**:
+   - Navigate to the **Documents** page (\`/documents\`).
+   - Find your document in the table list and click on its name to open the **Document Detail Page** (e.g., \`/documents/:id\`).
+   - In the top-right corner, click on the **"Revise Document"** button (if the document is approved) or **"Upload New Version"** button (if it is a draft or rejected).
+   - This opens the **Upload Version Modal**.
+   - Upload the new file version, enter your change/revision notes, and click submit.
+
+Current Application Context:
+${context || 'No specific page context provided.'}
+${localRules ? `\nLocal DMS System Rules & Policies:\n${localRules}\n` : ''}
+${kbContext}
+${dbContext}
+
+Please respond to the user's message accordingly.`;
+
+        try {
+            this.logger.log(`Sending streaming prompt to local model '${this.modelName}' at ${this.ollamaUrl}...`);
+            
+            const response = await firstValueFrom(
+                this.httpService.post(`${this.ollamaUrl}/api/generate`, {
+                    model: this.modelName,
+                    prompt: message,
+                    system: systemPrompt,
+                    stream: true,
+                    keep_alive: '20m',
+                    options: {
+                        temperature: 0.7,
+                        num_ctx: 2048,
+                    }
+                }, {
+                    headers: { 'Content-Type': 'application/json' },
+                    responseType: 'stream',
+                    timeout: 240000,
+                })
+            );
+
+            await new Promise<void>((resolve, reject) => {
+                let buffer = '';
+                
+                response.data.on('data', (chunkBuffer: Buffer) => {
+                    buffer += chunkBuffer.toString('utf8');
+                    let index;
+                    while ((index = buffer.indexOf('\n')) !== -1) {
+                        const line = buffer.substring(0, index).trim();
+                        buffer = buffer.substring(index + 1);
+                        if (line) {
+                            try {
+                                const parsed = JSON.parse(line);
+                                if (parsed.response) {
+                                    onChunk(parsed.response);
+                                }
+                            } catch (err) {
+                                // Ignore json parse errors for incomplete lines
+                            }
+                        }
+                    }
+                });
+
+                response.data.on('end', () => {
+                    if (buffer.trim()) {
+                        try {
+                            const parsed = JSON.parse(buffer.trim());
+                            if (parsed.response) {
+                                onChunk(parsed.response);
+                            }
+                        } catch (err) {}
+                    }
+                    resolve();
+                });
+
+                response.data.on('error', (err: any) => {
+                    reject(err);
+                });
+            });
+
+        } catch (error) {
+            this.logger.error(`Error communicating with local AI model (${this.modelName}) in stream:`, error.message);
+            throw error;
+        }
+    }
+
+    getModelName(): string {
+        return this.modelName;
     }
 }
