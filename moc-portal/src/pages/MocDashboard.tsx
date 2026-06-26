@@ -74,6 +74,8 @@ const MocDashboard = () => {
         return 'bg-slate-100 text-slate-700';
       case 'Pending HOD':
         return 'bg-amber-100 text-amber-700';
+      case 'Pending QC Head':
+        return 'bg-amber-100 text-amber-700';
       case 'Pending Plant Head':
         return 'bg-amber-100 text-amber-700';
       case 'Pending CEO':

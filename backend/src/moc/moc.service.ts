@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { MocRecord } from '../entities/moc-record.entity';
 import { AuditLog, AuditAction } from '../entities/audit-log.entity';
+import { User } from '../entities/user.entity';
 import { DocumentsService } from '../documents/documents.service';
+import { MailService } from '../mail/mail.service';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class MocService {
@@ -12,7 +15,11 @@ export class MocService {
         private mocRepository: Repository<MocRecord>,
         @InjectRepository(AuditLog)
         private auditLogRepository: Repository<AuditLog>,
+        @InjectRepository(User)
+        private userRepository: Repository<User>,
         private documentsService: DocumentsService,
+        private mailService: MailService,
+        private settingsService: SettingsService,
     ) {}
 
     private async logAction(action: AuditAction, userId: string, mocId: string | null, details: string) {
@@ -43,6 +50,11 @@ export class MocService {
         const details = isDraft ? 'MOC draft initiated' : 'MOC created and submitted for HOD approval';
 
         await this.logAction(action, userId || saved.requisitionById, saved.id, details);
+
+        this.triggerMocEmailAlerts(saved, null, userId || saved.requisitionById, action).catch(err =>
+            console.error('Failed to trigger email alerts for MOC create:', err)
+        );
+
         return saved;
     }
 
@@ -86,15 +98,16 @@ export class MocService {
 
         let isWorkflowAction = false;
         if (checkApprovalDiff('HOD', data.hodApproval, moc.hodApproval)) isWorkflowAction = true;
+        else if (checkApprovalDiff('QC Head', data.qcHeadApproval, moc.qcHeadApproval)) isWorkflowAction = true;
         else if (checkApprovalDiff('Plant Head', data.plantHeadApproval, moc.plantHeadApproval)) isWorkflowAction = true;
         else if (checkApprovalDiff('CEO', data.ceoApproval, moc.ceoApproval)) isWorkflowAction = true;
         else if (checkApprovalDiff('EHS', data.ehsApproval, moc.ehsApproval)) isWorkflowAction = true;
         else if (checkApprovalDiff('QA', data.qaApproval, moc.qaApproval)) isWorkflowAction = true;
 
         if (!isWorkflowAction) {
-            if (data.status === 'Pending HOD' && moc.status === 'Draft') {
+            if (data.status && data.status.startsWith('Pending ') && moc.status === 'Draft') {
                 action = AuditAction.SUBMIT;
-                details = 'MOC submitted for HOD approval';
+                details = `MOC submitted for ${data.status.replace('Pending ', '')} approval`;
             } else if (data.status === 'Draft' && moc.status && moc.status !== 'Draft') {
                 action = AuditAction.REJECT;
                 details = 'MOC rejected and reverted to Draft';
@@ -113,6 +126,11 @@ export class MocService {
         if (updated && (updated.status === 'Closed' || updated.status === 'Finalized')) {
             await this.syncToDms(updated);
         }
+
+        // Trigger dynamic email alert asynchronously
+        this.triggerMocEmailAlerts(updated, moc, userId || rest.requisitionById || moc.requisitionById, action).catch(err =>
+            console.error('Failed to trigger email alerts for MOC update:', err)
+        );
 
         return updated;
     }
@@ -176,6 +194,145 @@ export class MocService {
             console.log(`Successfully synced MOC ${moc.mocNo} to DMS.`);
         } catch (error) {
             console.error('Failed to sync MOC to DMS:', error);
+        }
+    }
+
+    private async getEmailsForRole(roleKey: string, hodName?: string): Promise<string[]> {
+        if (roleKey === 'hod') {
+            if (!hodName) return [];
+            const users = await this.userRepository.find();
+            const matched = users.filter(u => 
+                `${u.firstName} ${u.lastName}`.trim().toLowerCase() === hodName.trim().toLowerCase()
+            );
+            return matched.map(u => u.email).filter(Boolean);
+        }
+
+        try {
+            const settings = await this.settingsService.getSetting('moc_approval_settings');
+            const customEmails = settings?.approvers?.[roleKey] || settings?.[roleKey] || [];
+            if (customEmails.length > 0) {
+                return customEmails;
+            }
+        } catch (e) {
+            console.error('Failed to read MOC settings:', e);
+        }
+
+        let fallbackRoles: string[] = [];
+        if (roleKey === 'qc_head' || roleKey === 'plant_head') {
+            fallbackRoles = ['dept_head', 'reviewer', 'admin'];
+        } else if (roleKey === 'ceo') {
+            fallbackRoles = ['reviewer', 'admin'];
+        } else if (roleKey === 'ehs' || roleKey === 'qa') {
+            fallbackRoles = ['compliance_manager', 'reviewer', 'admin'];
+        }
+
+        if (fallbackRoles.length > 0) {
+            const users = await this.userRepository.find();
+            const matched = users.filter(u => fallbackRoles.includes(u.role) && u.isActive);
+            return matched.map(u => u.email).filter(Boolean);
+        }
+
+        return [];
+    }
+
+    private async triggerMocEmailAlerts(updated: MocRecord, oldMoc: MocRecord | null, actorId: string, action: AuditAction) {
+        try {
+            const creator = await this.userRepository.findOne({ where: { id: updated.requisitionById } });
+            const creatorEmail = creator?.email;
+            const actionUrl = `http://localhost:5173/edit-moc/${updated.id}`;
+
+            const actor = await this.userRepository.findOne({ where: { id: actorId } });
+            const actorName = actor ? `${actor.firstName} ${actor.lastName}` : 'System';
+
+            // 1. Rejection notification
+            if (updated.status === 'Draft' && oldMoc && oldMoc.status !== 'Draft' && action === AuditAction.REJECT) {
+                let remarks = 'No remarks';
+                const approvalFields = [
+                    { name: 'HOD', val: updated.hodApproval },
+                    { name: 'QC Head', val: updated.qcHeadApproval },
+                    { name: 'Plant Head', val: updated.plantHeadApproval },
+                    { name: 'CEO', val: updated.ceoApproval },
+                    { name: 'EHS', val: updated.ehsApproval },
+                    { name: 'QA', val: updated.qaApproval }
+                ];
+                const rejectedStep = approvalFields.find(f => f.val?.status === 'rejected');
+                if (rejectedStep) {
+                    remarks = rejectedStep.val.remarks || remarks;
+                }
+
+                if (creatorEmail) {
+                    await this.mailService.sendMocAlert([creatorEmail], {
+                        id: updated.id,
+                        mocNo: updated.mocNo,
+                        status: updated.status,
+                        department: updated.department,
+                        productProcess: updated.productProcess,
+                        requisitionByName: updated.requisitionByName || 'N/A',
+                        description: updated.description,
+                        pendingWith: 'Creator (Draft)',
+                        actionUrl,
+                        decisionType: 'rejected',
+                        remarks,
+                        actorName
+                    });
+                }
+                return;
+            }
+
+            // 2. Finalized notification
+            if (updated.status === 'Finalized' || updated.status === 'Closed') {
+                if (creatorEmail) {
+                    await this.mailService.sendMocAlert([creatorEmail], {
+                        id: updated.id,
+                        mocNo: updated.mocNo,
+                        status: updated.status,
+                        department: updated.department,
+                        productProcess: updated.productProcess,
+                        requisitionByName: updated.requisitionByName || 'N/A',
+                        description: updated.description,
+                        pendingWith: 'None (Finalized)',
+                        actionUrl,
+                        decisionType: 'finalized',
+                        actorName
+                    });
+                }
+                return;
+            }
+
+            // 3. Pending Approvals
+            if (updated.status && updated.status.startsWith('Pending ')) {
+                const pendingRoleStr = updated.status.replace('Pending ', '');
+                
+                let roleKey = '';
+                if (pendingRoleStr === 'HOD') roleKey = 'hod';
+                else if (pendingRoleStr === 'QC Head') roleKey = 'qc_head';
+                else if (pendingRoleStr === 'Plant Head') roleKey = 'plant_head';
+                else if (pendingRoleStr === 'CEO') roleKey = 'ceo';
+                else if (pendingRoleStr === 'EHS') roleKey = 'ehs';
+                else if (pendingRoleStr === 'QA') roleKey = 'qa';
+
+                if (roleKey) {
+                    const recipientEmails = await this.getEmailsForRole(roleKey, updated.hodName);
+                    if (recipientEmails.length > 0) {
+                        const isSubmit = !oldMoc || oldMoc.status === 'Draft';
+                        await this.mailService.sendMocAlert(recipientEmails, {
+                            id: updated.id,
+                            mocNo: updated.mocNo,
+                            status: updated.status,
+                            department: updated.department,
+                            productProcess: updated.productProcess,
+                            requisitionByName: updated.requisitionByName || 'N/A',
+                            description: updated.description,
+                            pendingWith: pendingRoleStr,
+                            actionUrl,
+                            decisionType: isSubmit ? 'submitted' : 'approved',
+                            actorName: isSubmit ? undefined : actorName
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to process MOC email workflow:', e);
         }
     }
 }

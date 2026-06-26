@@ -16,8 +16,8 @@ import {
 import api from '../api';
 
 const Section3Implementation = ({ data, update, currentUser, handleApproval, isSaving, readOnly }: any) => {
-  const [remarks, setRemarks] = useState<any>({ hod: '', plant_head: '', ceo: '', ehs: '', qa: '' });
-  const [signature, setSignature] = useState<any>({ hod: '', plant_head: '', ceo: '', ehs: '', qa: '' });
+  const [remarks, setRemarks] = useState<any>({ hod: '', qc_head: '', plant_head: '', ceo: '', ehs: '', qa: '' });
+  const [signature, setSignature] = useState<any>({ hod: '', qc_head: '', plant_head: '', ceo: '', ehs: '', qa: '' });
   const [authSettings, setAuthSettings] = useState<any>(null);
 
   // Fetch custom authorized persons configured in main DMS settings
@@ -67,6 +67,45 @@ const Section3Implementation = ({ data, update, currentUser, handleApproval, isS
   const fullName = `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || currentUser?.name || '';
   const userEmail = currentUser?.email || '';
 
+  const sequence = authSettings?.sequence || ['hod', 'qc_head', 'plant_head', 'ceo', 'ehs', 'qa'];
+
+  const getStepApprovalStatus = (role: string) => {
+    switch (role) {
+      case 'hod': return data.hodApproval;
+      case 'qc_head': return data.qcHeadApproval;
+      case 'plant_head': return data.plantHeadApproval;
+      case 'ceo': return data.ceoApproval;
+      case 'ehs': return data.ehsApproval;
+      case 'qa': return data.qaApproval;
+      default: return null;
+    }
+  };
+
+  const isStepLocked = (role: string) => {
+    const idx = sequence.indexOf(role);
+    if (idx <= 0) return false;
+    const prevRole = sequence[idx - 1];
+    const prevApproval = getStepApprovalStatus(prevRole);
+    return prevApproval?.status !== 'approved';
+  };
+
+  const getLockMessage = (role: string) => {
+    const idx = sequence.indexOf(role);
+    if (idx <= 0) return '';
+    const prevRole = sequence[idx - 1];
+    const roleLabels: Record<string, string> = {
+      hod: 'HOD',
+      qc_head: 'QC Head',
+      plant_head: 'Plant Head',
+      ceo: 'CEO',
+      ehs: 'EHS',
+      qa: 'QA'
+    };
+    const currentLabel = roleLabels[role] || role;
+    const prevLabel = roleLabels[prevRole] || prevRole;
+    return `Awaiting ${prevLabel} approval to start ${currentLabel} review`;
+  };
+
   // Can Approve Checks (Checks custom DMS settings, falls back to standard user roles if not set)
   
   // 1. HOD Approval Check (HOD is assigned per MOC)
@@ -74,40 +113,53 @@ const Section3Implementation = ({ data, update, currentUser, handleApproval, isS
   const isHodRole = currentUser?.role === 'dept_head' || currentUser?.role === 'admin';
   const canApproveHod = data.status === 'Pending HOD' && (isHodMatched || isHodRole);
 
-  // 2. Plant Head Approval Check
-  const hasCustomPlantHead = authSettings?.plantHead && authSettings.plantHead.length > 0;
+  // 2. QC Head Approval Check
+  const qcHeadEmails = authSettings?.approvers?.qc_head || authSettings?.qcHead || [];
+  const hasCustomQcHead = qcHeadEmails.length > 0;
+  const isQcHeadAuthorized = hasCustomQcHead 
+    ? qcHeadEmails.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase()) 
+    : false;
+  const canApproveQcHead = data.status === 'Pending QC Head' && 
+    (isQcHeadAuthorized || (!hasCustomQcHead && (currentUser?.role === 'admin' || currentUser?.role === 'dept_head' || currentUser?.role === 'reviewer')));
+
+  // 3. Plant Head Approval Check
+  const plantHeadEmails = authSettings?.approvers?.plant_head || authSettings?.plantHead || [];
+  const hasCustomPlantHead = plantHeadEmails.length > 0;
   const isPlantHeadAuthorized = hasCustomPlantHead 
-    ? authSettings.plantHead.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase()) 
+    ? plantHeadEmails.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase()) 
     : false;
   const canApprovePlantHead = data.status === 'Pending Plant Head' && 
     (isPlantHeadAuthorized || (!hasCustomPlantHead && (currentUser?.role === 'admin' || currentUser?.role === 'dept_head' || currentUser?.role === 'reviewer')));
 
-  // 3. CEO Approval Check
-  const hasCustomCeo = authSettings?.ceo && authSettings.ceo.length > 0;
+  // 4. CEO Approval Check
+  const ceoEmails = authSettings?.approvers?.ceo || authSettings?.ceo || [];
+  const hasCustomCeo = ceoEmails.length > 0;
   const isCeoAuthorized = hasCustomCeo 
-    ? authSettings.ceo.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase()) 
+    ? ceoEmails.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase()) 
     : false;
   const canApproveCeo = data.status === 'Pending CEO' && 
     (isCeoAuthorized || (!hasCustomCeo && (currentUser?.role === 'admin' || currentUser?.role === 'reviewer')));
 
-  // 4. EHS Approval Check
-  const hasCustomEhs = authSettings?.ehs && authSettings.ehs.length > 0;
+  // 5. EHS Approval Check
+  const ehsEmails = authSettings?.approvers?.ehs || authSettings?.ehs || [];
+  const hasCustomEhs = ehsEmails.length > 0;
   const isEhsAuthorized = hasCustomEhs 
-    ? authSettings.ehs.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase()) 
+    ? ehsEmails.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase()) 
     : false;
   const canApproveEhs = data.status === 'Pending EHS' && 
     (isEhsAuthorized || (!hasCustomEhs && (currentUser?.role === 'compliance_manager' || currentUser?.role === 'admin' || currentUser?.role === 'reviewer')));
 
-  // 5. QA Approval Check
-  const hasCustomQa = authSettings?.qa && authSettings.qa.length > 0;
+  // 6. QA Approval Check
+  const qaEmails = authSettings?.approvers?.qa || authSettings?.qa || [];
+  const hasCustomQa = qaEmails.length > 0;
   const isQaAuthorized = hasCustomQa 
-    ? authSettings.qa.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase()) 
+    ? qaEmails.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase()) 
     : false;
   const canApproveQa = data.status === 'Pending QA' && 
     (isQaAuthorized || (!hasCustomQa && (currentUser?.role === 'compliance_manager' || currentUser?.role === 'admin' || currentUser?.role === 'reviewer')));
 
   const renderApprovalCard = (
-    type: 'hod' | 'plant_head' | 'ceo' | 'ehs' | 'qa',
+    type: 'hod' | 'qc_head' | 'plant_head' | 'ceo' | 'ehs' | 'qa',
     title: string,
     Icon: any,
     approval: any,
@@ -131,42 +183,37 @@ const Section3Implementation = ({ data, update, currentUser, handleApproval, isS
       >
         <div>
           {/* Card Header */}
-          <div className="flex items-center justify-between mb-2.5 border-b border-slate-100 pb-1.5">
-            <div className="flex items-center gap-1.5">
-              <div className={`p-1 rounded-lg ${
+          <div className="flex items-center justify-between mb-2.5 border-b border-slate-100 pb-1.5 gap-2 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className={`p-1 rounded-lg shrink-0 ${
                 isCompleted
                   ? isApproved ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
                   : canApprove ? 'bg-brand-100 text-brand-600' : 'bg-slate-100 text-slate-400'
               }`}>
                 <Icon className="w-3.5 h-3.5" />
               </div>
-              <span className={`text-[11px] font-extrabold ${
+              <span className={`text-[10px] font-extrabold leading-tight break-words ${
                 isCompleted
                   ? isApproved ? 'text-emerald-800' : 'text-rose-800'
                   : 'text-slate-800'
-              }`}>
+              }`} title={title}>
                 {title}
               </span>
             </div>
 
             {/* Status Badge */}
             {isCompleted ? (
-              <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider ${
+              <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider shrink-0 ${
                 isApproved ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
               }`}>
                 {approval.status}
               </span>
             ) : canApprove ? (
-              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider bg-brand-100 text-brand-700 animate-pulse">
+              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider bg-brand-100 text-brand-700 animate-pulse shrink-0">
                 <PenTool className="w-2 h-2" />
                 Sign
               </span>
-            ) : (
-              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider bg-slate-100 text-slate-400">
-                <Lock className="w-2 h-2" />
-                Locked
-              </span>
-            )}
+            ) : null}
           </div>
 
           {/* Content Area */}
@@ -459,75 +506,94 @@ const Section3Implementation = ({ data, update, currentUser, handleApproval, isS
           )}
         </div>
 
-        {/* 5-Card Sequential Approval Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-          {/* Card 1: HOD */}
-          {renderApprovalCard(
-            'hod',
-            '1. HOD Approval',
-            UserCheck,
-            data.hodApproval,
-            canApproveHod,
-            data.status === 'Draft' 
-              ? 'Awaiting MOC submission' 
-              : `Awaiting HOD decision${data.hodName ? ` (Assigned: ${data.hodName})` : ''}`
-          )}
-          
-          {/* Card 2: Plant Head */}
-          {renderApprovalCard(
-            'plant_head',
-            '2. Plant Head Approval',
-            Building2,
-            data.plantHeadApproval,
-            canApprovePlantHead,
-            data.hodApproval?.status !== 'approved'
-              ? 'Awaiting HOD approval to start PH review'
-              : hasCustomPlantHead
-                ? `Awaiting Plant Head decision (Authorized: ${authSettings.plantHead.join(', ')})`
-                : 'Awaiting Plant Head decision (Authorized: Site Admin/Reviewers)'
-          )}
-
-          {/* Card 3: CEO */}
-          {renderApprovalCard(
-            'ceo',
-            '3. CEO Approval',
-            Briefcase,
-            data.ceoApproval,
-            canApproveCeo,
-            data.plantHeadApproval?.status !== 'approved'
-              ? 'Awaiting Plant Head approval to start CEO review'
-              : hasCustomCeo
-                ? `Awaiting CEO decision (Authorized: ${authSettings.ceo.join(', ')})`
-                : 'Awaiting CEO decision (Authorized: Site Admin/Reviewers)'
-          )}
-
-          {/* Card 4: EHS */}
-          {renderApprovalCard(
-            'ehs',
-            '4. EHS Approval',
-            Activity,
-            data.ehsApproval,
-            canApproveEhs,
-            data.ceoApproval?.status !== 'approved'
-              ? 'Awaiting CEO approval to start EHS review'
-              : hasCustomEhs
-                ? `Awaiting EHS decision (Authorized: ${authSettings.ehs.join(', ')})`
-                : 'Awaiting EHS decision (Authorized: Compliance/Admin)'
-          )}
-
-          {/* Card 5: QA */}
-          {renderApprovalCard(
-            'qa',
-            '5. QA Approval',
-            ShieldCheck,
-            data.qaApproval,
-            canApproveQa,
-            data.ehsApproval?.status !== 'approved'
-              ? 'Awaiting EHS approval to start QA review'
-              : hasCustomQa
-                ? `Awaiting QA decision (Authorized: ${authSettings.qa.join(', ')})`
-                : 'Awaiting QA decision (Authorized: Compliance/Admin)'
-          )}
+        {/* Dynamic-Card Sequential Approval Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
+          {sequence.map((roleKey: string, idx: number) => {
+            const numPrefix = `${idx + 1}. `;
+            if (roleKey === 'hod') {
+              return renderApprovalCard(
+                'hod',
+                numPrefix + 'HOD Approval',
+                UserCheck,
+                data.hodApproval,
+                canApproveHod,
+                data.status === 'Draft' 
+                  ? 'Awaiting MOC submission' 
+                  : `Awaiting HOD decision${data.hodName ? ` (Assigned: ${data.hodName})` : ''}`
+              );
+            }
+            if (roleKey === 'qc_head') {
+              return renderApprovalCard(
+                'qc_head',
+                numPrefix + 'QC Head Approval',
+                ShieldCheck,
+                data.qcHeadApproval,
+                canApproveQcHead,
+                isStepLocked('qc_head')
+                  ? getLockMessage('qc_head')
+                  : hasCustomQcHead
+                    ? `Awaiting QC Head decision (Authorized: ${qcHeadEmails.join(', ')})`
+                    : 'Awaiting QC Head decision (Authorized: Site Admin/Reviewers)'
+              );
+            }
+            if (roleKey === 'plant_head') {
+              return renderApprovalCard(
+                'plant_head',
+                numPrefix + 'Plant Head Approval',
+                Building2,
+                data.plantHeadApproval,
+                canApprovePlantHead,
+                isStepLocked('plant_head')
+                  ? getLockMessage('plant_head')
+                  : hasCustomPlantHead
+                    ? `Awaiting Plant Head decision (Authorized: ${plantHeadEmails.join(', ')})`
+                    : 'Awaiting Plant Head decision (Authorized: Site Admin/Reviewers)'
+              );
+            }
+            if (roleKey === 'ceo') {
+              return renderApprovalCard(
+                'ceo',
+                numPrefix + 'CEO Approval',
+                Briefcase,
+                data.ceoApproval,
+                canApproveCeo,
+                isStepLocked('ceo')
+                  ? getLockMessage('ceo')
+                  : hasCustomCeo
+                    ? `Awaiting CEO decision (Authorized: ${ceoEmails.join(', ')})`
+                    : 'Awaiting CEO decision (Authorized: Site Admin/Reviewers)'
+              );
+            }
+            if (roleKey === 'ehs') {
+              return renderApprovalCard(
+                'ehs',
+                numPrefix + 'EHS Approval',
+                Activity,
+                data.ehsApproval,
+                canApproveEhs,
+                isStepLocked('ehs')
+                  ? getLockMessage('ehs')
+                  : hasCustomEhs
+                    ? `Awaiting EHS decision (Authorized: ${ehsEmails.join(', ')})`
+                    : 'Awaiting EHS decision (Authorized: Compliance/Admin)'
+              );
+            }
+            if (roleKey === 'qa') {
+              return renderApprovalCard(
+                'qa',
+                numPrefix + 'QA Approval',
+                ShieldCheck,
+                data.qaApproval,
+                canApproveQa,
+                isStepLocked('qa')
+                  ? getLockMessage('qa')
+                  : hasCustomQa
+                    ? `Awaiting QA decision (Authorized: ${qaEmails.join(', ')})`
+                    : 'Awaiting QA decision (Authorized: Compliance/Admin)'
+              );
+            }
+            return null;
+          })}
         </div>
       </div>
     </div>

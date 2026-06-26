@@ -43,15 +43,23 @@ export default function MocPage() {
   const currentUser = useAuthStore(state => state.user);
 
   const [authSettings, setAuthSettings] = useState<{
-    plantHead: string[];
-    ceo: string[];
-    ehs: string[];
-    qa: string[];
+    sequence: string[];
+    approvers: {
+      qc_head: string[];
+      plant_head: string[];
+      ceo: string[];
+      ehs: string[];
+      qa: string[];
+    };
   }>({
-    plantHead: [],
-    ceo: [],
-    ehs: [],
-    qa: []
+    sequence: ['hod', 'qc_head', 'plant_head', 'ceo', 'ehs', 'qa'],
+    approvers: {
+      qc_head: [],
+      plant_head: [],
+      ceo: [],
+      ehs: [],
+      qa: []
+    }
   });
 
   useEffect(() => {
@@ -76,11 +84,16 @@ export default function MocPage() {
       // Fetch custom settings
       const settingsRes = await api.get('/settings/moc_approval_settings');
       if (settingsRes.data) {
+        const data = settingsRes.data;
         setAuthSettings({
-          plantHead: settingsRes.data.plantHead || [],
-          ceo: settingsRes.data.ceo || [],
-          ehs: settingsRes.data.ehs || [],
-          qa: settingsRes.data.qa || []
+          sequence: data.sequence || ['hod', 'qc_head', 'plant_head', 'ceo', 'ehs', 'qa'],
+          approvers: data.approvers || {
+            qc_head: [],
+            plant_head: data.plantHead || [],
+            ceo: data.ceo || [],
+            ehs: data.ehs || [],
+            qa: data.qa || []
+          }
         });
       }
     } catch (err) {
@@ -202,6 +215,8 @@ export default function MocPage() {
         return 'bg-slate-100 text-slate-700 border-slate-200';
       case 'Pending HOD':
         return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'Pending QC Head':
+        return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'Pending Plant Head':
         return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'Pending CEO':
@@ -219,7 +234,7 @@ export default function MocPage() {
   };
 
   const RoleConfigCard = ({ roleKey, label, icon: Icon, color, bg }: {
-    roleKey: 'plantHead' | 'ceo' | 'ehs' | 'qa';
+    roleKey: 'qc_head' | 'plant_head' | 'ceo' | 'ehs' | 'qa';
     label: string;
     icon: any;
     color: string;
@@ -228,13 +243,16 @@ export default function MocPage() {
     const [search, setSearch] = useState('');
     const [showDropdown, setShowDropdown] = useState(false);
 
-    const selectedEmails = authSettings[roleKey] || [];
+    const selectedEmails = authSettings.approvers?.[roleKey] || [];
 
     const handleAdd = (email: string) => {
       if (selectedEmails.includes(email)) return;
       setAuthSettings(prev => ({
         ...prev,
-        [roleKey]: [...selectedEmails, email]
+        approvers: {
+          ...prev.approvers,
+          [roleKey]: [...selectedEmails, email]
+        }
       }));
       setSearch('');
       setShowDropdown(false);
@@ -243,7 +261,10 @@ export default function MocPage() {
     const handleRemove = (email: string) => {
       setAuthSettings(prev => ({
         ...prev,
-        [roleKey]: selectedEmails.filter(e => e !== email)
+        approvers: {
+          ...prev.approvers,
+          [roleKey]: selectedEmails.filter(e => e !== email)
+        }
       }));
     };
 
@@ -426,17 +447,33 @@ export default function MocPage() {
 
           {/* Sequential Workflow Bar (Horizontal Pipeline) */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm text-left">
-            <h2 className="text-xs font-bold text-slate-450 uppercase tracking-widest mb-4">7-Stage Change Control Process</h2>
+            <h2 className="text-xs font-bold text-slate-450 uppercase tracking-widest mb-4">
+              {authSettings.sequence.length + 2}-Stage Change Control Process
+            </h2>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               {[
                 { stage: 1, name: 'Creator Raise', desc: 'Draft initiated', icon: UserCheck, color: 'text-slate-605', bg: 'bg-slate-50' },
-                { stage: 2, name: 'HOD Review', desc: 'Dept Head sign', icon: UserCheck, color: 'text-amber-650', bg: 'bg-amber-50/50' },
-                { stage: 3, name: 'Plant Head', desc: 'Logistics audit', icon: Building2, color: 'text-amber-650', bg: 'bg-amber-50/50' },
-                { stage: 4, name: 'CEO Approval', desc: 'Risk sign-off', icon: Briefcase, color: 'text-purple-600', bg: 'bg-purple-50/50' },
-                { stage: 5, name: 'EHS Clearance', desc: 'Safety audit', icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50/50' },
-                { stage: 6, name: 'QA Approval', desc: 'Systems sign', icon: Shield, color: 'text-blue-600', bg: 'bg-blue-50/50' },
-                { stage: 7, name: 'Finalized', desc: 'Synced & closed', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50/60' }
+                ...authSettings.sequence.map((role, i) => {
+                  const roleMap: Record<string, { label: string; desc: string; icon: any; color: string; bg: string }> = {
+                    hod: { label: 'HOD Review', desc: 'Dept Head sign', icon: UserCheck, color: 'text-amber-650', bg: 'bg-amber-50/50' },
+                    qc_head: { label: 'QC Head', desc: 'QC check & sign', icon: Shield, color: 'text-amber-650', bg: 'bg-blue-50/50' },
+                    plant_head: { label: 'Plant Head', desc: 'Logistics audit', icon: Building2, color: 'text-amber-650', bg: 'bg-amber-50/50' },
+                    ceo: { label: 'CEO Approval', desc: 'Risk sign-off', icon: Briefcase, color: 'text-purple-600', bg: 'bg-purple-50/50' },
+                    ehs: { label: 'EHS Clearance', desc: 'Safety audit', icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50/50' },
+                    qa: { label: 'QA Approval', desc: 'Systems sign', icon: Shield, color: 'text-blue-600', bg: 'bg-blue-50/50' }
+                  };
+                  const info = roleMap[role] || { label: role, desc: 'Approval stage', icon: UserCheck, color: 'text-slate-500', bg: 'bg-slate-50' };
+                  return {
+                    stage: i + 2,
+                    name: info.label,
+                    desc: info.desc,
+                    icon: info.icon,
+                    color: info.color,
+                    bg: info.bg
+                  };
+                }),
+                { stage: authSettings.sequence.length + 2, name: 'Finalized', desc: 'Synced & closed', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50/60' }
               ].map((step, i) => (
                 <div key={i} className="flex items-center gap-2.5 p-2 bg-slate-50/40 border border-slate-150 rounded-lg hover:border-blue-300 transition-colors">
                   <div className={`w-7 h-7 rounded-full ${step.bg} ${step.color} flex items-center justify-center font-bold text-[11px] shrink-0 border border-current/10`}>
@@ -688,6 +725,79 @@ export default function MocPage() {
 
       {activeTab === 'settings' && (
         <div className="space-y-6 animate-in fade-in duration-200">
+          {/* 1. Sequence Configuration Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-left p-6">
+            <div className="flex items-center gap-2.5 mb-4 border-b border-slate-100 pb-3">
+              <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                <GitBranch className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-base">MOC Approval Sequence Configuration</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Define the exact chronological order of approvals for MOC submissions.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+              {authSettings.sequence.map((roleKey, idx) => {
+                const labelMap: Record<string, string> = {
+                  hod: 'HOD Approval',
+                  qc_head: 'QC Head Approval',
+                  plant_head: 'Plant Head Approval',
+                  ceo: 'CEO Approval',
+                  ehs: 'EHS Approval',
+                  qa: 'QA Approval'
+                };
+
+                const moveStep = (direction: 'left' | 'right') => {
+                  const newSeq = [...authSettings.sequence];
+                  const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+                  if (targetIdx < 0 || targetIdx >= newSeq.length) return;
+                  
+                  // swap
+                  const temp = newSeq[idx];
+                  newSeq[idx] = newSeq[targetIdx];
+                  newSeq[targetIdx] = temp;
+                  
+                  setAuthSettings(prev => ({
+                    ...prev,
+                    sequence: newSeq
+                  }));
+                };
+
+                return (
+                  <div key={roleKey} className="flex flex-col justify-between p-3.5 bg-slate-50 border border-slate-205 rounded-xl hover:border-slate-350 transition-all shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-200 w-5 h-5 rounded-full flex items-center justify-center shrink-0">{idx + 1}</span>
+                      <span className="text-xs font-bold text-slate-700 truncate">{labelMap[roleKey] || roleKey}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        onClick={() => moveStep('left')}
+                        className="px-2 py-0.5 bg-white border border-slate-200 rounded hover:bg-slate-50 text-[10px] font-extrabold text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        title="Move Left"
+                      >
+                        ◀
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === authSettings.sequence.length - 1}
+                        onClick={() => moveStep('right')}
+                        className="px-2 py-0.5 bg-white border border-slate-200 rounded hover:bg-slate-50 text-[10px] font-extrabold text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                        title="Move Right"
+                      >
+                        ▶
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2. Approver Assignments Grid Card */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="text-left">
@@ -709,7 +819,7 @@ export default function MocPage() {
                 ) : (
                   <Save size={16} />
                 )}
-                {saving ? 'Saving...' : 'Save Approvers'}
+                {saving ? 'Saving...' : 'Save Approvers & Sequence'}
               </button>
             </div>
 
@@ -719,42 +829,28 @@ export default function MocPage() {
                 <span>Loading configurations...</span>
               </div>
             ) : (
-              <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* 1. Plant Head Card */}
-                <RoleConfigCard 
-                  roleKey="plantHead" 
-                  label="1. Plant Head Authority" 
-                  icon={Building2} 
-                  color="text-amber-600" 
-                  bg="bg-amber-50" 
-                />
-
-                {/* 2. CEO Card */}
-                <RoleConfigCard 
-                  roleKey="ceo" 
-                  label="2. Chief Executive Officer" 
-                  icon={Briefcase} 
-                  color="text-purple-600" 
-                  bg="bg-purple-50" 
-                />
-
-                {/* 3. EHS Representative Card */}
-                <RoleConfigCard 
-                  roleKey="ehs" 
-                  label="3. EHS Lead Officer" 
-                  icon={Activity} 
-                  color="text-blue-600" 
-                  bg="bg-blue-50" 
-                />
-
-                {/* 4. QA Head Card */}
-                <RoleConfigCard 
-                  roleKey="qa" 
-                  label="4. Quality Assurance Head" 
-                  icon={Shield} 
-                  color="text-emerald-600" 
-                  bg="bg-emerald-50" 
-                />
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                {authSettings.sequence.filter(role => role !== 'hod').map((role, idx) => {
+                  const roleConfigMap: Record<string, { label: string; icon: any; color: string; bg: string }> = {
+                    qc_head: { label: 'QC Head Authority', icon: Shield, color: 'text-blue-600', bg: 'bg-blue-50' },
+                    plant_head: { label: 'Plant Head Authority', icon: Building2, color: 'text-amber-600', bg: 'bg-amber-50' },
+                    ceo: { label: 'Chief Executive Officer', icon: Briefcase, color: 'text-purple-600', bg: 'bg-purple-50' },
+                    ehs: { label: 'EHS Lead Officer', icon: Activity, color: 'text-blue-650', bg: 'bg-blue-50' },
+                    qa: { label: 'Quality Assurance Head', icon: Shield, color: 'text-emerald-600', bg: 'bg-emerald-50' }
+                  };
+                  const cfg = roleConfigMap[role];
+                  if (!cfg) return null;
+                  return (
+                    <RoleConfigCard
+                      key={role}
+                      roleKey={role as any}
+                      label={`${idx + 1}. ${cfg.label}`}
+                      icon={cfg.icon}
+                      color={cfg.color}
+                      bg={cfg.bg}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>

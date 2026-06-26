@@ -91,6 +91,16 @@ export class MocRecord {
     };
 
     @Column({ type: 'jsonb', nullable: true })
+    qcHeadApproval: {
+        name: string;
+        designation: string;
+        sign: string;
+        remarks: string;
+        status: 'pending' | 'approved' | 'rejected';
+        date: Date;
+    };
+
+    @Column({ type: 'jsonb', nullable: true })
     plantHeadApproval: {
         name: string;
         designation: string;

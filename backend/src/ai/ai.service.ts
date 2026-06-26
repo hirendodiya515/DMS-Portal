@@ -95,17 +95,23 @@ export class AiService {
                     `### Registered Auditees (Total: ${auditees.length}):\n` +
                     auditees.map(a => `- Name: ${a.name}, Email: ${a.email}, Department: ${a.department || 'N/A'}`).join('\n');
 
-                // Filter auditees matching any specific department keyword in query
-                const deptKeywords = ['tempering', 'furnace', 'cutting', 'packing', 'production', 'purchase', 'sales', 'utility', 'maintenance', 'hr', 'stores', 'qa', 'qc'];
-                const matchedDepts = deptKeywords.filter(d => queryLower.includes(d));
+                // Filter auditees matching any specific department in query dynamically
+                const allDepts = Array.from(new Set(
+                    participants
+                        .map(p => p.department)
+                        .filter((dept): dept is string => !!dept && dept.trim() !== '')
+                ));
+                const matchedDepts = allDepts.filter(dept => 
+                    queryLower.includes(dept.toLowerCase())
+                );
                 if (matchedDepts.length > 0) {
                     auditText += `\n\n### Filtered Auditees Matching Query:`;
                     for (const dept of matchedDepts) {
-                        const filtered = auditees.filter(a => a.department && a.department.toLowerCase().includes(dept));
+                        const filtered = auditees.filter(a => a.department && a.department.toLowerCase() === dept.toLowerCase());
                         if (filtered.length > 0) {
-                            auditText += `\nFor ${dept.toUpperCase()}:\n` + filtered.map(a => `- Name: ${a.name}, Email: ${a.email}, Department: ${a.department}`).join('\n');
+                            auditText += `\nFor department "${dept}":\n` + filtered.map(a => `- Name: ${a.name}, Email: ${a.email}, Department: ${a.department}`).join('\n');
                         } else {
-                            auditText += `\nFor ${dept.toUpperCase()}: No specific auditees registered.`;
+                            auditText += `\nFor department "${dept}": No specific auditees registered.`;
                         }
                     }
                 }
@@ -237,15 +243,16 @@ export class AiService {
             try {
                 const count = await this.orgRepo.count();
                 const nodes = await this.orgRepo.find({
-                    take: 25,
+                    take: 50,
                 });
-                if (nodes.length > 0) {
-                    contextParts.push(`### Organization Chart (Total People: ${count}):\n` +
-                        nodes.map(n => `- Name: ${n.name}, Designation: ${n.designation || 'N/A'}, Department: ${n.department || 'N/A'}`).join('\n')
-                    );
-                } else {
-                    contextParts.push(`### Organization Chart:\n- No people are currently listed in the organization chart.`);
-                }
+                contextParts.push(
+                    `### Organization Chart Metadata:\n` +
+                    `- Total Number of Employees Registered in System: ${count}\n\n` +
+                    `### List of Organization Members (First 50 employees shown for reference):\n` +
+                    (nodes.length > 0 
+                        ? nodes.map(n => `- Name: ${n.name}, Designation: ${n.designation || 'N/A'}, Department: ${n.department || 'N/A'}`).join('\n')
+                        : '- No employees currently listed.')
+                );
             } catch (e) {
                 this.logger.error('Failed to query org chart for AI context', e.message);
             }
@@ -455,7 +462,7 @@ Please respond to the user's message accordingly.`;
                     keep_alive: '20m',
                     options: {
                         temperature: 0.7,
-                        num_ctx: 2048,
+                        num_ctx: 8192,
                     }
                 }, {
                     headers: { 'Content-Type': 'application/json' },
@@ -487,7 +494,7 @@ Please respond to the user's message accordingly.`;
                         keep_alive: '20m',
                         options: {
                             temperature: 0.7,
-                            num_ctx: 2048,
+                            num_ctx: 8192,
                         }
                     }, {
                         headers: { 'Content-Type': 'application/json' },
@@ -602,7 +609,7 @@ Please respond to the user's message accordingly.`;
                     keep_alive: '20m',
                     options: {
                         temperature: 0.7,
-                        num_ctx: 2048,
+                        num_ctx: 8192,
                     }
                 }, {
                     headers: { 'Content-Type': 'application/json' },

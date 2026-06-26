@@ -84,6 +84,19 @@ const MocForm = () => {
   const [displayMocNo, setDisplayMocNo] = useState(`${new Date().getFullYear()}-...`);
   const [isSaving, setIsSaving] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [approvalSequence, setApprovalSequence] = useState<string[]>(['hod', 'qc_head', 'plant_head', 'ceo', 'ehs', 'qa']);
+
+  const getStatusStringForRole = (role: string) => {
+    switch (role) {
+      case 'hod': return 'Pending HOD';
+      case 'qc_head': return 'Pending QC Head';
+      case 'plant_head': return 'Pending Plant Head';
+      case 'ceo': return 'Pending CEO';
+      case 'ehs': return 'Pending EHS';
+      case 'qa': return 'Pending QA';
+      default: return 'Pending HOD';
+    }
+  };
 
   useEffect(() => {
     try {
@@ -123,7 +136,18 @@ const MocForm = () => {
     pictureAfter: null,
     teamMembers: [],
     customerApprovalRequired: false,
+    qcHeadApproval: null, // New QC Head approval field
   });
+
+  useEffect(() => {
+    api.get('/settings/moc_approval_settings')
+      .then(res => {
+        if (res.data && res.data.sequence) {
+          setApprovalSequence(res.data.sequence);
+        }
+      })
+      .catch(err => console.error('Failed to load MOC approval settings:', err));
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -184,10 +208,13 @@ const MocForm = () => {
       const user = userStr ? JSON.parse(userStr) : null;
       const requisitionById = user?.id || '';
 
+      const firstRole = approvalSequence[0] || 'hod';
+      const firstStatus = getStatusStringForRole(firstRole);
+
       const payload = {
         ...formData,
         requisitionById,
-        status: isSubmit ? 'Pending HOD' : 'Draft',
+        status: isSubmit ? firstStatus : 'Draft',
       };
 
       if (id) {
@@ -207,7 +234,7 @@ const MocForm = () => {
   };
 
   const handleApproval = async (
-    roleType: 'hod' | 'plant_head' | 'ceo' | 'ehs' | 'qa',
+    roleType: 'hod' | 'qc_head' | 'plant_head' | 'ceo' | 'ehs' | 'qa',
     decision: 'approved' | 'rejected',
     remarks: string,
     sign: string
@@ -231,29 +258,26 @@ const MocForm = () => {
         updatedFormData.status = 'Draft';
       }
       
-      if (roleType === 'hod') {
-        updatedFormData.hodApproval = approvalData;
-        if (decision === 'approved') {
-          updatedFormData.status = 'Pending Plant Head';
-        }
-      } else if (roleType === 'plant_head') {
-        updatedFormData.plantHeadApproval = approvalData;
-        if (decision === 'approved') {
-          updatedFormData.status = 'Pending CEO';
-        }
-      } else if (roleType === 'ceo') {
-        updatedFormData.ceoApproval = approvalData;
-        if (decision === 'approved') {
-          updatedFormData.status = 'Pending EHS';
-        }
-      } else if (roleType === 'ehs') {
-        updatedFormData.ehsApproval = approvalData;
-        if (decision === 'approved') {
-          updatedFormData.status = 'Pending QA';
-        }
-      } else if (roleType === 'qa') {
-        updatedFormData.qaApproval = approvalData;
-        if (decision === 'approved') {
+      const fieldMap: Record<string, string> = {
+        hod: 'hodApproval',
+        qc_head: 'qcHeadApproval',
+        plant_head: 'plantHeadApproval',
+        ceo: 'ceoApproval',
+        ehs: 'ehsApproval',
+        qa: 'qaApproval'
+      };
+
+      const dbField = fieldMap[roleType];
+      if (dbField) {
+        updatedFormData[dbField] = approvalData;
+      }
+
+      if (decision === 'approved') {
+        const currIdx = approvalSequence.indexOf(roleType);
+        if (currIdx !== -1 && currIdx < approvalSequence.length - 1) {
+          const nextRole = approvalSequence[currIdx + 1];
+          updatedFormData.status = getStatusStringForRole(nextRole);
+        } else {
           updatedFormData.status = 'Finalized';
         }
       }

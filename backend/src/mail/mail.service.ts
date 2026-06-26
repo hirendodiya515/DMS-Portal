@@ -353,4 +353,95 @@ export class MailService {
 
     return this.sendMail(recipientEmails, subject, html, "Process Deviation - DMS");
   }
+
+  async sendMocAlert(
+    recipientEmails: string[],
+    mocData: {
+      id: string;
+      mocNo: string;
+      status: string;
+      department: string;
+      productProcess: string;
+      requisitionByName: string;
+      description: string;
+      pendingWith: string;
+      actionUrl: string;
+      decisionType?: 'approved' | 'rejected' | 'submitted' | 'finalized';
+      remarks?: string;
+      actorName?: string;
+    }
+  ) {
+    const isFinalized = mocData.status === 'Finalized' || mocData.status === 'Closed';
+    const isRejected = mocData.decisionType === 'rejected';
+    const isSubmitted = mocData.decisionType === 'submitted';
+    
+    let subject = `⚠️ Action Required: MOC ${mocData.mocNo} (Pending: ${mocData.pendingWith})`;
+    let color = '#2563eb'; // Blue
+    let actionText = 'Action Required';
+
+    if (isFinalized) {
+      subject = `✅ Notification: MOC ${mocData.mocNo} - Finalized`;
+      color = '#10b981'; // Emerald
+      actionText = 'MOC Finalized';
+    } else if (isRejected) {
+      subject = `❌ Reverted to Draft: MOC ${mocData.mocNo} - Rejected by ${mocData.actorName}`;
+      color = '#ef4444'; // Red
+      actionText = 'MOC Rejected';
+    } else if (isSubmitted) {
+      subject = `📥 MOC Submitted: ${mocData.mocNo} - Pending ${mocData.pendingWith}`;
+      color = '#f59e0b'; // Amber
+      actionText = 'MOC Submitted';
+    }
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+        <div style="background-color: ${color}; color: white; padding: 20px; text-align: center;">
+          <h2 style="margin: 0;">Management of Change (MOC) Alert</h2>
+          <p style="margin: 5px 0 0 0; opacity: 0.9;">${mocData.mocNo} - ${mocData.status}</p>
+        </div>
+        <div style="padding: 20px;">
+          <p>Hello,</p>
+          <p style="margin: 0; color: #4b5563; font-size: 14px;">This is an automated notification regarding the Management of Change (MOC) request.</p>
+          
+          <div style="background-color: #f8fafc; border-left: 4px solid ${color}; padding: 12px 16px; margin: 24px 0; border-radius: 4px;">
+            <p style="margin: 0 0 8px 0; color: #1e293b; font-weight: 500;">Requisitioner: <span style="color: #64748b; font-weight: 400;">${mocData.requisitionByName}</span></p>
+            <p style="margin: 0 0 8px 0; color: #1e293b; font-weight: 500;">Current Status: <span style="color: ${color}; font-weight: bold;">${mocData.status}</span></p>
+            ${mocData.actorName ? `<p style="margin: 0 0 8px 0; color: #1e293b; font-weight: 500;">Last Action By: <span style="color: #64748b; font-weight: 400;">${mocData.actorName} (${mocData.decisionType})</span></p>` : ''}
+            ${mocData.remarks ? `<p style="margin: 0; color: #1e293b; font-weight: 500; font-style: italic;">Remarks: <span style="color: #475569; font-weight: 400;">"${mocData.remarks}"</span></p>` : ''}
+          </div>
+
+          <h3 style="color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">MOC Details</h3>
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; width: 30%; background-color: #f1f5f9;">MOC Number</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; width: 70%;">${mocData.mocNo}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Department</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${mocData.department}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Product / Process</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${mocData.productProcess}</td>
+            </tr>
+          </table>
+
+          <h3 style="color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Description of Change</h3>
+          <div style="background-color: #f8fafc; padding: 15px; border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 25px;">
+            ${mocData.description}
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${mocData.actionUrl}" style="background-color: ${color}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">View MOC Details</a>
+          </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;">
+            <p>This is an automated message from the DMS Portal. Please do not reply to this email.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return this.sendMail(recipientEmails, subject, html, "MOC - DMS");
+  }
 }
