@@ -34,6 +34,14 @@ export class CreateProductDeviationDto {
     @IsUUID('all', { each: true })
     @IsNotEmpty()
     responsiblePersonIds: string[];
+
+    @IsString()
+    @IsOptional()
+    initiatorName?: string;
+
+    @IsArray()
+    @IsOptional()
+    attachments?: { name: string; fileData: string }[];
 }
 
 export class UpdateActionPlanDto {
@@ -48,6 +56,10 @@ export class UpdateActionPlanDto {
     @IsString()
     @IsOptional()
     rootCauseAnalysis?: string;
+
+    @IsString()
+    @IsOptional()
+    disposalAction?: string;
 }
 
 export class AddMarketingRemarkDto {
@@ -60,6 +72,12 @@ export class ApprovePlantHeadDto {
     @IsString()
     @IsOptional()
     plantHeadRemarks?: string;
+}
+
+export class ApproveCeoDto {
+    @IsString()
+    @IsOptional()
+    ceoRemarks?: string;
 }
 
 export class ApproveQualityHeadDto {

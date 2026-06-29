@@ -137,6 +137,7 @@ const MocForm = () => {
     teamMembers: [],
     customerApprovalRequired: false,
     qcHeadApproval: null, // New QC Head approval field
+    attachments: [],
   });
 
   useEffect(() => {

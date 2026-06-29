@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, AlertCircle, FileWarning, Search } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, AlertCircle, FileWarning, Search, UploadCloud, FileText, Trash2, Download } from 'lucide-react';
 import api from '../api';
+import { formatDate } from '../utils/dateFormatter';
 
 interface User {
   id: string;
@@ -19,16 +20,21 @@ export default function DeviationFormPage() {
   const [error, setError] = useState('');
   const [userSearchTerm, setUserSearchTerm] = useState('');
 
+  const startDateInputRef = useRef<HTMLInputElement>(null);
+  const endDateInputRef = useRef<HTMLInputElement>(null);
+
   // Form states
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<any>({
     line: '',
     startDate: '',
     endDate: '',
     totalQuantityProduced: 0,
     quantityUnderDeviation: 0,
     natureOfDeviation: '',
+    initiatorName: '',
     detailsOfDeviation: '',
-    responsiblePersonIds: [] as string[]
+    responsiblePersonIds: [] as string[],
+    attachments: []
   });
 
   useEffect(() => {
@@ -62,12 +68,12 @@ export default function DeviationFormPage() {
   };
 
   const handleCheckboxChange = (userId: string) => {
-    setFormData((prev) => {
+    setFormData((prev: any) => {
       const current = prev.responsiblePersonIds;
       if (current.includes(userId)) {
         return {
           ...prev,
-          responsiblePersonIds: current.filter((id) => id !== userId)
+          responsiblePersonIds: current.filter((id: string) => id !== userId)
         };
       } else {
         if (current.length >= 3) {
@@ -80,6 +86,43 @@ export default function DeviationFormPage() {
         };
       }
     });
+  };
+
+  const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const fileData = reader.result as string;
+        setFormData((prev: any) => ({
+          ...prev,
+          attachments: [
+            ...(prev.attachments || []),
+            { name: file.name, fileData }
+          ]
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      attachments: prev.attachments.filter((_: any, idx: number) => idx !== index)
+    }));
+  };
+
+  const downloadAttachment = (file: { name: string; fileData: string }) => {
+    const link = document.createElement('a');
+    link.href = file.fileData;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,6 +156,10 @@ export default function DeviationFormPage() {
     }
     if (!formData.natureOfDeviation.trim()) {
       setError('Please specify the nature of deviation.');
+      return;
+    }
+    if (!formData.initiatorName.trim()) {
+      setError('Please enter the Initiator Name.');
       return;
     }
     if (formData.responsiblePersonIds.length === 0) {
@@ -172,7 +219,7 @@ export default function DeviationFormPage() {
                 <FileWarning className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-lg font-bold">New Product Deviation Record</h2>
+                <h2 className="text-lg font-bold">Create Product Deviation Record</h2>
                 <p className="text-xs text-orange-100">Ensure all details are accurate. Responsible persons will receive notifications to provide containment and corrective actions.</p>
               </div>
             </div>
@@ -201,26 +248,82 @@ export default function DeviationFormPage() {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Initiator Name *</label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
+                    placeholder="Enter initiator name..."
+                    value={formData.initiatorName}
+                    onChange={(e) => setFormData({ ...formData, initiatorName: e.target.value })}
+                    required
+                  />
+                </div>
+
+                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Start Date *</label>
-                    <input
-                      type="date"
-                      className="w-full px-3 py-2 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
-                      value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                      required
-                    />
+                    <div 
+                      className="relative cursor-pointer"
+                      onClick={() => {
+                        try {
+                          startDateInputRef.current?.showPicker();
+                        } catch (e) {
+                          startDateInputRef.current?.click();
+                        }
+                      }}
+                    >
+                      {/* Visual overlay displaying the formatted date */}
+                      <div className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl font-medium text-slate-700 flex items-center justify-between min-h-[42px]">
+                        <span className={formData.startDate ? 'text-slate-800 font-bold' : 'text-slate-400'}>
+                          {formData.startDate ? formatDate(formData.startDate) : 'Select start date...'}
+                        </span>
+                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      {/* Invisible native input */}
+                      <input
+                        type="date"
+                        ref={startDateInputRef}
+                        className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+                        value={formData.startDate}
+                        onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                        required
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">End Date *</label>
-                    <input
-                      type="date"
-                      className="w-full px-3 py-2 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                      required
-                    />
+                    <div 
+                      className="relative cursor-pointer"
+                      onClick={() => {
+                        try {
+                          endDateInputRef.current?.showPicker();
+                        } catch (e) {
+                          endDateInputRef.current?.click();
+                        }
+                      }}
+                    >
+                      {/* Visual overlay displaying the formatted date */}
+                      <div className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl font-medium text-slate-700 flex items-center justify-between min-h-[42px]">
+                        <span className={formData.endDate ? 'text-slate-800 font-bold' : 'text-slate-400'}>
+                          {formData.endDate ? formatDate(formData.endDate) : 'Select end date...'}
+                        </span>
+                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      {/* Invisible native input */}
+                      <input
+                        type="date"
+                        ref={endDateInputRef}
+                        className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+                        value={formData.endDate}
+                        onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -275,12 +378,76 @@ export default function DeviationFormPage() {
                 </div>
 
                 <div className="col-span-1 md:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">
+                    Attachments
+                  </label>
+                  <p className="text-[11px] text-slate-400 font-medium mb-3 ml-1">
+                    Upload relevant documents, screenshots, or specifications (Optional).
+                  </p>
+                  
+                  <div className="border-2 border-dashed border-slate-200 hover:border-orange-500/50 rounded-2xl p-6 text-center bg-slate-50/50 hover:bg-orange-50/10 transition-all group relative">
+                    <input
+                      type="file"
+                      multiple
+                      onChange={handleAttachmentUpload}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-orange-500 transition-colors mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-700">
+                      Click or drag files to upload
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-medium mt-1">
+                      Support PDF, DOCX, XLSX, images etc.
+                    </p>
+                  </div>
+
+                  {formData.attachments && formData.attachments.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {formData.attachments.map((file: any, index: number) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-100 shadow-sm"
+                        >
+                          <FileText className="w-5 h-5 text-orange-500 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-700 truncate">
+                              {file.name}
+                            </div>
+                            <div className="text-[9px] text-slate-400 font-semibold uppercase">
+                              {(file.fileData.length * 0.75 / 1024).toFixed(1)} KB
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => downloadAttachment(file)}
+                              className="p-1.5 hover:bg-slate-100 text-slate-500 hover:text-slate-700 rounded-lg transition-colors cursor-pointer"
+                              title="Download file"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAttachment(index)}
+                              className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg transition-colors cursor-pointer"
+                              title="Remove file"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="col-span-1 md:col-span-2">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1">Assign Responsible Persons (Max 3) *</label>
-                  <p className="text-[11px] text-slate-400 font-medium mb-3 ml-1">Select the operators/engineers responsible for defining root cause, containment, and corrective actions.</p>
+                  <p className="text-[11px] text-slate-400 font-medium mb-3 ml-1">Select the person(s) responsible for defining root cause, containment, and corrective actions.</p>
                   
                   {formData.responsiblePersonIds.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {formData.responsiblePersonIds.map((id) => {
+                      {formData.responsiblePersonIds.map((id: string) => {
                         const targetUser = users.find(u => u.id === id);
                         if (!targetUser) return null;
                         return (

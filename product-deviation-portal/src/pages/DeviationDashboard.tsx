@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Eye, FileText, LogOut, Search, RefreshCw } from 'lucide-react';
 import api from '../api';
 import { generateDeviationPdf } from '../utils/generateDeviationPdf';
+import { formatDate } from '../utils/dateFormatter';
 
 interface Deviation {
   id: string;
@@ -21,6 +22,7 @@ interface Deviation {
     lastName: string;
     email: string;
   };
+  initiatorName?: string;
 }
 
 export default function DeviationDashboard() {
@@ -71,12 +73,14 @@ export default function DeviationDashboard() {
     const firstName = dev.createdBy?.firstName || '';
     const lastName = dev.createdBy?.lastName || '';
     const creatorName = `${firstName} ${lastName}`.trim();
+    const initiatorName = dev.initiatorName || '';
 
     const matchesSearch = 
       serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       line.toLowerCase().includes(searchTerm.toLowerCase()) ||
       natureOfDeviation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      creatorName.toLowerCase().includes(searchTerm.toLowerCase());
+      creatorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      initiatorName.toLowerCase().includes(searchTerm.toLowerCase());
     
     if (statusFilter === 'ALL') return matchesSearch;
     return matchesSearch && dev.status === statusFilter;
@@ -219,6 +223,7 @@ export default function DeviationDashboard() {
                   <th className="py-4 px-6">Sr No. / Line</th>
                   <th className="py-4 px-6">Nature of Deviation</th>
                   <th className="py-4 px-6">Created By</th>
+                  <th className="py-4 px-6">Initiator Name</th>
                   <th className="py-4 px-6">Created On</th>
                   <th className="py-4 px-6">Status</th>
                   <th className="py-4 px-6 text-right">Actions</th>
@@ -237,8 +242,11 @@ export default function DeviationDashboard() {
                     <td className="py-4 px-6 font-medium text-slate-500">
                       {dev.createdBy?.firstName} {dev.createdBy?.lastName}
                     </td>
+                    <td className="py-4 px-6 font-semibold text-slate-700">
+                      {dev.initiatorName || 'N/A'}
+                    </td>
                     <td className="py-4 px-6 font-medium text-slate-400 text-xs">
-                      {new Date(dev.createdAt).toLocaleDateString()}
+                      {formatDate(dev.createdAt)}
                     </td>
                     <td className="py-4 px-6">
                       <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
@@ -273,7 +281,7 @@ export default function DeviationDashboard() {
                 
                 {filteredDeviations.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-400 font-medium">
+                    <td colSpan={7} className="py-12 text-center text-slate-400 font-medium">
                       {loading ? (
                         <div className="flex items-center justify-center gap-2">
                           <RefreshCw className="w-5 h-5 animate-spin text-orange-500" />

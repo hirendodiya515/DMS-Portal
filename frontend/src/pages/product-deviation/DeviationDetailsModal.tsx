@@ -38,10 +38,12 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
   const [marketingRemark, setMarketingRemark] = useState('');
   const [plantHeadRemark, setPlantHeadRemark] = useState('');
   const [qualityHeadRemark, setQualityHeadRemark] = useState('');
+  const [ceoRemark, setCeoRemark] = useState('');
   
   // Settings context
   const [marketingConfigId, setMarketingConfigId] = useState<string | null>(null);
   const [plantHeadConfigId, setPlantHeadConfigId] = useState<string | null>(null);
+  const [ceoConfigId, setCeoConfigId] = useState<string | null>(null);
   const [qualityHeadConfigId, setQualityHeadConfigId] = useState<string | null>(null);
   const [lineOptions, setLineOptions] = useState<string[]>(['Line 1', 'Line 2', 'Line 3']);
 
@@ -57,15 +59,17 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
 
   const fetchSettings = async () => {
     try {
-      const [mRes, pRes, qRes, lRes] = await Promise.all([
+      const [mRes, pRes, qRes, lRes, cRes] = await Promise.all([
         api.get('/settings/product_deviation_marketing_person'),
         api.get('/settings/product_deviation_plant_head'),
         api.get('/settings/product_deviation_quality_head'),
-        api.get('/settings/product_deviation_lines')
+        api.get('/settings/product_deviation_lines'),
+        api.get('/settings/product_deviation_ceo').catch(() => ({ data: null }))
       ]);
       setMarketingConfigId(mRes.data);
       setPlantHeadConfigId(pRes.data);
       setQualityHeadConfigId(qRes.data);
+      setCeoConfigId(cRes?.data || null);
       if (lRes.data) {
         setLineOptions(lRes.data.split('\n').map((l: string) => l.trim()).filter(Boolean));
       }
@@ -90,6 +94,7 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
       });
       setMarketingRemark(data.marketingRemarks || '');
       setPlantHeadRemark(data.plantHeadRemarks || '');
+      setCeoRemark(data.ceoRemarks || '');
       setQualityHeadRemark(data.qualityHeadRemarks || '');
     } catch (err) { }
   };
@@ -154,6 +159,19 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
     }
   };
 
+  const handleCeoApprove = async () => {
+    setLoading(true);
+    try {
+      await api.put(`/product-deviation/${deviationId}/ceo`, { ceoRemarks: ceoRemark });
+      fetchDeviationDetails();
+    } catch (err) {
+      console.error(err);
+      alert('Error approving deviation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleQualityHeadApprove = async () => {
     setLoading(true);
     try {
@@ -175,6 +193,7 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
   // Validating the current user against defined configured Defaults. If defined, they natively override ambient Admin roles.
   const isMarketingPerson = marketingConfigId ? user?.id === marketingConfigId : user?.role === 'admin';
   const isPlantHead = plantHeadConfigId ? user?.id === plantHeadConfigId : user?.role === 'admin';
+  const isCeo = ceoConfigId ? user?.id === ceoConfigId : user?.role === 'admin';
   const isQualityHead = qualityHeadConfigId ? user?.id === qualityHeadConfigId : user?.role === 'admin';
 
   return (
@@ -369,13 +388,35 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                   </div>
                 )}
 
-                {deviation.status !== 'OPEN' && deviation.status !== 'PENDING_MARKETING' && deviation.status !== 'PENDING_PLANT_HEAD' && deviation.plantHeadId && (
+                {deviation.status === 'PENDING_PLANT_HEAD' && isCeo && (
+                  <div className="bg-amber-50 p-5 border border-amber-200 rounded-xl shadow-sm">
+                     <h4 className="font-semibold text-amber-900 text-base mb-4">CEO Approval</h4>
+                     <p className="text-sm text-amber-700 mb-4">Please review the containment actions, corrective actions, and marketing remarks. Provide any final remarks before escalating to the Quality Head.</p>
+                     <textarea rows={3} className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4" placeholder="CEO Remarks (optional)..." value={ceoRemark} onChange={(e) => setCeoRemark(e.target.value)} />
+                     <button onClick={handleCeoApprove} disabled={loading} className="bg-amber-600 text-white px-5 py-2.5 rounded-lg transition shadow-lg shadow-amber-600/30 hover:bg-amber-700 flex items-center gap-2 font-medium">
+                       <CheckCircle className="w-5 h-5" /> Approve & Send to Quality Head
+                     </button>
+                  </div>
+                )}
+
+                {deviation.plantHeadId && (
                    <div className="bg-slate-50 p-5 border border-slate-200 rounded-xl shadow-sm text-sm text-slate-700">
                      <h4 className="font-semibold text-slate-900 text-base mb-2">Plant Head Remarks</h4>
                      <div className="bg-white border border-slate-200 rounded-lg p-4 italic text-slate-600">{deviation.plantHeadRemarks || 'No remarks provided.'}</div>
                      <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                        <CheckCircle className="w-4 h-4 text-green-500" />
                        Approved by <span className="font-semibold">{deviation.plantHead?.firstName} {deviation.plantHead?.lastName}</span> on {deviation.plantHeadSignedAt && new Date(deviation.plantHeadSignedAt).toLocaleString()}
+                     </div>
+                   </div>
+                )}
+
+                {deviation.ceoId && (
+                   <div className="bg-slate-50 p-5 border border-slate-200 rounded-xl shadow-sm text-sm text-slate-700">
+                     <h4 className="font-semibold text-slate-900 text-base mb-2">CEO Remarks</h4>
+                     <div className="bg-white border border-slate-200 rounded-lg p-4 italic text-slate-600">{deviation.ceoRemarks || 'No remarks provided.'}</div>
+                     <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                       <CheckCircle className="w-4 h-4 text-green-500" />
+                       Approved by <span className="font-semibold">{deviation.ceo?.firstName} {deviation.ceo?.lastName}</span> on {deviation.ceoSignedAt && new Date(deviation.ceoSignedAt).toLocaleString()}
                      </div>
                    </div>
                 )}

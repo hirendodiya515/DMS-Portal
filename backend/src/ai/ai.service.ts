@@ -75,6 +75,12 @@ export class AiService {
     private async getDatabaseContext(message: string): Promise<string> {
         const queryLower = message.toLowerCase();
         const contextParts: string[] = [];
+        const today = new Date();
+
+        // Helper to match user query against a list of dynamic database departments/categories
+        const matchDepartment = (depts: string[]): string[] => {
+            return depts.filter(d => d && queryLower.includes(d.toLowerCase()));
+        };
 
         // 1. Audit / Participant Check
         if (
@@ -82,7 +88,8 @@ export class AiService {
             queryLower.includes('schedule') || 
             queryLower.includes('plan') || 
             queryLower.includes('auditor') || 
-            queryLower.includes('auditee')
+            queryLower.includes('auditee') ||
+            queryLower.includes('participant')
         ) {
             try {
                 // Fetch all registered participants (Auditors and Auditees)
@@ -90,50 +97,71 @@ export class AiService {
                 const auditors = participants.filter(p => p.type === 'auditor');
                 const auditees = participants.filter(p => p.type === 'auditee');
 
-                let auditText = `### Registered Auditors (Total: ${auditors.length}):\n` +
-                    auditors.map(a => `- Name: ${a.name}, Email: ${a.email}, Remarks: ${a.remarks || 'None'}, Certificate: ${a.certificateName || 'N/A'}`).join('\n') + '\n\n' +
-                    `### Registered Auditees (Total: ${auditees.length}):\n` +
-                    auditees.map(a => `- Name: ${a.name}, Email: ${a.email}, Department: ${a.department || 'N/A'}`).join('\n');
+                let auditText = `### Audit System Status:\n` +
+                    `- Total Auditors: ${auditors.length}\n` +
+                    `- Total Auditees: ${auditees.length}\n\n`;
 
-                // Filter auditees matching any specific department in query dynamically
-                const allDepts = Array.from(new Set(
-                    participants
-                        .map(p => p.department)
-                        .filter((dept): dept is string => !!dept && dept.trim() !== '')
-                ));
-                const matchedDepts = allDepts.filter(dept => 
-                    queryLower.includes(dept.toLowerCase())
-                );
+                // Specific person search in participants
+                const matchedParticipants = participants.filter(p => p.name && queryLower.includes(p.name.toLowerCase()));
+                if (matchedParticipants.length > 0) {
+                    auditText += `### Matched Audit Participants:\n` +
+                        matchedParticipants.map(p => `- Name: ${p.name}, Email: ${p.email}, Type: ${p.type.toUpperCase()}, Department: ${p.department || 'N/A'}`).join('\n') + '\n\n';
+                }
+
+                // Dynamic department filter
+                const uniqueDepts = Array.from(new Set(participants.map(p => p.department).filter((d): d is string => !!d && d.trim() !== '')));
+                const matchedDepts = matchDepartment(uniqueDepts);
                 if (matchedDepts.length > 0) {
-                    auditText += `\n\n### Filtered Auditees Matching Query:`;
+                    auditText += `### Registered Auditees for Requested Departments:\n`;
                     for (const dept of matchedDepts) {
-                        const filtered = auditees.filter(a => a.department && a.department.toLowerCase() === dept.toLowerCase());
-                        if (filtered.length > 0) {
-                            auditText += `\nFor department "${dept}":\n` + filtered.map(a => `- Name: ${a.name}, Email: ${a.email}, Department: ${a.department}`).join('\n');
+                        const deptAuditees = auditees.filter(a => a.department && a.department.toLowerCase() === dept.toLowerCase());
+                        if (deptAuditees.length > 0) {
+                            auditText += `- ${dept.toUpperCase()}: ` + deptAuditees.map(a => `${a.name} (${a.email})`).join(', ') + '\n';
                         } else {
-                            auditText += `\nFor department "${dept}": No specific auditees registered.`;
+                            auditText += `- ${dept.toUpperCase()}: No registered auditees.\n`;
                         }
                     }
+                    auditText += '\n';
                 }
 
-                // Fetch top 15 audit schedules
-                const schedules = await this.schedRepo.find({
-                    relations: ['auditors'],
-                    order: { date: 'ASC' },
-                    take: 15,
-                });
+                // Month checks (e.g. "Planned in June")
+                const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                const matchedMonths = months.filter(m => queryLower.includes(m));
+                
+                // Fetch audit schedules & plans
+                const schedules = await this.schedRepo.find({ relations: ['auditors'] });
+                const plans = await this.planRepo.find();
+
+                if (matchedMonths.length > 0) {
+                    auditText += `### Audit Plans for Requested Months:\n`;
+                    for (const m of matchedMonths) {
+                        const monthPlans = plans.filter(p => p.month && p.month.toLowerCase().includes(m));
+                        if (monthPlans.length > 0) {
+                            auditText += monthPlans.map(p => `- Dept: ${p.department}, Month: ${p.month}, Status: ${p.isPlanned ? 'Planned' : 'Unplanned'}, Outcome: ${p.outcome || 'Pending'}`).join('\n') + '\n';
+                        }
+                    }
+                    auditText += '\n';
+                }
+
+                // General Audit schedules summary
                 if (schedules.length > 0) {
-                    auditText += '\n\n### Upcoming & Past Audit Schedules:\n' + 
-                        schedules.map(s => `- Department: ${s.department}, Date: ${new Date(s.date).toLocaleDateString()}, Scope: ${s.scope}, Status: ${s.status}, Assigned Auditors: ${s.auditors && s.auditors.length > 0 ? s.auditors.map(a => a.name).join(', ') : 'None'}`).join('\n');
-                }
+                    const upcoming = schedules.filter(s => new Date(s.date) >= today);
+                    const completed = schedules.filter(s => s.status as string === 'completed');
+                    auditText += `### Audit Schedule Summary:\n` +
+                        `- Total Audits Scheduled: ${schedules.length}\n` +
+                        `- Completed Audits: ${completed.length}\n` +
+                        `- Upcoming Audits: ${upcoming.length}\n\n`;
 
-                // Fetch top 10 audit plans
-                const plans = await this.planRepo.find({
-                    take: 10,
-                });
-                if (plans.length > 0) {
-                    auditText += '\n\n### Month-wise Audit Plans:\n' +
-                        plans.map(p => `- Department: ${p.department}, Month: ${p.month}, Status: ${p.isPlanned ? 'Planned' : 'Unplanned'}, Outcome: ${p.outcome || 'Pending'}`).join('\n');
+                    if (queryLower.includes('schedule') || queryLower.includes('upcoming') || matchedDepts.length > 0) {
+                        const targetSchedules = matchedDepts.length > 0 
+                            ? schedules.filter(s => matchedDepts.some(d => s.department && s.department.toLowerCase().includes(d.toLowerCase())))
+                            : schedules.slice(0, 15);
+                        
+                        if (targetSchedules.length > 0) {
+                            auditText += `### Detailed Audit Schedules:\n` +
+                                targetSchedules.map(s => `- Dept: ${s.department}, Date: ${new Date(s.date).toLocaleDateString()}, Scope: ${s.scope}, Status: ${s.status}, Auditors: ${s.auditors && s.auditors.length > 0 ? s.auditors.map(a => a.name).join(', ') : 'None'}`).join('\n') + '\n\n';
+                        }
+                    }
                 }
 
                 contextParts.push(auditText);
@@ -143,40 +171,142 @@ export class AiService {
         }
 
         // 2. Equipment & Calibration check
-        if (queryLower.includes('calibrat') || queryLower.includes('equipment') || queryLower.includes('instrument') || queryLower.includes('maintenance')) {
+        if (queryLower.includes('calibrat') || queryLower.includes('equipment') || queryLower.includes('instrument') || queryLower.includes('measurement') || queryLower.includes('maintenance')) {
             try {
-                const equipment = await this.eqRepo.find({
-                    order: { nextCalibrationDate: 'ASC' },
-                    take: 10,
-                });
-                if (equipment.length > 0) {
-                    contextParts.push('### Equipment & Calibration Schedule:\n' +
-                        equipment.map(e => `- Number: ${e.equipmentNumber}, Name: ${e.name}, Location: ${e.location}, Dept: ${e.department}, Status: ${e.status}, Next Calibration: ${e.nextCalibrationDate ? new Date(e.nextCalibrationDate).toLocaleDateString() : 'N/A'}`).join('\n')
-                    );
+                const allEq = await this.eqRepo.find();
+                const activeEq = allEq.filter(e => e.status as string === 'Active');
+                const maintenanceEq = allEq.filter(e => e.status as string === 'Maintenance' || e.status as string === 'Inactive');
+                const overdueEq = allEq.filter(e => e.nextCalibrationDate && new Date(e.nextCalibrationDate) < today && e.status as string !== 'Maintenance' && e.status as string !== 'Inactive');
+
+                let eqText = `### Calibration & Equipment Summary:\n` +
+                    `- Total Instruments: ${allEq.length}\n` +
+                    `- Active Instruments: ${activeEq.length}\n` +
+                    `- Under Maintenance / Inactive: ${maintenanceEq.length}\n` +
+                    `- Overdue for Calibration: ${overdueEq.length}\n\n`;
+
+                // Specific equipment match by number or name (e.g. "E-101" or "Vernier")
+                const matchedEq = allEq.filter(e => 
+                    (e.equipmentNumber && queryLower.includes(e.equipmentNumber.toLowerCase())) ||
+                    (e.name && queryLower.includes(e.name.toLowerCase()))
+                );
+                if (matchedEq.length > 0) {
+                    eqText += `### Matched Instruments:\n` +
+                        matchedEq.map(e => `- No: ${e.equipmentNumber}, Name: ${e.name}, Location: ${e.location || 'N/A'}, Dept: ${e.department}, Status: ${e.status}, Next Calib: ${e.nextCalibrationDate ? new Date(e.nextCalibrationDate).toLocaleDateString() : 'N/A'}`).join('\n') + '\n\n';
                 }
+
+                // If asking about overdue
+                if (queryLower.includes('overdue') || queryLower.includes('due') || queryLower.includes('pending')) {
+                    if (overdueEq.length > 0) {
+                        eqText += `### Overdue Instruments:\n` +
+                            overdueEq.map(e => `- No: ${e.equipmentNumber}, Name: ${e.name}, Dept: ${e.department}, Next Calib: ${e.nextCalibrationDate ? new Date(e.nextCalibrationDate).toLocaleDateString() : 'N/A'}`).join('\n') + '\n\n';
+                    } else {
+                        eqText += `### Overdue Instruments:\n- No active instruments are overdue for calibration.\n\n`;
+                    }
+                }
+
+                // If asking about maintenance
+                if (queryLower.includes('maintenance') || queryLower.includes('inactive')) {
+                    if (maintenanceEq.length > 0) {
+                        eqText += `### Instruments under Maintenance / Inactive:\n` +
+                            maintenanceEq.map(e => `- No: ${e.equipmentNumber}, Name: ${e.name}, Dept: ${e.department}, Status: ${e.status}`).join('\n') + '\n\n';
+                    }
+                }
+
+                // Filter by department
+                const uniqueDepts = Array.from(new Set(allEq.map(e => e.department).filter((d): d is string => !!d && d.trim() !== '')));
+                const matchedDepts = matchDepartment(uniqueDepts);
+                if (matchedDepts.length > 0 && matchedEq.length === 0) {
+                    eqText += `### Instruments in Requested Departments:\n`;
+                    for (const dept of matchedDepts) {
+                        const deptEq = allEq.filter(e => e.department && e.department.toLowerCase() === dept.toLowerCase());
+                        if (deptEq.length > 0) {
+                            eqText += `For ${dept.toUpperCase()}:\n` + deptEq.slice(0, 10).map(e => `- No: ${e.equipmentNumber}, Name: ${e.name}, Status: ${e.status}`).join('\n') + '\n';
+                        }
+                    }
+                }
+
+                contextParts.push(eqText);
             } catch (e) {
                 this.logger.error('Failed to query equipment for AI context', e.message);
             }
         }
 
         // 3. Document check
-        if (queryLower.includes('document') || queryLower.includes('sop') || queryLower.includes('policy') || queryLower.includes('procedure')) {
+        if (queryLower.includes('document') || queryLower.includes('sop') || queryLower.includes('policy') || queryLower.includes('procedure') || queryLower.includes('manual') || queryLower.includes('format')) {
             try {
-                const docs = await this.docRepo.find({
-                    order: { updatedAt: 'DESC' },
-                    take: 10,
-                });
-                if (docs.length > 0) {
-                    contextParts.push('### Recent System Documents:\n' +
-                        docs.map(d => `- Title: ${d.title}, Number: ${d.documentNumber || 'N/A'}, Type: ${d.type}, Status: ${d.status}`).join('\n')
-                    );
+                const allDocs = await this.docRepo.find();
+                const approved = allDocs.filter(d => d.status === 'approved' as any);
+                const draft = allDocs.filter(d => d.status === 'draft' as any);
+                const review = allDocs.filter(d => d.status === 'review' as any || d.status === 'under review' as any);
+
+                let docText = `### Document Management System Summary:\n` +
+                    `- Total Documents: ${allDocs.length}\n` +
+                    `- Approved Documents: ${approved.length}\n` +
+                    `- Draft Documents: ${draft.length}\n` +
+                    `- Under Review Documents: ${review.length}\n\n`;
+
+                // Specific document search by title or number (supporting substring search in both directions)
+                const matchedDocs = allDocs.filter(d => 
+                    (d.documentNumber && (queryLower.includes(d.documentNumber.toLowerCase()) || d.documentNumber.toLowerCase().includes(queryLower))) ||
+                    (d.title && (queryLower.includes(d.title.toLowerCase()) || d.title.toLowerCase().includes(queryLower)))
+                );
+                if (matchedDocs.length > 0) {
+                    docText += `### Matched Documents:\n` +
+                        matchedDocs.map(d => `- Title: ${d.title}, Number: ${d.documentNumber || 'N/A'}, Type: ${d.type}, Status: ${(d.status as string).toUpperCase()}, Departments: ${d.departments ? d.departments.join(', ') : 'All'}`).join('\n') + '\n\n';
                 }
+
+                // If filtering by type (SOP, Policy, etc.) and/or department
+                const types = ['sop', 'policy', 'procedure', 'manual', 'format', 'work instruction', 'work_instruction', 'record', 'report'];
+                const matchedTypes = types.filter(t => queryLower.includes(t));
+
+                const uniqueDepts = Array.from(new Set(allDocs.flatMap(d => d.departments || []).filter(d => !!d && d.trim() !== '')));
+                let allSystemDepts = uniqueDepts;
+                try {
+                    const orgNodes = await this.orgRepo.find({ select: ['department'] });
+                    const orgDepts = orgNodes.map(n => n.department).filter((d): d is string => !!d && d.trim() !== '');
+                    allSystemDepts = Array.from(new Set([...uniqueDepts, ...orgDepts]));
+                } catch (err) {
+                    this.logger.error('Failed to query organization chart departments for document matching', err.message);
+                }
+
+                const matchedDepts = matchDepartment(allSystemDepts);
+
+                if (matchedTypes.length > 0 || matchedDepts.length > 0) {
+                    let filteredDocs = allDocs;
+
+                    if (matchedTypes.length > 0) {
+                        filteredDocs = filteredDocs.filter(d => 
+                            d.type && matchedTypes.some(mt => d.type.toLowerCase().includes(mt))
+                        );
+                    }
+
+                    if (matchedDepts.length > 0) {
+                        filteredDocs = filteredDocs.filter(d => 
+                            d.departments && d.departments.some(dept => 
+                                matchedDepts.some(md => dept.toLowerCase().includes(md.toLowerCase()))
+                            )
+                        );
+                    }
+
+                    const typeHeader = matchedTypes.length > 0 ? `of Type ${matchedTypes.map(t => t.toUpperCase()).join('/')}` : '';
+                    const deptHeader = matchedDepts.length > 0 ? `in ${matchedDepts.map(d => d.toUpperCase()).join('/')} Department` : '';
+                    const filterHeader = `### Filtered Documents ${typeHeader} ${deptHeader}`.replace(/\s+/g, ' ').trim() + ':';
+
+                    if (filteredDocs.length > 0) {
+                        docText += `${filterHeader}\n` +
+                            filteredDocs.slice(0, 15).map(d => `- Title: ${d.title}, No: ${d.documentNumber || 'N/A'}, Type: ${d.type}, Status: ${d.status}, Departments: ${d.departments ? d.departments.join(', ') : 'All'}`).join('\n') + '\n\n';
+                    } else {
+                        docText += `${filterHeader} None found.\n\n`;
+                    }
+                }
+
+                contextParts.push(docText);
             } catch (e) {
                 this.logger.error('Failed to query documents for AI context', e.message);
             }
         }
 
-        // 4. Risks & Severity Rating (HIRA / EAA / QRA / Furnace)
+        // 4. Risks (HIRA / EAA / QRA)
         if (
             queryLower.includes('risk') || 
             queryLower.includes('hira') || 
@@ -184,50 +314,44 @@ export class AiService {
             queryLower.includes('eaa') || 
             queryLower.includes('qra') || 
             queryLower.includes('furnace') ||
-            queryLower.includes('threat')
+            queryLower.includes('threat') ||
+            queryLower.includes('severity')
         ) {
             try {
-                // Fetch general risks
-                const risks = await this.riskRepo.find({ take: 10 });
-                let riskText = '';
-                if (risks.length > 0) {
-                    riskText += '### System Risks & Hazard Assessments:\n' +
-                        risks.map(r => `- Number: ${r.riskNumber}, Title: ${r.title}, Type: ${r.type}`).join('\n') + '\n\n';
+                const hiraRisks = await this.hiraRepo.find();
+                const eaaRisks = await this.eaaRepo.find();
+                const qraRisks = await this.qraRepo.find();
+
+                const hiraHigh = hiraRisks.filter(r => r.maxRiskLevel === 'high' || r.maxRiskLevel === 'critical');
+                const eaaHigh = eaaRisks.filter(r => r.maxRiskLevel === 'high' || r.maxRiskLevel === 'critical');
+                const qraHigh = qraRisks.filter(r => r.maxRiskLevel === 'high' || r.maxRiskLevel === 'critical');
+
+                let riskText = `### Hazard & Risk Assessment Summary:\n` +
+                    `- HIRA (Occupational Safety): Total: ${hiraRisks.length}, Critical/High ("Red" Risks): ${hiraHigh.length}\n` +
+                    `- EAA (Environmental Aspects): Total: ${eaaRisks.length}, Critical/High ("Red" Risks): ${eaaHigh.length}\n` +
+                    `- QRA (Quantitative Risk): Total: ${qraRisks.length}, Critical/High ("Red" Risks): ${qraHigh.length}\n\n`;
+
+                // If asking about high/red/critical risks
+                if (queryLower.includes('high') || queryLower.includes('critical') || queryLower.includes('red')) {
+                    if (hiraHigh.length > 0) {
+                        riskText += `### High/Critical HIRA Risks:\n` +
+                            hiraHigh.slice(0, 10).map(r => `- No: ${r.riskNumber}, Activity: ${r.activity}, Task: ${r.task || 'N/A'}, Dept: ${r.department}, RiskLevel: ${r.maxRiskLevel.toUpperCase()}`).join('\n') + '\n\n';
+                    }
+                    if (eaaHigh.length > 0) {
+                        riskText += `### High/Critical EAA Risks:\n` +
+                            eaaHigh.slice(0, 10).map(r => `- No: ${r.riskNumber}, Process: ${r.process}, Area: ${r.area || 'N/A'}, MaxLevel: ${r.maxRiskLevel.toUpperCase()}`).join('\n') + '\n\n';
+                    }
                 }
 
-                // Fetch HIRA risks
-                const hiraRisks = await this.hiraRepo.find({ take: 50 });
-                const hiraHigh = hiraRisks.filter(r => r.maxRiskLevel === 'high' || r.maxRiskLevel === 'critical').length;
-                const hiraMed = hiraRisks.filter(r => r.maxRiskLevel === 'medium').length;
-                const hiraLow = hiraRisks.filter(r => r.maxRiskLevel === 'low').length;
-
-                riskText += `### HIRA (Occupational Safety) Risks Summary:\n` +
-                    `- Total Registered HIRA Risks: ${hiraRisks.length}\n` +
-                    `- Critical/High ("Red" Risks): ${hiraHigh}\n` +
-                    `- Medium (Amber Risks): ${hiraMed}\n` +
-                    `- Low (Green Risks): ${hiraLow}\n`;
-
-                // Fetch EAA risks
-                const eaaRisks = await this.eaaRepo.find({ take: 20 });
-                riskText += `\n### EAA (Environmental Aspects) Risks (Total: ${eaaRisks.length}):\n` +
-                    eaaRisks.slice(0, 10).map(r => `- Number: ${r.riskNumber}, Process: ${r.process}, Area: ${r.area || 'N/A'}, Max Level: ${r.maxRiskLevel}`).join('\n');
-
-                // Filter HIRA/EAA/QRA risks matching specific keywords (e.g. "furnace" or "tempering")
-                const kwList = ['furnace', 'tempering', 'cutting', 'packing', 'electrical', 'chemical', 'lifting'];
-                const matchedKws = kwList.filter(k => queryLower.includes(k));
-                if (matchedKws.length > 0) {
-                    riskText += `\n\n### Filtered HIRA Risks Matching Query:`;
-                    for (const kw of matchedKws) {
-                        const matches = hiraRisks.filter(r => 
-                            (r.department && r.department.toLowerCase().includes(kw)) ||
-                            (r.activity && r.activity.toLowerCase().includes(kw)) ||
-                            (r.task && r.task.toLowerCase().includes(kw))
-                        );
-                        if (matches.length > 0) {
-                            riskText += `\nFor keyword "${kw}":\n` + 
-                                matches.map(m => `- RiskNo: ${m.riskNumber}, Activity: ${m.activity}, Task: ${m.task || 'N/A'}, Dept: ${m.department}, RiskLevel: ${m.maxRiskLevel.toUpperCase()}`).join('\n');
-                        } else {
-                            riskText += `\nFor keyword "${kw}": No HIRA risks registered.`;
+                // Dynamic department match for risks (e.g. "Risks in Furnace")
+                const allHiraDepts = Array.from(new Set(hiraRisks.map(r => r.department).filter((d): d is string => !!d && d.trim() !== '')));
+                const matchedDepts = matchDepartment(allHiraDepts);
+                if (matchedDepts.length > 0) {
+                    riskText += `### Filtered Risks for Requested Departments:\n`;
+                    for (const dept of matchedDepts) {
+                        const deptHira = hiraRisks.filter(r => r.department && r.department.toLowerCase() === dept.toLowerCase());
+                        if (deptHira.length > 0) {
+                            riskText += `For HIRA in ${dept.toUpperCase()}:\n` + deptHira.slice(0, 10).map(r => `- RiskNo: ${r.riskNumber}, Activity: ${r.activity}, Risk: ${r.maxRiskLevel.toUpperCase()}`).join('\n') + '\n';
                         }
                     }
                 }
@@ -258,17 +382,81 @@ export class AiService {
             }
         }
 
+        // 5b. Specific Employee or Role Check (Matches names/designations dynamically and resolves reporting structure)
+        try {
+            const allNodes = await this.orgRepo.find({ select: ['id', 'parentId', 'name', 'designation', 'department'] });
+            
+            // Build ID to Name map for manager lookup
+            const idToNameMap = new Map<string, string>();
+            allNodes.forEach(n => idToNameMap.set(n.id, n.name));
+
+            const matchedNodes = allNodes.filter(n => {
+                if (!n.name) return false;
+                const lowerName = n.name.toLowerCase();
+                const lowerDesig = n.designation ? n.designation.toLowerCase() : '';
+                
+                // Match full name
+                if (queryLower.includes(lowerName)) return true;
+
+                // Match specific designations
+                if (lowerDesig && (
+                    queryLower.includes(lowerDesig) || 
+                    (lowerDesig === 'ceo' && queryLower.includes('ceo')) ||
+                    (lowerDesig === 'cfo' && queryLower.includes('cfo'))
+                )) return true;
+
+                // Match split name parts
+                const nameParts = lowerName.split(/\s+/).filter(part => part.length > 2);
+                if (nameParts.length >= 2) {
+                    const matches = nameParts.filter(part => queryLower.includes(part)).length;
+                    return matches >= 2;
+                }
+                return false;
+            });
+
+            if (matchedNodes.length > 0) {
+                let matchedText = `### Matched Employees in Organization Chart:\n`;
+                for (const node of matchedNodes) {
+                    const managerName = node.parentId ? (idToNameMap.get(node.parentId) || 'Unknown') : 'None (Top of hierarchy)';
+                    matchedText += `- Name: ${node.name}, Designation: ${node.designation || 'N/A'}, Department: ${node.department || 'N/A'}, Reports To: ${managerName}\n`;
+                    
+                    // Fetch direct reports to this matched employee
+                    const reports = allNodes.filter(n => n.parentId === node.id);
+                    if (reports.length > 0) {
+                        matchedText += `  * Direct Reports to ${node.name} (Total: ${reports.length}):\n` +
+                            reports.map(r => `    - Name: ${r.name}, Designation: ${r.designation || 'N/A'}, Department: ${r.department || 'N/A'}`).join('\n') + '\n';
+                    }
+                }
+                contextParts.push(matchedText);
+            }
+        } catch (e) {
+            this.logger.error('Failed to query specific names or roles in org chart for AI context', e.message);
+        }
+
         // 6. Objectives/KPIs check
         if (queryLower.includes('objective') || queryLower.includes('kpi') || queryLower.includes('target') || queryLower.includes('goal')) {
             try {
-                const objectives = await this.objRepo.find({
-                    take: 10,
-                });
-                if (objectives.length > 0) {
-                    contextParts.push('### Quality, Environmental & Safety Objectives:\n' +
-                        objectives.map(o => `- Number: ${o.objectiveNumber}, Name: ${o.name}, Type: ${o.type}, Dept: ${o.department || 'N/A'}, Target: ${o.target} ${o.uom}, Status: ${o.status}`).join('\n')
-                    );
+                const objectives = await this.objRepo.find();
+                
+                let objText = `### Objectives & Targets Summary:\n` +
+                    `- Total Objectives: ${objectives.length}\n` +
+                    `- Active Objectives: ${objectives.filter(o => o.status as string === 'Active' || o.status as string === 'In Progress').length}\n` +
+                    `- Achieved Objectives: ${objectives.filter(o => o.status as string === 'Achieved').length}\n\n`;
+
+                // If asking about a specific department's objectives
+                const uniqueDepts = Array.from(new Set(objectives.map(o => o.department).filter((d): d is string => !!d && d.trim() !== '')));
+                const matchedDepts = matchDepartment(uniqueDepts);
+                
+                const targetObjs = matchedDepts.length > 0
+                    ? objectives.filter(o => matchedDepts.some(d => o.department && o.department.toLowerCase().includes(d.toLowerCase())))
+                    : objectives.slice(0, 15);
+
+                if (targetObjs.length > 0) {
+                    objText += `### Objectives List:\n` +
+                        targetObjs.map(o => `- No: ${o.objectiveNumber}, Name: ${o.name}, Type: ${o.type}, Dept: ${o.department || 'N/A'}, Target: ${o.target} ${o.uom || ''}, Status: ${o.status}`).join('\n');
                 }
+
+                contextParts.push(objText);
             } catch (e) {
                 this.logger.error('Failed to query objectives for AI context', e.message);
             }
@@ -277,9 +465,7 @@ export class AiService {
         // 7. SWOT check
         if (queryLower.includes('swot') || queryLower.includes('strength') || queryLower.includes('weakness') || queryLower.includes('opportunity') || queryLower.includes('threat') || queryLower.includes('context')) {
             try {
-                const swots = await this.swotRepo.find({
-                    take: 40,
-                });
+                const swots = await this.swotRepo.find();
                 if (swots.length > 0) {
                     const strengths = swots.filter(s => s.category === 'strength');
                     const weaknesses = swots.filter(s => s.category === 'weakness');
@@ -289,7 +475,7 @@ export class AiService {
                     let swotText = `### SWOT Analysis Summary (Total: ${swots.length}):\n` +
                         `- Strengths: ${strengths.length}, Weaknesses: ${weaknesses.length}, Opportunities: ${opportunities.length}, Threats: ${threats.length}\n\n`;
 
-                    if (queryLower.includes('threat') || queryLower.includes('impact') || queryLower.includes('context')) {
+                    if (queryLower.includes('threat') || queryLower.includes('impact') || queryLower.includes('context') || queryLower.includes('high')) {
                         swotText += `### SWOT Threats:\n` +
                             threats.map(t => `- Threat: ${t.text}, Impact: ${t.impact.toUpperCase()}, Standards: ${t.standards ? t.standards.join(', ') : 'None'}`).join('\n') + '\n\n';
                     }
@@ -317,14 +503,25 @@ export class AiService {
             queryLower.includes('interested') || 
             queryLower.includes('party') || 
             queryLower.includes('parties') || 
-            queryLower.includes('employee')
+            queryLower.includes('employee') ||
+            queryLower.includes('customer') ||
+            queryLower.includes('expect')
         ) {
             try {
-                const ipList = await this.interestedRepo.find({ take: 30 });
+                const ipList = await this.interestedRepo.find();
                 if (ipList.length > 0) {
+                    // Filter matching specific interested parties in query (e.g. "employees" or "customers")
+                    const matchedIps = ipList.filter(ip => 
+                        queryLower.includes(ip.name.toLowerCase()) || 
+                        (ip.name.toLowerCase().includes('employee') && queryLower.includes('employee')) ||
+                        (ip.name.toLowerCase().includes('customer') && queryLower.includes('customer'))
+                    );
+
+                    const targetIps = matchedIps.length > 0 ? matchedIps : ipList;
+
                     contextParts.push(
                         `### Interested Parties (Needs & Expectations):\n` +
-                        ipList.map(ip => `- Party Name: ${ip.name}\n  Needs: ${ip.needs}\n  Risk Rating: ${ip.risk}\n  Actions: ${ip.actions && ip.actions.length > 0 ? ip.actions.join(', ') : 'None'}\n  Responsible: ${ip.responsible || 'N/A'}`).join('\n\n')
+                        targetIps.map(ip => `- Party Name: ${ip.name}\n  Needs & Expectations: ${ip.needs}\n  Risk Rating: ${ip.risk}\n  Actions: ${ip.actions && ip.actions.length > 0 ? ip.actions.join(', ') : 'None'}\n  Responsible: ${ip.responsible || 'N/A'}`).join('\n\n')
                     );
                 }
             } catch (e) {
@@ -333,25 +530,35 @@ export class AiService {
         }
 
         // 9. Deviation check
-        if (queryLower.includes('deviation') || queryLower.includes('non-conformance') || queryLower.includes('defect') || queryLower.includes('reject')) {
+        if (queryLower.includes('deviation') || queryLower.includes('non-conformance') || queryLower.includes('defect') || queryLower.includes('reject') || queryLower.includes('nonconformance')) {
             try {
-                const prodDevs = await this.prodDevRepo.find({
-                    take: 5,
-                });
-                if (prodDevs.length > 0) {
-                    contextParts.push('### Product Deviations:\n' +
-                        prodDevs.map(d => `- Serial: ${d.serialNumber}, Line: ${d.line}, Nature: ${d.natureOfDeviation || 'N/A'}, Status: ${d.status}`).join('\n')
-                    );
+                const prodDevs = await this.prodDevRepo.find();
+                const procDevs = await this.procDevRepo.find();
+
+                let devText = `### Product & Process Deviations Summary:\n` +
+                    `- Total Product Deviations: ${prodDevs.length}\n` +
+                    `- Total Process Deviations: ${procDevs.length}\n\n`;
+
+                // If asking about a specific department's process deviations
+                const uniqueDepts = Array.from(new Set(procDevs.map(d => d.department).filter((d): d is string => !!d && d.trim() !== '')));
+                const matchedDepts = matchDepartment(uniqueDepts);
+
+                const targetProd = prodDevs.slice(0, 10);
+                const targetProc = matchedDepts.length > 0
+                    ? procDevs.filter(d => matchedDepts.some(dept => d.department && d.department.toLowerCase().includes(dept.toLowerCase())))
+                    : procDevs.slice(0, 10);
+
+                if (targetProd.length > 0 && (queryLower.includes('product') || !queryLower.includes('process'))) {
+                    devText += `### Product Deviations:\n` +
+                        targetProd.map(d => `- Serial: ${d.serialNumber}, Line: ${d.line}, Nature: ${d.natureOfDeviation || 'N/A'}, Status: ${d.status}`).join('\n') + '\n\n';
                 }
 
-                const procDevs = await this.procDevRepo.find({
-                    take: 5,
-                });
-                if (procDevs.length > 0) {
-                    contextParts.push('### Process Deviations:\n' +
-                        procDevs.map(d => `- Serial: ${d.serialNumber}, Line: ${d.line}, Dept: ${d.department}, Nature: ${d.natureOfDeviation || 'N/A'}, Status: ${d.status}`).join('\n')
-                    );
+                if (targetProc.length > 0 && (queryLower.includes('process') || !queryLower.includes('product'))) {
+                    devText += `### Process Deviations:\n` +
+                        targetProc.map(d => `- Serial: ${d.serialNumber}, Dept: ${d.department}, Line: ${d.line}, Nature: ${d.natureOfDeviation || 'N/A'}, Status: ${d.status}`).join('\n') + '\n\n';
                 }
+
+                contextParts.push(devText);
             } catch (e) {
                 this.logger.error('Failed to query deviations for AI context', e.message);
             }
@@ -360,14 +567,26 @@ export class AiService {
         // 10. MOC check
         if (queryLower.includes('moc') || queryLower.includes('change') || queryLower.includes('management of change')) {
             try {
-                const mocs = await this.mocRepo.find({
-                    take: 10,
-                });
-                if (mocs.length > 0) {
-                    contextParts.push('### MOC Records (Management of Change):\n' +
-                        mocs.map(m => `- MOC No: ${m.mocNo}, Dept: ${m.department}, Product/Process: ${m.productProcess}, Description: ${m.description}, Status: ${m.status}`).join('\n')
-                    );
+                const mocs = await this.mocRepo.find();
+                
+                let mocText = `### Management of Change (MOC) Summary:\n` +
+                    `- Total MOC Records: ${mocs.length}\n` +
+                    `- Active/Under Review MOCs: ${mocs.filter(m => m.status !== 'Approved' && m.status !== 'Finalized').length}\n` +
+                    `- Approved/Finalized MOCs: ${mocs.filter(m => m.status === 'Approved' || m.status === 'Finalized').length}\n\n`;
+
+                const uniqueDepts = Array.from(new Set(mocs.map(m => m.department).filter((d): d is string => !!d && d.trim() !== '')));
+                const matchedDepts = matchDepartment(uniqueDepts);
+
+                const targetMocs = matchedDepts.length > 0
+                    ? mocs.filter(m => matchedDepts.some(d => m.department && m.department.toLowerCase().includes(d.toLowerCase())))
+                    : mocs.slice(0, 15);
+
+                if (targetMocs.length > 0) {
+                    mocText += `### MOC Records List:\n` +
+                        targetMocs.map(m => `- MOC No: ${m.mocNo}, Dept: ${m.department}, Product/Process: ${m.productProcess}, Status: ${m.status}, Description: ${m.description}`).join('\n');
                 }
+
+                contextParts.push(mocText);
             } catch (e) {
                 this.logger.error('Failed to query MOC records for AI context', e.message);
             }
@@ -441,6 +660,21 @@ When users ask how to upload a new document or how to revise an existing documen
    - In the top-right corner, click on the **"Revise Document"** button (if the document is approved) or **"Upload New Version"** button (if it is a draft or rejected).
    - This opens the **Upload Version Modal**.
    - Upload the new file version, enter your change/revision notes, and click submit.
+
+3. **Link to DMS Pages**:
+   Whenever you mention modules or list specific calibration equipment, documents, audit plans, risks, objectives, or MOC records, you MUST include a clean markdown link to the relevant section so the user can easily navigate there:
+   - Calibration & Equipment page: [Calibration & Equipment](/calibration-equipment)
+   - Documents library page: [Documents](/documents)
+   - Risks Management page: [Risks](/risks)
+   - SWOT Analysis page: [SWOT Analysis](/context-organization)
+   - Quality/Safety/Environmental Objectives: [Objectives](/objectives)
+   - Internal Audit planning/schedules: [Audit Plans](/internal-audit/plan)
+   - Product Deviations page: [Product Deviations](/product-deviation)
+   - Process Deviations page: [Process Deviations](/process-deviation)
+   - Management of Change (MOC) page: [MOC Records](/moc)
+   - Organization Chart: [Organization Chart](/org-chart)
+   
+   Example format: "Plunger calibration is overdue. For more details, you can [click here to access the Calibration & Equipment page](/calibration-equipment)."
 
 Current Application Context:
 ${context || 'No specific page context provided.'}
@@ -588,6 +822,21 @@ When users ask how to upload a new document or how to revise an existing documen
    - In the top-right corner, click on the **"Revise Document"** button (if the document is approved) or **"Upload New Version"** button (if it is a draft or rejected).
    - This opens the **Upload Version Modal**.
    - Upload the new file version, enter your change/revision notes, and click submit.
+
+3. **Link to DMS Pages**:
+   Whenever you mention modules or list specific calibration equipment, documents, audit plans, risks, objectives, or MOC records, you MUST include a clean markdown link to the relevant section so the user can easily navigate there:
+   - Calibration & Equipment page: [Calibration & Equipment](/calibration-equipment)
+   - Documents library page: [Documents](/documents)
+   - Risks Management page: [Risks](/risks)
+   - SWOT Analysis page: [SWOT Analysis](/context-organization)
+   - Quality/Safety/Environmental Objectives: [Objectives](/objectives)
+   - Internal Audit planning/schedules: [Audit Plans](/internal-audit/plan)
+   - Product Deviations page: [Product Deviations](/product-deviation)
+   - Process Deviations page: [Process Deviations](/process-deviation)
+   - Management of Change (MOC) page: [MOC Records](/moc)
+   - Organization Chart: [Organization Chart](/org-chart)
+   
+   Example format: "Plunger calibration is overdue. For more details, you can [click here to access the Calibration & Equipment page](/calibration-equipment)."
 
 Current Application Context:
 ${context || 'No specific page context provided.'}

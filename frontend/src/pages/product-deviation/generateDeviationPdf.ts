@@ -140,6 +140,14 @@ export const generateDeviationPdf = async (deviation: any) => {
     ]);
   }
 
+  if (deviation.ceoId) {
+    sigData.push([
+      'CEO',
+      `${deviation.ceo?.firstName} ${deviation.ceo?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.ceoSignedAt ? format(new Date(deviation.ceoSignedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
+      deviation.ceoRemarks ? `"${deviation.ceoRemarks}"` : 'Approved.'
+    ]);
+  }
+
   if (deviation.qualityHeadId) {
     sigData.push([
       'Quality Head',

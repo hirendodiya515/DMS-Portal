@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Put, UseGuards, Request, Query } from '@nestjs/common';
 import { ProductDeviationService } from './product-deviation.service';
-import { CreateProductDeviationDto, UpdateActionPlanDto, AddMarketingRemarkDto, ApprovePlantHeadDto, ApproveQualityHeadDto } from './dto/product-deviation.dto';
+import { CreateProductDeviationDto, UpdateActionPlanDto, AddMarketingRemarkDto, ApprovePlantHeadDto, ApproveCeoDto, ApproveQualityHeadDto } from './dto/product-deviation.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('product-deviation')
@@ -41,6 +41,11 @@ export class ProductDeviationController {
     @Put(':id/plant-head')
     approvePlantHead(@Param('id') id: string, @Body() dto: ApprovePlantHeadDto, @Request() req) {
         return this.productDeviationService.approvePlantHead(id, dto, req.user.userId);
+    }
+
+    @Put(':id/ceo')
+    approveCeo(@Param('id') id: string, @Body() dto: ApproveCeoDto, @Request() req) {
+        return this.productDeviationService.approveCeo(id, dto, req.user.userId);
     }
 
     @Put(':id/quality-head')

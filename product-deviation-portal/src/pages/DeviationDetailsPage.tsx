@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Clock, Save, FileText, Loader2, AlertCircle, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Clock, Save, FileText, Loader2, AlertCircle, ShieldAlert, Download } from 'lucide-react';
 import api from '../api';
 import { generateDeviationPdf } from '../utils/generateDeviationPdf';
+import { formatDate, formatDateTime } from '../utils/dateFormatter';
 
 export default function DeviationDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,16 +21,28 @@ export default function DeviationDetailsPage() {
   const [marketingConfigId, setMarketingConfigId] = useState<string | null>(null);
   const [plantHeadConfigId, setPlantHeadConfigId] = useState<string | null>(null);
   const [qualityHeadConfigId, setQualityHeadConfigId] = useState<string | null>(null);
+  const [ceoConfigId, setCeoConfigId] = useState<string | null>(null);
 
   // Form states for actions and remarks
   const [actionData, setActionData] = useState({
     rootCauseAnalysis: '',
     containmentAction: '',
-    correctiveAction: ''
+    correctiveAction: '',
+    disposalAction: ''
   });
   const [marketingRemark, setMarketingRemark] = useState('');
   const [plantHeadRemark, setPlantHeadRemark] = useState('');
+  const [ceoRemark, setCeoRemark] = useState('');
   const [qualityHeadRemark, setQualityHeadRemark] = useState('');
+
+  const downloadAttachment = (file: { name: string; fileData: string }) => {
+    const link = document.createElement('a');
+    link.href = file.fileData;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   useEffect(() => {
     if (id) {
@@ -40,14 +53,16 @@ export default function DeviationDetailsPage() {
 
   const fetchConfigs = async () => {
     try {
-      const [mRes, pRes, qRes] = await Promise.all([
+      const [mRes, pRes, qRes, cRes] = await Promise.all([
         api.get('/settings/product_deviation_marketing_person').catch(() => ({ data: null })),
         api.get('/settings/product_deviation_plant_head').catch(() => ({ data: null })),
-        api.get('/settings/product_deviation_quality_head').catch(() => ({ data: null }))
+        api.get('/settings/product_deviation_quality_head').catch(() => ({ data: null })),
+        api.get('/settings/product_deviation_ceo').catch(() => ({ data: null }))
       ]);
       setMarketingConfigId(mRes.data);
       setPlantHeadConfigId(pRes.data);
       setQualityHeadConfigId(qRes.data);
+      setCeoConfigId(cRes.data);
     } catch (err) {
       console.error('Failed to load portal configuration settings:', err);
     }
@@ -62,10 +77,12 @@ export default function DeviationDetailsPage() {
       setActionData({
         rootCauseAnalysis: data.rootCauseAnalysis || '',
         containmentAction: data.containmentAction || '',
-        correctiveAction: data.correctiveAction || ''
+        correctiveAction: data.correctiveAction || '',
+        disposalAction: data.disposalAction || ''
       });
       setMarketingRemark(data.marketingRemarks || '');
       setPlantHeadRemark(data.plantHeadRemarks || '');
+      setCeoRemark(data.ceoRemarks || '');
       setQualityHeadRemark(data.qualityHeadRemarks || '');
     } catch (err: any) {
       console.error(err);
@@ -76,7 +93,7 @@ export default function DeviationDetailsPage() {
   };
 
   const handleActionSign = async () => {
-    if (!actionData.rootCauseAnalysis.trim() || !actionData.containmentAction.trim() || !actionData.correctiveAction.trim()) {
+    if (!actionData.rootCauseAnalysis.trim() || !actionData.containmentAction.trim() || !actionData.correctiveAction.trim() || !actionData.disposalAction.trim()) {
       alert('Please fill out all action fields before signing.');
       return;
     }
@@ -113,6 +130,19 @@ export default function DeviationDetailsPage() {
     setActionLoading(true);
     try {
       await api.put(`/product-deviation/${id}/plant-head`, { plantHeadRemarks: plantHeadRemark });
+      await fetchDeviationDetails();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Error approving deviation record.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCeoApprove = async () => {
+    setActionLoading(true);
+    try {
+      await api.put(`/product-deviation/${id}/ceo`, { ceoRemarks: ceoRemark });
       await fetchDeviationDetails();
     } catch (err: any) {
       console.error(err);
@@ -171,6 +201,7 @@ export default function DeviationDetailsPage() {
   
   const isMarketingPerson = marketingConfigId ? user?.id === marketingConfigId : user?.role === 'admin';
   const isPlantHead = plantHeadConfigId ? user?.id === plantHeadConfigId : user?.role === 'admin';
+  const isCeo = ceoConfigId ? user?.id === ceoConfigId : user?.role === 'admin';
   const isQualityHead = qualityHeadConfigId ? user?.id === qualityHeadConfigId : user?.role === 'admin';
 
   return (
@@ -228,10 +259,16 @@ export default function DeviationDetailsPage() {
               <span className="text-slate-400 font-medium block text-xs">Production Line</span>
               <span className="font-bold text-slate-700">{deviation.line}</span>
             </div>
+            {deviation.initiatorName && (
+              <div>
+                <span className="text-slate-400 font-medium block text-xs">Initiator Name</span>
+                <span className="font-bold text-slate-700">{deviation.initiatorName}</span>
+              </div>
+            )}
             <div>
               <span className="text-slate-400 font-medium block text-xs">Duration Period</span>
               <span className="font-bold text-slate-700">
-                {new Date(deviation.startDate).toLocaleDateString()} to {new Date(deviation.endDate).toLocaleDateString()}
+                {formatDate(deviation.startDate)} to {formatDate(deviation.endDate)}
               </span>
             </div>
             <div>
@@ -252,9 +289,41 @@ export default function DeviationDetailsPage() {
                 {deviation.detailsOfDeviation}
               </div>
             </div>
+            {deviation.attachments && deviation.attachments.length > 0 && (
+              <div className="col-span-1 md:col-span-2">
+                <span className="text-slate-400 font-medium block text-xs mb-2">Attached Documents</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {deviation.attachments.map((file: any, index: number) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-100 rounded-xl transition-all shadow-sm group"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <FileText className="w-5 h-5 text-orange-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-700 truncate max-w-[180px] sm:max-w-[240px]">
+                            {file.name}
+                          </p>
+                          <p className="text-[9px] text-slate-400 font-semibold uppercase">
+                            {(file.fileData.length * 0.75 / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => downloadAttachment(file)}
+                        className="p-2 hover:bg-white text-slate-500 hover:text-orange-500 border border-transparent hover:border-slate-200/60 rounded-xl transition-all cursor-pointer shadow-sm"
+                        title="Download file"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="col-span-1 md:col-span-2 flex items-center justify-between text-xs text-slate-400 pt-2 font-medium border-t border-slate-50">
               <span>Created By: {deviation.createdBy?.firstName} {deviation.createdBy?.lastName}</span>
-              <span>Created On: {new Date(deviation.createdAt).toLocaleString()}</span>
+              <span>Created On: {formatDateTime(deviation.createdAt)}</span>
             </div>
           </div>
         </section>
@@ -271,7 +340,7 @@ export default function DeviationDetailsPage() {
                   <div className="text-[10px] text-slate-400 font-semibold">{rp.user?.email}</div>
                 </div>
                 {rp.signedAt ? (
-                  <span className="text-slate-500 italic text-[11px] ml-auto font-medium">Signed on {new Date(rp.signedAt).toLocaleString()}</span>
+                  <span className="text-slate-500 italic text-[11px] ml-auto font-medium">Signed on {formatDateTime(rp.signedAt)}</span>
                 ) : (
                   <span className="text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-2 py-0.5 text-[10px] font-bold ml-auto uppercase tracking-wide">Pending Sign</span>
                 )}
@@ -293,7 +362,7 @@ export default function DeviationDetailsPage() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Root Cause Analysis *</label>
                 <textarea 
                   rows={2} 
-                  className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+                  className="w-full px-4 py-3 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
                   placeholder="Identify root cause..."
                   value={actionData.rootCauseAnalysis} 
                   onChange={(e) => setActionData({ ...actionData, rootCauseAnalysis: e.target.value })} 
@@ -303,7 +372,7 @@ export default function DeviationDetailsPage() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Containment Action *</label>
                 <textarea 
                   rows={2} 
-                  className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+                  className="w-full px-4 py-3 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
                   placeholder="Containment measures..."
                   value={actionData.containmentAction} 
                   onChange={(e) => setActionData({ ...actionData, containmentAction: e.target.value })} 
@@ -313,10 +382,20 @@ export default function DeviationDetailsPage() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Corrective Action *</label>
                 <textarea 
                   rows={2} 
-                  className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+                  className="w-full px-4 py-3 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
                   placeholder="Corrective actions..."
                   value={actionData.correctiveAction} 
                   onChange={(e) => setActionData({ ...actionData, correctiveAction: e.target.value })} 
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Disposal Action *</label>
+                <textarea 
+                  rows={2} 
+                  className="w-full px-4 py-3 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+                  placeholder="Disposal actions..."
+                  value={actionData.disposalAction} 
+                  onChange={(e) => setActionData({ ...actionData, disposalAction: e.target.value })} 
                 />
               </div>
               
@@ -350,6 +429,10 @@ export default function DeviationDetailsPage() {
               <div>
                 <span className="text-slate-400 font-medium block text-xs">Corrective Action</span>
                 <span className="font-bold text-slate-700">{deviation.correctiveAction || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium block text-xs">Disposal Action</span>
+                <span className="font-bold text-slate-700">{deviation.disposalAction || 'N/A'}</span>
               </div>
             </div>
           ) : (
@@ -394,7 +477,7 @@ export default function DeviationDetailsPage() {
             <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-50">
               <CheckCircle className="w-4 h-4 text-green-500" />
               <span>Signed by: {deviation.marketingPerson?.firstName} {deviation.marketingPerson?.lastName}</span>
-              <span className="ml-auto">Signed On: {deviation.marketingSignedAt && new Date(deviation.marketingSignedAt).toLocaleString()}</span>
+              <span className="ml-auto">Signed On: {deviation.marketingSignedAt && formatDateTime(deviation.marketingSignedAt)}</span>
             </div>
           </section>
         )}
@@ -424,8 +507,33 @@ export default function DeviationDetailsPage() {
           </section>
         )}
 
+        {/* CEO Approval Screen */}
+        {deviation.status === 'PENDING_PLANT_HEAD' && isCeo && (
+          <section className="bg-amber-50/50 p-6 rounded-2xl border border-amber-100 shadow-sm space-y-4">
+            <h3 className="text-sm font-black text-amber-900 uppercase tracking-wider border-b border-amber-100 pb-3">CEO Approval Required</h3>
+            <p className="text-xs text-amber-700 leading-relaxed font-semibold">Please audit root cause analysis, action items, and marketing remarks. Add optional remarks and approve to route this deviation to the Quality Head.</p>
+            <textarea 
+              rows={3} 
+              className="w-full px-4 py-3 text-sm bg-white border border-amber-100 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+              placeholder="CEO Remarks (optional)..." 
+              value={ceoRemark} 
+              onChange={(e) => setCeoRemark(e.target.value)} 
+            />
+            <div className="flex justify-end">
+              <button 
+                onClick={handleCeoApprove} 
+                disabled={actionLoading} 
+                className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-xl transition shadow-md shadow-amber-200 flex items-center gap-2 text-sm font-bold cursor-pointer disabled:opacity-50"
+              >
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                Approve & Escalate to Quality Head
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* Display Plant Head remarks if signed */}
-        {deviation.status !== 'OPEN' && deviation.status !== 'PENDING_MARKETING' && deviation.status !== 'PENDING_PLANT_HEAD' && deviation.plantHeadId && (
+        {deviation.plantHeadId && (
           <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-3">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-50 pb-3">Plant Head Remarks</h3>
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-slate-600 font-medium text-sm leading-relaxed">
@@ -434,7 +542,22 @@ export default function DeviationDetailsPage() {
             <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-50">
               <CheckCircle className="w-4 h-4 text-green-500" />
               <span>Approved by: {deviation.plantHead?.firstName} {deviation.plantHead?.lastName}</span>
-              <span className="ml-auto">Approved On: {deviation.plantHeadSignedAt && new Date(deviation.plantHeadSignedAt).toLocaleString()}</span>
+              <span className="ml-auto">Approved On: {deviation.plantHeadSignedAt && formatDateTime(deviation.plantHeadSignedAt)}</span>
+            </div>
+          </section>
+        )}
+
+        {/* Display CEO remarks if signed */}
+        {deviation.ceoId && (
+          <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-50 pb-3">CEO Remarks</h3>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-slate-600 font-medium text-sm leading-relaxed">
+              {deviation.ceoRemarks || 'No remarks provided.'}
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-50">
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              <span>Approved by: {deviation.ceo?.firstName} {deviation.ceo?.lastName}</span>
+              <span className="ml-auto">Approved On: {deviation.ceoSignedAt && formatDateTime(deviation.ceoSignedAt)}</span>
             </div>
           </section>
         )}
@@ -477,7 +600,7 @@ export default function DeviationDetailsPage() {
               </div>
             )}
             <p className="text-[11px] text-emerald-700 font-semibold mt-2">
-              Approved by: {deviation.qualityHead?.firstName} {deviation.qualityHead?.lastName} on {deviation.qualityHeadSignedAt && new Date(deviation.qualityHeadSignedAt).toLocaleString()}
+              Approved by: {deviation.qualityHead?.firstName} {deviation.qualityHead?.lastName} on {deviation.qualityHeadSignedAt && formatDateTime(deviation.qualityHeadSignedAt)}
             </p>
           </section>
         )}
@@ -516,7 +639,7 @@ export default function DeviationDetailsPage() {
                           </p>
                         </div>
                         <div className="whitespace-nowrap text-right text-slate-400 font-semibold">
-                          {new Date(log.timestamp).toLocaleString()}
+                          {formatDateTime(log.timestamp)}
                         </div>
                       </div>
                     </div>

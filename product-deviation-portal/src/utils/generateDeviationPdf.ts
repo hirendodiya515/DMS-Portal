@@ -50,10 +50,11 @@ export const generateDeviationPdf = async (deviation: any) => {
   // Base Info Table
   const baseData = [
     ['Serial Number', deviation.serialNumber, 'Status', deviation.status],
-    ['Line', deviation.line, 'Creation Date', format(new Date(deviation.createdAt), 'dd MMM yyyy, hh:mm a')],
-    ['Start Date', format(new Date(deviation.startDate), 'dd MMM yyyy'), 'End Date', format(new Date(deviation.endDate), 'dd MMM yyyy')],
+    ['Line', deviation.line, 'Creation Date', format(new Date(deviation.createdAt), 'dd-MMM-yy, hh:mm a')],
+    ['Start Date', format(new Date(deviation.startDate), 'dd-MMM-yy'), 'End Date', format(new Date(deviation.endDate), 'dd-MMM-yy')],
     ['Quantity Produced', `${deviation.totalQuantityProduced} sqm`, 'Quantity Under Deviation', `${deviation.quantityUnderDeviation} sqm`],
-    ['Created By', `${deviation.createdBy?.firstName} ${deviation.createdBy?.lastName}`, 'Nature of Deviation', deviation.natureOfDeviation]
+    ['Created By', `${deviation.createdBy?.firstName} ${deviation.createdBy?.lastName}`, 'Nature of Deviation', deviation.natureOfDeviation],
+    ['Initiator Name', deviation.initiatorName || 'N/A', '', '']
   ];
 
   autoTable(doc, {
@@ -93,7 +94,8 @@ export const generateDeviationPdf = async (deviation: any) => {
   const actionData = [
     ['Root Cause Analysis', deviation.rootCauseAnalysis || 'N/A'],
     ['Containment Action', deviation.containmentAction || 'N/A'],
-    ['Corrective Action', deviation.correctiveAction || 'N/A']
+    ['Corrective Action', deviation.correctiveAction || 'N/A'],
+    ['Disposal Action', deviation.disposalAction || 'N/A']
   ];
 
   autoTable(doc, {
@@ -119,7 +121,7 @@ export const generateDeviationPdf = async (deviation: any) => {
   deviation.responsiblePersons?.forEach((rp: any) => {
     sigData.push([
       'Responsible Person',
-      `${rp.user?.firstName} ${rp.user?.lastName}\n\nStatus: Digitally Signed\nDate: ${rp.signedAt ? format(new Date(rp.signedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
+      `${rp.user?.firstName} ${rp.user?.lastName}\n\nStatus: Digitally Signed\nDate: ${rp.signedAt ? format(new Date(rp.signedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
       'Action plan submitted.'
     ]);
   });
@@ -127,7 +129,7 @@ export const generateDeviationPdf = async (deviation: any) => {
   if (deviation.marketingPersonId) {
     sigData.push([
       'Marketing Person',
-      `${deviation.marketingPerson?.firstName} ${deviation.marketingPerson?.lastName}\n\nStatus: Digitally Signed\nDate: ${deviation.marketingSignedAt ? format(new Date(deviation.marketingSignedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
+      `${deviation.marketingPerson?.firstName} ${deviation.marketingPerson?.lastName}\n\nStatus: Digitally Signed\nDate: ${deviation.marketingSignedAt ? format(new Date(deviation.marketingSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
       deviation.marketingRemarks ? `"${deviation.marketingRemarks}"` : 'No remarks provided.'
     ]);
   }
@@ -135,15 +137,23 @@ export const generateDeviationPdf = async (deviation: any) => {
   if (deviation.plantHeadId) {
     sigData.push([
       'Plant Head',
-      `${deviation.plantHead?.firstName} ${deviation.plantHead?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.plantHeadSignedAt ? format(new Date(deviation.plantHeadSignedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
+      `${deviation.plantHead?.firstName} ${deviation.plantHead?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.plantHeadSignedAt ? format(new Date(deviation.plantHeadSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
       deviation.plantHeadRemarks ? `"${deviation.plantHeadRemarks}"` : 'Approved.'
+    ]);
+  }
+
+  if (deviation.ceoId) {
+    sigData.push([
+      'CEO',
+      `${deviation.ceo?.firstName} ${deviation.ceo?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.ceoSignedAt ? format(new Date(deviation.ceoSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
+      deviation.ceoRemarks ? `"${deviation.ceoRemarks}"` : 'Approved.'
     ]);
   }
 
   if (deviation.qualityHeadId) {
     sigData.push([
       'Quality Head',
-      `${deviation.qualityHead?.firstName} ${deviation.qualityHead?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.qualityHeadSignedAt ? format(new Date(deviation.qualityHeadSignedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
+      `${deviation.qualityHead?.firstName} ${deviation.qualityHead?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.qualityHeadSignedAt ? format(new Date(deviation.qualityHeadSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
       deviation.qualityHeadRemarks ? `"${deviation.qualityHeadRemarks}"` : 'Final Approval completed.'
     ]);
   }

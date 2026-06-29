@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../api';
-import { Search, ChevronDown } from 'lucide-react';
+import { Search, ChevronDown, UploadCloud, FileText, Trash2, Download } from 'lucide-react';
 
 const classifications = ['Man', 'Machine', 'Material', 'Method', 'Other'];
 
@@ -10,6 +10,43 @@ const Section1BasicInfo = ({ data, update, readOnly }: any) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const fileData = reader.result as string;
+        update((prev: any) => ({
+          ...prev,
+          attachments: [
+            ...(prev.attachments || []),
+            { name: file.name, fileData }
+          ]
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    update((prev: any) => ({
+      ...prev,
+      attachments: prev.attachments.filter((_: any, idx: number) => idx !== index)
+    }));
+  };
+
+  const downloadAttachment = (file: { name: string; fileData: string }) => {
+    const link = document.createElement('a');
+    link.href = file.fileData;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -306,6 +343,64 @@ const Section1BasicInfo = ({ data, update, readOnly }: any) => {
           )}
         </div>
       </div>
+
+      <div className="pt-4 border-t border-slate-200">
+        <label className="block text-xs font-semibold text-slate-700 mb-2">Supporting Attachments</label>
+        
+        {/* Upload Button/Zone */}
+        {!readOnly && (
+          <label className="border-2 border-dashed border-slate-200 hover:border-brand-500 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-50/50 hover:bg-brand-50/5 transition-all cursor-pointer group mb-4">
+            <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-brand-500 transition-colors mb-2" />
+            <span className="text-xs font-bold text-slate-700">Click to upload files</span>
+            <span className="text-[10px] text-slate-400 font-medium mt-1">Upload drawings, specifications, risk assessments, etc.</span>
+            <input 
+              type="file" 
+              multiple 
+              className="hidden" 
+              onChange={handleAttachmentUpload} 
+            />
+          </label>
+        )}
+
+        {/* Attachments List */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {data.attachments && data.attachments.length > 0 ? (
+            data.attachments.map((file: any, index: number) => (
+              <div key={index} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-2 bg-slate-100 text-slate-500 rounded-lg">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <p className="text-xs font-bold text-slate-800 truncate" title={file.name}>{file.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => downloadAttachment(file)}
+                      className="text-[10px] font-bold text-brand-600 hover:text-brand-700 hover:underline mt-0.5 block flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" /> Download file
+                    </button>
+                  </div>
+                </div>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveAttachment(index)}
+                    className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full py-4 text-center text-xs text-slate-400 italic bg-slate-50/50 rounded-xl border border-slate-200">
+              No attachments uploaded
+            </div>
+          )}
+        </div>
+      </div>
+
       </div>
     </fieldset>
   );

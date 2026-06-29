@@ -53,6 +53,9 @@ export class MocRecord {
     @Column({ nullable: true })
     changeAssessmentFile: string;
 
+    @Column({ type: 'jsonb', nullable: true })
+    attachments: { name: string; fileData: string }[];
+
     @Column({ nullable: true })
     hodName: string;
 

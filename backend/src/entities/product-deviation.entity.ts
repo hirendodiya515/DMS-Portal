@@ -38,6 +38,9 @@ export class ProductDeviation {
     @Column({ nullable: true })
     natureOfDeviation: string;
 
+    @Column({ nullable: true })
+    initiatorName: string;
+
     @Column({ type: 'text' })
     detailsOfDeviation: string;
 
@@ -49,6 +52,9 @@ export class ProductDeviation {
 
     @Column({ type: 'text', nullable: true })
     correctiveAction: string;
+
+    @Column({ type: 'text', nullable: true })
+    disposalAction: string;
 
     @Column({ type: 'text', nullable: true })
     marketingRemarks: string;
@@ -93,6 +99,19 @@ export class ProductDeviation {
     @Column({ type: 'timestamp', nullable: true })
     plantHeadSignedAt: Date;
 
+    @Column({ type: 'text', nullable: true })
+    ceoRemarks: string;
+
+    @ManyToOne(() => User, { nullable: true })
+    @JoinColumn({ name: 'ceoId' })
+    ceo: User;
+
+    @Column({ nullable: true })
+    ceoId: string;
+
+    @Column({ type: 'timestamp', nullable: true })
+    ceoSignedAt: Date;
+
     @ManyToOne(() => User, { nullable: true })
     @JoinColumn({ name: 'qualityHeadId' })
     qualityHead: User;
@@ -105,6 +124,9 @@ export class ProductDeviation {
 
     @Column({ type: 'timestamp', nullable: true })
     qualityHeadSignedAt: Date;
+
+    @Column({ type: 'jsonb', nullable: true })
+    attachments: { name: string; fileData: string }[];
 
     @OneToMany(() => AuditLog, (log) => log.productDeviation)
     auditLogs: AuditLog[];

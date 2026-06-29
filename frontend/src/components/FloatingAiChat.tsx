@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquareCode, Sparkles, Send, X, RotateCcw, Bot, User, Minimize2 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
@@ -82,6 +82,7 @@ export default function FloatingAiChat() {
     const [isLoading, setIsLoading] = useState(false);
     const [modelName, setModelName] = useState('Local AI');
     const location = useLocation();
+    const navigate = useNavigate();
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Get current context and starters based on route (supporting dynamic prefixes)
@@ -289,13 +290,52 @@ export default function FloatingAiChat() {
                             return <code key={subIndex} className="bg-slate-200 text-rose-600 px-1 py-0.5 rounded text-xs font-mono">{subPart.slice(1, -1)}</code>;
                         }
                         
-                        // Handle bold **text**
-                        const boldParts = subPart.split(/(\*\*[^*]+\*\*)/g);
-                        return boldParts.map((boldPart, boldIndex) => {
-                            if (boldPart.startsWith('**') && boldPart.endsWith('**')) {
-                                return <strong key={boldIndex} className="font-semibold text-slate-900">{boldPart.slice(2, -2)}</strong>;
+                        // Handle markdown links [label](url)
+                        const linkParts = subPart.split(/(\[[^\]]+\]\([^)]+\))/g);
+                        return linkParts.map((linkPart, linkIndex) => {
+                            if (linkPart.startsWith('[') && linkPart.includes('](')) {
+                                const match = linkPart.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                                if (match) {
+                                    const [_, label, url] = match;
+                                    // Internal path navigation using useNavigate
+                                    if (url.startsWith('/')) {
+                                        return (
+                                            <a 
+                                                key={linkIndex} 
+                                                href={url} 
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    navigate(url);
+                                                }}
+                                                className="text-indigo-600 hover:text-indigo-800 underline font-medium cursor-pointer"
+                                            >
+                                                {label}
+                                            </a>
+                                        );
+                                    } else {
+                                        return (
+                                            <a 
+                                                key={linkIndex} 
+                                                href={url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="text-indigo-600 hover:text-indigo-800 underline font-medium cursor-pointer"
+                                            >
+                                                {label}
+                                            </a>
+                                        );
+                                    }
+                                }
                             }
-                            return boldPart;
+
+                            // Handle bold **text**
+                            const boldParts = linkPart.split(/(\*\*[^*]+\*\*)/g);
+                            return boldParts.map((boldPart, boldIndex) => {
+                                if (boldPart.startsWith('**') && boldPart.endsWith('**')) {
+                                    return <strong key={boldIndex} className="font-semibold text-slate-900">{boldPart.slice(2, -2)}</strong>;
+                                }
+                                return boldPart;
+                            });
                         });
                     })}
                 </span>

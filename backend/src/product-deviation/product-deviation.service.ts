@@ -6,7 +6,7 @@ import { ProductDeviationResponsible } from '../entities/product-deviation-respo
 import { User, UserRole } from '../entities/user.entity';
 import { AuditLog, AuditAction } from '../entities/audit-log.entity';
 import { SystemSetting } from '../entities/system-setting.entity';
-import { CreateProductDeviationDto, UpdateActionPlanDto, AddMarketingRemarkDto, ApprovePlantHeadDto, ApproveQualityHeadDto } from './dto/product-deviation.dto';
+import { CreateProductDeviationDto, UpdateActionPlanDto, AddMarketingRemarkDto, ApprovePlantHeadDto, ApproveCeoDto, ApproveQualityHeadDto } from './dto/product-deviation.dto';
 import { MailService } from '../mail/mail.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
@@ -83,8 +83,14 @@ export class ProductDeviationService {
             toEmails = [marketingUser?.email, creatorUser?.email].filter(Boolean) as string[];
             pendingWith = marketingUser ? `${marketingUser.firstName} ${marketingUser.lastName} (Marketing Person)` : 'Marketing Person';
         } else if (deviation.status === ProductDeviationStatus.PENDING_PLANT_HEAD) {
-            toEmails = [plantHeadUser?.email, creatorUser?.email].filter(Boolean) as string[];
-            pendingWith = plantHeadUser ? `${plantHeadUser.firstName} ${plantHeadUser.lastName} (Plant Head)` : 'Plant Head';
+            const ceoSetting = await this.settingRepo.findOne({ where: { key: 'product_deviation_ceo' } });
+            const ceoUser = await getUser(ceoSetting?.value);
+            toEmails = [plantHeadUser?.email, ceoUser?.email, creatorUser?.email].filter(Boolean) as string[];
+            const names = [
+                plantHeadUser ? `${plantHeadUser.firstName} ${plantHeadUser.lastName} (Plant Head)` : '',
+                ceoUser ? `${ceoUser.firstName} ${ceoUser.lastName} (CEO)` : ''
+            ].filter(Boolean);
+            pendingWith = names.length > 0 ? names.join(' or ') : 'Plant Head or CEO';
         } else if (deviation.status === ProductDeviationStatus.PENDING_QUALITY_HEAD) {
             toEmails = [qualityHeadUser?.email, creatorUser?.email].filter(Boolean) as string[];
             pendingWith = qualityHeadUser ? `${qualityHeadUser.firstName} ${qualityHeadUser.lastName} (Quality Head)` : 'Quality Head';
@@ -129,6 +135,8 @@ export class ProductDeviationService {
             totalQuantityProduced: createDto.totalQuantityProduced,
             quantityUnderDeviation: createDto.quantityUnderDeviation,
             natureOfDeviation: createDto.natureOfDeviation,
+            initiatorName: createDto.initiatorName,
+            attachments: createDto.attachments,
             detailsOfDeviation: createDto.detailsOfDeviation,
             createdById: userId,
             createdBy: { id: userId } as any,
@@ -155,7 +163,7 @@ export class ProductDeviationService {
 
     async findAll() {
         return this.productDeviationRepo.find({
-            relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead'],
+            relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead', 'ceo'],
             order: { createdAt: 'DESC' }
         });
     }
@@ -163,7 +171,7 @@ export class ProductDeviationService {
     async findOne(id: string) {
         const deviation = await this.productDeviationRepo.findOne({
             where: { id },
-            relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead', 'auditLogs', 'auditLogs.user'],
+            relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead', 'ceo', 'auditLogs', 'auditLogs.user'],
         });
         if (!deviation) throw new NotFoundException('Product Deviation not found');
         
@@ -222,6 +230,7 @@ export class ProductDeviationService {
         if (dto.containmentAction !== undefined) deviation.containmentAction = dto.containmentAction;
         if (dto.correctiveAction !== undefined) deviation.correctiveAction = dto.correctiveAction;
         if (dto.rootCauseAnalysis !== undefined) deviation.rootCauseAnalysis = dto.rootCauseAnalysis;
+        if (dto.disposalAction !== undefined) deviation.disposalAction = dto.disposalAction;
 
         responsibleRecord.signedAt = new Date();
         await this.responsibleRepo.save(responsibleRecord);
@@ -236,14 +245,16 @@ export class ProductDeviationService {
         const anySigned = deviation.responsiblePersons.some(r => r.signedAt != null);
 
         if (anySigned) {
-            deviation.status = ProductDeviationStatus.PENDING_MARKETING;
+            const enableMarketingSetting = await this.settingRepo.findOne({ where: { key: 'product_deviation_enable_marketing' } });
+            const enableMarketing = enableMarketingSetting?.value !== 'false'; // defaults to true
+            deviation.status = enableMarketing ? ProductDeviationStatus.PENDING_MARKETING : ProductDeviationStatus.PENDING_PLANT_HEAD;
         }
 
         await this.productDeviationRepo.save(deviation);
         await this.logAction(AuditAction.PRODUCT_DEVIATION_SIGN, userId, id, 'Responsible person signed action plan.');
         
         // Progress hook dispatcher
-        if (deviation.status === ProductDeviationStatus.PENDING_MARKETING) {
+        if (deviation.status === ProductDeviationStatus.PENDING_MARKETING || deviation.status === ProductDeviationStatus.PENDING_PLANT_HEAD) {
             const actor = await this.userRepo.findOne({where: {id: userId}});
             this.triggerWorkflowEmail(deviation.id, actor ? `${actor.firstName} ${actor.lastName}` : 'Responsible Person');
         }
@@ -311,6 +322,38 @@ export class ProductDeviationService {
 
         const actor = await this.userRepo.findOne({where: {id: userId}});
         this.triggerWorkflowEmail(deviation.id, actor ? `${actor.firstName} ${actor.lastName}` : 'Plant Head');
+
+        return deviation;
+    }
+
+    async approveCeo(id: string, dto: ApproveCeoDto, userId: string) {
+        const deviation = await this.findOne(id);
+        if (deviation.status !== ProductDeviationStatus.PENDING_PLANT_HEAD) {
+            throw new BadRequestException('Not waiting for CEO/Plant Head approval.');
+        }
+
+        const user = await this.userRepo.findOne({ where: { id: userId } });
+        const ceoSetting = await this.settingRepo.findOne({ where: { key: 'product_deviation_ceo' } });
+        
+        if (ceoSetting?.value) {
+            if (ceoSetting.value !== userId) {
+                throw new ForbiddenException('Only the uniquely designated Default CEO can approve this deviation.');
+            }
+        } else if (user?.role !== UserRole.ADMIN) {
+            throw new ForbiddenException('No default CEO is set. Only Admins can override this approval.');
+        }
+
+        deviation.ceoRemarks = dto.ceoRemarks || '';
+        deviation.ceoId = userId;
+        deviation.ceo = { id: userId } as any;
+        deviation.ceoSignedAt = new Date();
+        deviation.status = ProductDeviationStatus.PENDING_QUALITY_HEAD;
+
+        await this.productDeviationRepo.save(deviation);
+        await this.logAction(AuditAction.PRODUCT_DEVIATION_SIGN, userId, id, 'CEO approved and forwarded deviation to Quality.');
+
+        const actor = await this.userRepo.findOne({where: {id: userId}});
+        this.triggerWorkflowEmail(deviation.id, actor ? `${actor.firstName} ${actor.lastName}` : 'CEO');
 
         return deviation;
     }
