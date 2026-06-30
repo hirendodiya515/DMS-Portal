@@ -39,6 +39,10 @@ export class CreateProductDeviationDto {
     @IsOptional()
     initiatorName?: string;
 
+    @IsNumber()
+    @IsOptional()
+    quantityUnderDeviationPcs?: number;
+
     @IsArray()
     @IsOptional()
     attachments?: { name: string; fileData: string }[];
@@ -60,28 +64,48 @@ export class UpdateActionPlanDto {
     @IsString()
     @IsOptional()
     disposalAction?: string;
+
+    @IsArray()
+    @IsOptional()
+    attachments?: { name: string; fileData: string }[];
 }
 
 export class AddMarketingRemarkDto {
     @IsString()
     @IsNotEmpty()
     marketingRemarks: string;
+
+    @IsArray()
+    @IsOptional()
+    attachments?: { name: string; fileData: string }[];
 }
 
 export class ApprovePlantHeadDto {
     @IsString()
     @IsOptional()
     plantHeadRemarks?: string;
+
+    @IsArray()
+    @IsOptional()
+    attachments?: { name: string; fileData: string }[];
 }
 
 export class ApproveCeoDto {
     @IsString()
     @IsOptional()
     ceoRemarks?: string;
+
+    @IsArray()
+    @IsOptional()
+    attachments?: { name: string; fileData: string }[];
 }
 
 export class ApproveQualityHeadDto {
     @IsString()
     @IsOptional()
     qualityHeadRemarks?: string;
+
+    @IsArray()
+    @IsOptional()
+    attachments?: { name: string; fileData: string }[];
 }

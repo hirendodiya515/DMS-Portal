@@ -31,6 +31,14 @@ export const generateDeviationPdf = async (deviation: any) => {
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
     doc.text("PRODUCT DEVIATION REPORT", pageWidth / 2, 20, { align: "center" });
+
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    const rightAlignX = pageWidth - 14;
+    doc.text("Doc. no.: MR/L4/013", rightAlignX, 11, { align: "right" });
+    doc.text("Issue no./date: 01/12.02.2020", rightAlignX, 15, { align: "right" });
+    doc.text("Rev. no.: 01", rightAlignX, 19, { align: "right" });
+    doc.text("Rev. date: 01.07.2026", rightAlignX, 23, { align: "right" });
     
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.5);
@@ -48,13 +56,16 @@ export const generateDeviationPdf = async (deviation: any) => {
   let currentY = 35;
 
   // Base Info Table
+  const pcsStr = deviation.quantityUnderDeviationPcs !== null && deviation.quantityUnderDeviationPcs !== undefined 
+    ? `${deviation.quantityUnderDeviationPcs} pcs` 
+    : 'N/A';
   const baseData = [
     ['Serial Number', deviation.serialNumber, 'Status', deviation.status],
     ['Line', deviation.line, 'Creation Date', format(new Date(deviation.createdAt), 'dd-MMM-yy, hh:mm a')],
     ['Start Date', format(new Date(deviation.startDate), 'dd-MMM-yy'), 'End Date', format(new Date(deviation.endDate), 'dd-MMM-yy')],
-    ['Quantity Produced', `${deviation.totalQuantityProduced} sqm`, 'Quantity Under Deviation', `${deviation.quantityUnderDeviation} sqm`],
-    ['Created By', `${deviation.createdBy?.firstName} ${deviation.createdBy?.lastName}`, 'Nature of Deviation', deviation.natureOfDeviation],
-    ['Initiator Name', deviation.initiatorName || 'N/A', '', '']
+    ['Quantity Produced', `${deviation.totalQuantityProduced} sqm`, 'Qty Under Dev (sqm)', `${deviation.quantityUnderDeviation} sqm`],
+    ['Qty Under Dev (pcs)', pcsStr, 'Nature of Deviation', deviation.natureOfDeviation],
+    ['Created By', `${deviation.createdBy?.firstName} ${deviation.createdBy?.lastName}`, 'Initiator Name', deviation.initiatorName || 'N/A']
   ];
 
   autoTable(doc, {
@@ -91,17 +102,21 @@ export const generateDeviationPdf = async (deviation: any) => {
   });
 
   // Action Plan Table
-  const actionData = [
+  const actionPlanData = [
     ['Root Cause Analysis', deviation.rootCauseAnalysis || 'N/A'],
     ['Containment Action', deviation.containmentAction || 'N/A'],
     ['Corrective Action', deviation.correctiveAction || 'N/A'],
     ['Disposal Action', deviation.disposalAction || 'N/A']
   ];
 
+  if (deviation.actionPlanAttachments && deviation.actionPlanAttachments.length > 0) {
+    actionPlanData.push(['Action Plan Attachments', deviation.actionPlanAttachments.map((f: any) => f.name).join(', ')]);
+  }
+
   autoTable(doc, {
     startY: currentY,
     head: [['Action Plan Area', 'Details']],
-    body: actionData,
+    body: actionPlanData,
     theme: 'grid',
     margin: { top: 35, bottom: 25 },
     headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 10 },
@@ -127,34 +142,50 @@ export const generateDeviationPdf = async (deviation: any) => {
   });
   
   if (deviation.marketingPersonId) {
+    let mRemarks = deviation.marketingRemarks ? `"${deviation.marketingRemarks}"` : 'No remarks provided.';
+    if (deviation.marketingAttachments && deviation.marketingAttachments.length > 0) {
+      mRemarks += `\n\nAttachments: ${deviation.marketingAttachments.map((f: any) => f.name).join(', ')}`;
+    }
     sigData.push([
       'Marketing Person',
       `${deviation.marketingPerson?.firstName} ${deviation.marketingPerson?.lastName}\n\nStatus: Digitally Signed\nDate: ${deviation.marketingSignedAt ? format(new Date(deviation.marketingSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
-      deviation.marketingRemarks ? `"${deviation.marketingRemarks}"` : 'No remarks provided.'
+      mRemarks
     ]);
   }
 
   if (deviation.plantHeadId) {
+    let pRemarks = deviation.plantHeadRemarks ? `"${deviation.plantHeadRemarks}"` : 'Approved.';
+    if (deviation.plantHeadAttachments && deviation.plantHeadAttachments.length > 0) {
+      pRemarks += `\n\nAttachments: ${deviation.plantHeadAttachments.map((f: any) => f.name).join(', ')}`;
+    }
     sigData.push([
       'Plant Head',
       `${deviation.plantHead?.firstName} ${deviation.plantHead?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.plantHeadSignedAt ? format(new Date(deviation.plantHeadSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
-      deviation.plantHeadRemarks ? `"${deviation.plantHeadRemarks}"` : 'Approved.'
+      pRemarks
     ]);
   }
 
   if (deviation.ceoId) {
+    let cRemarks = deviation.ceoRemarks ? `"${deviation.ceoRemarks}"` : 'Approved.';
+    if (deviation.ceoAttachments && deviation.ceoAttachments.length > 0) {
+      cRemarks += `\n\nAttachments: ${deviation.ceoAttachments.map((f: any) => f.name).join(', ')}`;
+    }
     sigData.push([
       'CEO',
       `${deviation.ceo?.firstName} ${deviation.ceo?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.ceoSignedAt ? format(new Date(deviation.ceoSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
-      deviation.ceoRemarks ? `"${deviation.ceoRemarks}"` : 'Approved.'
+      cRemarks
     ]);
   }
 
   if (deviation.qualityHeadId) {
+    let qRemarks = deviation.qualityHeadRemarks ? `"${deviation.qualityHeadRemarks}"` : 'Final Approval completed.';
+    if (deviation.qualityHeadAttachments && deviation.qualityHeadAttachments.length > 0) {
+      qRemarks += `\n\nAttachments: ${deviation.qualityHeadAttachments.map((f: any) => f.name).join(', ')}`;
+    }
     sigData.push([
       'Quality Head',
       `${deviation.qualityHead?.firstName} ${deviation.qualityHead?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.qualityHeadSignedAt ? format(new Date(deviation.qualityHeadSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
-      deviation.qualityHeadRemarks ? `"${deviation.qualityHeadRemarks}"` : 'Final Approval completed.'
+      qRemarks
     ]);
   }
 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, AlertCircle, FileWarning, Search, UploadCloud, FileText, Trash2, Download } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, AlertCircle, FileWarning, Search, UploadCloud, FileText, Trash2, Download, LogOut, HelpCircle } from 'lucide-react';
 import api from '../api';
 import { formatDate } from '../utils/dateFormatter';
+import UserGuideModal from '../components/UserGuideModal';
 
 interface User {
   id: string;
@@ -13,9 +14,19 @@ interface User {
 
 export default function DeviationFormPage() {
   const navigate = useNavigate();
+  const userString = localStorage.getItem('pd_user');
+  const user = userString ? JSON.parse(userString) : null;
+
+  const handleLogout = () => {
+    localStorage.removeItem('pd_token');
+    localStorage.removeItem('pd_user');
+    navigate('/login');
+  };
+
   const [users, setUsers] = useState<User[]>([]);
   const [lineOptions, setLineOptions] = useState<string[]>(['Line 1', 'Line 2', 'Line 3']);
   const [loading, setLoading] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [userSearchTerm, setUserSearchTerm] = useState('');
@@ -30,6 +41,7 @@ export default function DeviationFormPage() {
     endDate: '',
     totalQuantityProduced: 0,
     quantityUnderDeviation: 0,
+    quantityUnderDeviationPcs: '',
     natureOfDeviation: '',
     initiatorName: '',
     detailsOfDeviation: '',
@@ -154,6 +166,10 @@ export default function DeviationFormPage() {
       setError('Quantity under deviation cannot exceed total quantity produced.');
       return;
     }
+    if (formData.quantityUnderDeviationPcs !== '' && Number(formData.quantityUnderDeviationPcs) < 0) {
+      setError('Quantity under deviation (pcs) cannot be negative.');
+      return;
+    }
     if (!formData.natureOfDeviation.trim()) {
       setError('Please specify the nature of deviation.');
       return;
@@ -172,7 +188,8 @@ export default function DeviationFormPage() {
       await api.post('/product-deviation', {
         ...formData,
         totalQuantityProduced: Number(formData.totalQuantityProduced),
-        quantityUnderDeviation: Number(formData.quantityUnderDeviation)
+        quantityUnderDeviation: Number(formData.quantityUnderDeviation),
+        quantityUnderDeviationPcs: formData.quantityUnderDeviationPcs !== '' ? Number(formData.quantityUnderDeviationPcs) : null
       });
       navigate('/dashboard');
     } catch (err: any) {
@@ -187,7 +204,7 @@ export default function DeviationFormPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Top Navigation Bar */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/dashboard')}
@@ -198,15 +215,53 @@ export default function DeviationFormPage() {
             <img src="/logo.png" alt="Borosil Logo" className="h-10 w-auto object-contain" />
             <div className="h-8 w-[1px] bg-slate-200 mx-1"></div>
             <div>
-              <h1 className="text-base font-black text-slate-800 tracking-tight">Create Product Deviation</h1>
+              <h1 className="text-base font-black text-slate-800 tracking-tight">New Product Deviation</h1>
               <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Product Deviation Portal</p>
             </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button 
+              type="button"
+              onClick={() => setIsGuideOpen(true)}
+              className="h-11 px-4 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              title="User Guide"
+            >
+              <HelpCircle className="w-4 h-4 text-orange-500" />
+              <span>User Guide</span>
+            </button>
+
+            {user && (
+              <div className="hidden md:flex items-center gap-2 px-3 h-11 bg-slate-50 rounded-xl border border-slate-100 shrink-0">
+                <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-bold text-xs">
+                  {user.firstName[0]}
+                </div>
+                <div className="text-left">
+                  <div className="text-xs font-bold text-slate-800 leading-tight">
+                    {user.firstName} {user.lastName}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                    {user.role} {user.department ? `| ${user.department}` : ''}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <button 
+              type="button"
+              onClick={handleLogout}
+              className="h-11 px-4 bg-slate-50 hover:bg-red-50 text-slate-650 hover:text-red-650 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4 text-red-500" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-4xl mx-auto px-6 py-8 flex-1 w-full">
+      <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full">
         {loading ? (
           <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center shadow-sm flex flex-col items-center justify-center">
             <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-4" />
@@ -328,7 +383,7 @@ export default function DeviationFormPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Total Quantity Produced (sqm) *</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Total Quantity Produced (pcs) *</label>
                   <input
                     type="number"
                     className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
@@ -341,7 +396,7 @@ export default function DeviationFormPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Quantity Under Deviation (sqm) *</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Quantity Under Deviation (pcs) *</label>
                   <input
                     type="number"
                     className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
@@ -350,6 +405,18 @@ export default function DeviationFormPage() {
                     onChange={(e) => setFormData({ ...formData, quantityUnderDeviation: Number(e.target.value) })}
                     min="0"
                     required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Quantity Under Deviation (sqm)</label>
+                  <input
+                    type="number"
+                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
+                    placeholder="e.g. 100"
+                    value={formData.quantityUnderDeviationPcs || ''}
+                    onChange={(e) => setFormData({ ...formData, quantityUnderDeviationPcs: e.target.value })}
+                    min="0"
                   />
                 </div>
 
@@ -442,7 +509,7 @@ export default function DeviationFormPage() {
                 </div>
 
                 <div className="col-span-1 md:col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1">Assign Responsible Persons (Max 3) *</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1">Assign Responsible Persons (can add upto 3) *</label>
                   <p className="text-[11px] text-slate-400 font-medium mb-3 ml-1">Select the person(s) responsible for defining root cause, containment, and corrective actions.</p>
                   
                   {formData.responsiblePersonIds.length > 0 && (
@@ -559,6 +626,8 @@ export default function DeviationFormPage() {
       <footer className="bg-white border-t border-slate-200 py-6 mt-8 text-center text-slate-400 text-[10px] tracking-widest uppercase">
         &copy; 2026 Borosil Renewables Ltd. All Rights Reserved.
       </footer>
+
+      <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>
   );
 }

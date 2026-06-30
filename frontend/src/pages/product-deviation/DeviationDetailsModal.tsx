@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
-import { X, Save, CheckCircle, Clock } from 'lucide-react';
+import { X, Save, CheckCircle, Clock, Trash2, FileText, Download } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -22,6 +22,7 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
     endDate: '',
     totalQuantityProduced: 0,
     quantityUnderDeviation: 0,
+    quantityUnderDeviationPcs: '' as string | number,
     natureOfDeviation: '',
     detailsOfDeviation: '',
     responsiblePersonIds: [] as string[]
@@ -31,7 +32,8 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
   const [actionData, setActionData] = useState({
     rootCauseAnalysis: '',
     containmentAction: '',
-    correctiveAction: ''
+    correctiveAction: '',
+    disposalAction: ''
   });
 
   // Marketing & Head states
@@ -39,6 +41,87 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
   const [plantHeadRemark, setPlantHeadRemark] = useState('');
   const [qualityHeadRemark, setQualityHeadRemark] = useState('');
   const [ceoRemark, setCeoRemark] = useState('');
+
+  // Attachment states for each approval step
+  const [marketingAttachments, setMarketingAttachments] = useState<any[]>([]);
+  const [plantHeadAttachments, setPlantHeadAttachments] = useState<any[]>([]);
+  const [ceoAttachments, setCeoAttachments] = useState<any[]>([]);
+  const [qualityHeadAttachments, setQualityHeadAttachments] = useState<any[]>([]);
+  const [actionPlanAttachments, setActionPlanAttachments] = useState<any[]>([]);
+
+  const handleActionPlanAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setActionPlanAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleMarketingAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMarketingAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handlePlantHeadAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPlantHeadAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleCeoAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCeoAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleQualityHeadAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setQualityHeadAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const downloadAttachment = (file: { name: string; fileData: string }) => {
+    const link = document.createElement('a');
+    link.href = file.fileData;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   
   // Settings context
   const [marketingConfigId, setMarketingConfigId] = useState<string | null>(null);
@@ -90,7 +173,8 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
       setActionData({
         rootCauseAnalysis: data.rootCauseAnalysis || '',
         containmentAction: data.containmentAction || '',
-        correctiveAction: data.correctiveAction || ''
+        correctiveAction: data.correctiveAction || '',
+        disposalAction: data.disposalAction || ''
       });
       setMarketingRemark(data.marketingRemarks || '');
       setPlantHeadRemark(data.plantHeadRemarks || '');
@@ -109,7 +193,8 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
       await api.post('/product-deviation', {
         ...formData,
         totalQuantityProduced: Number(formData.totalQuantityProduced),
-        quantityUnderDeviation: Number(formData.quantityUnderDeviation)
+        quantityUnderDeviation: Number(formData.quantityUnderDeviation),
+        quantityUnderDeviationPcs: formData.quantityUnderDeviationPcs !== '' ? Number(formData.quantityUnderDeviationPcs) : null
       });
       onClose();
     } catch (err) {
@@ -123,7 +208,10 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
   const handleActionSign = async () => {
     setLoading(true);
     try {
-      await api.put(`/product-deviation/${deviationId}/action`, actionData);
+      await api.put(`/product-deviation/${deviationId}/action`, {
+        ...actionData,
+        attachments: actionPlanAttachments
+      });
       fetchDeviationDetails();
     } catch (err) {
       console.error(err);
@@ -136,7 +224,10 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
   const handleMarketingSign = async () => {
     setLoading(true);
     try {
-      await api.put(`/product-deviation/${deviationId}/marketing`, { marketingRemarks: marketingRemark });
+      await api.put(`/product-deviation/${deviationId}/marketing`, { 
+        marketingRemarks: marketingRemark,
+        attachments: marketingAttachments 
+      });
       fetchDeviationDetails();
     } catch (err) {
       console.error(err);
@@ -149,7 +240,10 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
   const handlePlantHeadApprove = async () => {
     setLoading(true);
     try {
-      await api.put(`/product-deviation/${deviationId}/plant-head`, { plantHeadRemarks: plantHeadRemark });
+      await api.put(`/product-deviation/${deviationId}/plant-head`, { 
+        plantHeadRemarks: plantHeadRemark,
+        attachments: plantHeadAttachments 
+      });
       fetchDeviationDetails();
     } catch (err) {
       console.error(err);
@@ -162,7 +256,10 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
   const handleCeoApprove = async () => {
     setLoading(true);
     try {
-      await api.put(`/product-deviation/${deviationId}/ceo`, { ceoRemarks: ceoRemark });
+      await api.put(`/product-deviation/${deviationId}/ceo`, { 
+        ceoRemarks: ceoRemark,
+        attachments: ceoAttachments 
+      });
       fetchDeviationDetails();
     } catch (err) {
       console.error(err);
@@ -175,11 +272,31 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
   const handleQualityHeadApprove = async () => {
     setLoading(true);
     try {
-      await api.put(`/product-deviation/${deviationId}/quality-head`, { qualityHeadRemarks: qualityHeadRemark });
+      await api.put(`/product-deviation/${deviationId}/quality-head`, { 
+        qualityHeadRemarks: qualityHeadRemark,
+        attachments: qualityHeadAttachments 
+      });
       fetchDeviationDetails();
     } catch (err) {
       console.error(err);
       alert('Error finalizing deviation via Quality Head');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this product deviation entry? This action cannot be undone.')) {
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.delete(`/product-deviation/${deviationId}`);
+      alert('Product deviation deleted successfully.');
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert('Error deleting deviation');
     } finally {
       setLoading(false);
     }
@@ -257,6 +374,14 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                     value={formData.quantityUnderDeviation} onChange={(e) => setFormData({ ...formData, quantityUnderDeviation: Number(e.target.value) })}
                   />
                 </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantity Under Deviation (pcs)</label>
+                  <input
+                    type="number"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={formData.quantityUnderDeviationPcs} onChange={(e) => setFormData({ ...formData, quantityUnderDeviationPcs: e.target.value })}
+                  />
+                </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nature of Deviation</label>
                   <input
@@ -298,6 +423,9 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                   <div><span className="font-semibold text-slate-900">Dates:</span> {new Date(deviation.startDate).toLocaleDateString()} to {new Date(deviation.endDate).toLocaleDateString()}</div>
                   <div><span className="font-semibold text-slate-900">Total Quantity Produced:</span> {deviation.totalQuantityProduced} sqm</div>
                   <div><span className="font-semibold text-slate-900">Quantity under Deviation:</span> {deviation.quantityUnderDeviation} sqm</div>
+                  {deviation.quantityUnderDeviationPcs !== null && deviation.quantityUnderDeviationPcs !== undefined && (
+                    <div><span className="font-semibold text-slate-900">Quantity under Deviation (pcs):</span> {deviation.quantityUnderDeviationPcs} pcs</div>
+                  )}
                   <div className="col-span-2"><span className="font-semibold text-slate-900">Nature of Deviation:</span> {deviation.natureOfDeviation}</div>
                   <div className="col-span-2"><span className="font-semibold text-slate-900">Details:</span> {deviation.detailsOfDeviation}</div>
                   <div className="col-span-2 flex items-center">
@@ -326,6 +454,24 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                         <label className="block text-sm font-medium text-slate-700 mb-1">Corrective Action</label>
                         <textarea rows={2} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={actionData.correctiveAction} onChange={(e) => setActionData({ ...actionData, correctiveAction: e.target.value })} />
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Disposal Action</label>
+                        <textarea rows={2} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={actionData.disposalAction} onChange={(e) => setActionData({ ...actionData, disposalAction: e.target.value })} />
+                      </div>
+                      <div className="mb-4">
+                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Optional Attachments</label>
+                        <input type="file" multiple onChange={handleActionPlanAttachmentUpload} className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
+                        {actionPlanAttachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {actionPlanAttachments.map((f, i) => (
+                              <span key={i} className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md text-xs text-slate-650">
+                                {f.name}
+                                <button type="button" onClick={() => setActionPlanAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <button onClick={handleActionSign} disabled={loading} className="bg-blue-600 text-white px-4 py-2 rounded-lg transition shadow-lg shadow-blue-500/30 hover:bg-blue-700 flex items-center gap-2">
                         <Save className="w-4 h-4" /> Save & Sign
                       </button>
@@ -340,6 +486,25 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                       <div><span className="font-semibold text-slate-900">Root Cause Analysis:</span> {deviation.rootCauseAnalysis || 'N/A'}</div>
                       <div className="mt-3"><span className="font-semibold text-slate-900">Containment Action:</span> {deviation.containmentAction || 'N/A'}</div>
                       <div className="mt-3"><span className="font-semibold text-slate-900">Corrective Action:</span> {deviation.correctiveAction || 'N/A'}</div>
+                      <div className="mt-3"><span className="font-semibold text-slate-900">Disposal Action:</span> {deviation.disposalAction || 'N/A'}</div>
+                      {deviation.actionPlanAttachments && deviation.actionPlanAttachments.length > 0 && (
+                        <div className="mt-4">
+                          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Action Plan Attachments</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {deviation.actionPlanAttachments.map((file: any, index: number) => (
+                              <div key={index} className="flex items-center justify-between p-2 bg-white border border-slate-200 rounded-lg text-xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                                  <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                                </div>
+                                <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-slate-50 text-slate-500 hover:text-orange-500 rounded border border-transparent hover:border-slate-200 cursor-pointer">
+                                  <Download className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="italic text-slate-500 mb-2">Awaiting action plans from responsible persons.</div>
@@ -359,8 +524,22 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                 {deviation.status === 'PENDING_MARKETING' && isMarketingPerson && (
                   <div className="bg-white p-5 border border-slate-200 rounded-xl shadow-sm">
                     <h4 className="font-semibold text-slate-900 text-base mb-4">Marketing Remarks</h4>
-                    <textarea rows={3} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Provide your remarks here..." value={marketingRemark} onChange={(e) => setMarketingRemark(e.target.value)} />
-                    <button onClick={handleMarketingSign} disabled={loading} className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg transition shadow-lg shadow-blue-500/30 hover:bg-blue-700 flex items-center gap-2">
+                    <textarea rows={3} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3" placeholder="Provide your remarks here..." value={marketingRemark} onChange={(e) => setMarketingRemark(e.target.value)} />
+                    <div className="mb-4">
+                      <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Optional Attachments</label>
+                      <input type="file" multiple onChange={handleMarketingAttachmentUpload} className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
+                      {marketingAttachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {marketingAttachments.map((f, i) => (
+                            <span key={i} className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md text-xs text-slate-650">
+                              {f.name}
+                              <button type="button" onClick={() => setMarketingAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={handleMarketingSign} disabled={loading} className="bg-blue-600 text-white px-4 py-2 rounded-lg transition shadow-lg shadow-blue-500/30 hover:bg-blue-700 flex items-center gap-2">
                       <Save className="w-4 h-4" /> Save & Sign
                     </button>
                   </div>
@@ -370,6 +549,24 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                    <div className="bg-slate-50 p-5 border border-slate-200 rounded-xl shadow-sm text-sm text-slate-700">
                      <h4 className="font-semibold text-slate-900 text-base mb-2">Marketing Remarks</h4>
                      <div className="bg-white border border-slate-200 rounded-lg p-4 italic text-slate-600">{deviation.marketingRemarks || 'No remarks provided.'}</div>
+                     {deviation.marketingAttachments && deviation.marketingAttachments.length > 0 && (
+                       <div className="mt-3">
+                         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Marketing Attachments</span>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                           {deviation.marketingAttachments.map((file: any, index: number) => (
+                             <div key={index} className="flex items-center justify-between p-2 bg-white border border-slate-200 rounded-lg text-xs">
+                               <div className="flex items-center gap-2 min-w-0">
+                                 <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                                 <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                               </div>
+                               <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-slate-50 text-slate-500 hover:text-orange-500 rounded border border-transparent hover:border-slate-200 cursor-pointer">
+                                 <Download className="w-3.5 h-3.5" />
+                               </button>
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                     )}
                      <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
                        <CheckCircle className="w-4 h-4 text-green-500" />
                        Signed by <span className="font-semibold">{deviation.marketingPerson?.firstName} {deviation.marketingPerson?.lastName}</span> on {deviation.marketingSignedAt && new Date(deviation.marketingSignedAt).toLocaleString()}
@@ -381,7 +578,21 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                   <div className="bg-amber-50 p-5 border border-amber-200 rounded-xl shadow-sm">
                     <h4 className="font-semibold text-amber-900 text-base mb-4">Plant Head Approval</h4>
                     <p className="text-sm text-amber-700 mb-4">Please review the containment actions, corrective actions, and marketing remarks. Provide any final remarks before escalating to the Quality Head.</p>
-                    <textarea rows={3} className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4" placeholder="Plant Head Remarks (optional)..." value={plantHeadRemark} onChange={(e) => setPlantHeadRemark(e.target.value)} />
+                    <textarea rows={3} className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-3" placeholder="Plant Head Remarks (optional)..." value={plantHeadRemark} onChange={(e) => setPlantHeadRemark(e.target.value)} />
+                    <div className="mb-4">
+                      <label className="block text-xs font-semibold text-amber-800 uppercase mb-1">Optional Attachments</label>
+                      <input type="file" multiple onChange={handlePlantHeadAttachmentUpload} className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-900 hover:file:bg-amber-200 cursor-pointer" />
+                      {plantHeadAttachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {plantHeadAttachments.map((f, i) => (
+                            <span key={i} className="inline-flex items-center gap-1.5 bg-white border border-amber-200 px-2 py-0.5 rounded-md text-xs text-amber-800">
+                              {f.name}
+                              <button type="button" onClick={() => setPlantHeadAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-amber-400 hover:text-amber-600 font-bold">&times;</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button onClick={handlePlantHeadApprove} disabled={loading} className="bg-amber-600 text-white px-5 py-2.5 rounded-lg transition shadow-lg shadow-amber-600/30 hover:bg-amber-700 flex items-center gap-2 font-medium">
                       <CheckCircle className="w-5 h-5" /> Approve & Send to Quality Head
                     </button>
@@ -392,7 +603,21 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                   <div className="bg-amber-50 p-5 border border-amber-200 rounded-xl shadow-sm">
                      <h4 className="font-semibold text-amber-900 text-base mb-4">CEO Approval</h4>
                      <p className="text-sm text-amber-700 mb-4">Please review the containment actions, corrective actions, and marketing remarks. Provide any final remarks before escalating to the Quality Head.</p>
-                     <textarea rows={3} className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4" placeholder="CEO Remarks (optional)..." value={ceoRemark} onChange={(e) => setCeoRemark(e.target.value)} />
+                     <textarea rows={3} className="w-full px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 mb-3" placeholder="CEO Remarks (optional)..." value={ceoRemark} onChange={(e) => setCeoRemark(e.target.value)} />
+                     <div className="mb-4">
+                       <label className="block text-xs font-semibold text-amber-800 uppercase mb-1">Optional Attachments</label>
+                       <input type="file" multiple onChange={handleCeoAttachmentUpload} className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-905 hover:file:bg-amber-200 cursor-pointer" />
+                       {ceoAttachments.length > 0 && (
+                         <div className="flex flex-wrap gap-2 mt-2">
+                           {ceoAttachments.map((f, i) => (
+                             <span key={i} className="inline-flex items-center gap-1.5 bg-white border border-amber-200 px-2 py-0.5 rounded-md text-xs text-amber-800">
+                               {f.name}
+                               <button type="button" onClick={() => setCeoAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-amber-400 hover:text-amber-600 font-bold">&times;</button>
+                             </span>
+                           ))}
+                         </div>
+                       )}
+                     </div>
                      <button onClick={handleCeoApprove} disabled={loading} className="bg-amber-600 text-white px-5 py-2.5 rounded-lg transition shadow-lg shadow-amber-600/30 hover:bg-amber-700 flex items-center gap-2 font-medium">
                        <CheckCircle className="w-5 h-5" /> Approve & Send to Quality Head
                      </button>
@@ -400,32 +625,82 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                 )}
 
                 {deviation.plantHeadId && (
-                   <div className="bg-slate-50 p-5 border border-slate-200 rounded-xl shadow-sm text-sm text-slate-700">
-                     <h4 className="font-semibold text-slate-900 text-base mb-2">Plant Head Remarks</h4>
-                     <div className="bg-white border border-slate-200 rounded-lg p-4 italic text-slate-600">{deviation.plantHeadRemarks || 'No remarks provided.'}</div>
-                     <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                       <CheckCircle className="w-4 h-4 text-green-500" />
-                       Approved by <span className="font-semibold">{deviation.plantHead?.firstName} {deviation.plantHead?.lastName}</span> on {deviation.plantHeadSignedAt && new Date(deviation.plantHeadSignedAt).toLocaleString()}
-                     </div>
-                   </div>
+                    <div className="bg-slate-50 p-5 border border-slate-200 rounded-xl shadow-sm text-sm text-slate-700">
+                      <h4 className="font-semibold text-slate-900 text-base mb-2">Plant Head Remarks</h4>
+                      <div className="bg-white border border-slate-200 rounded-lg p-4 italic text-slate-600">{deviation.plantHeadRemarks || 'No remarks provided.'}</div>
+                      {deviation.plantHeadAttachments && deviation.plantHeadAttachments.length > 0 && (
+                        <div className="mt-3">
+                          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">Plant Head Attachments</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {deviation.plantHeadAttachments.map((file: any, index: number) => (
+                              <div key={index} className="flex items-center justify-between p-2 bg-white border border-slate-200 rounded-lg text-xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                                  <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                                </div>
+                                <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-slate-50 text-slate-500 hover:text-orange-500 rounded border border-transparent hover:border-slate-200 cursor-pointer">
+                                  <Download className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        Approved by <span className="font-semibold">{deviation.plantHead?.firstName} {deviation.plantHead?.lastName}</span> on {deviation.plantHeadSignedAt && new Date(deviation.plantHeadSignedAt).toLocaleString()}
+                      </div>
+                    </div>
                 )}
 
                 {deviation.ceoId && (
-                   <div className="bg-slate-50 p-5 border border-slate-200 rounded-xl shadow-sm text-sm text-slate-700">
-                     <h4 className="font-semibold text-slate-900 text-base mb-2">CEO Remarks</h4>
-                     <div className="bg-white border border-slate-200 rounded-lg p-4 italic text-slate-600">{deviation.ceoRemarks || 'No remarks provided.'}</div>
-                     <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                       <CheckCircle className="w-4 h-4 text-green-500" />
-                       Approved by <span className="font-semibold">{deviation.ceo?.firstName} {deviation.ceo?.lastName}</span> on {deviation.ceoSignedAt && new Date(deviation.ceoSignedAt).toLocaleString()}
-                     </div>
-                   </div>
+                    <div className="bg-slate-50 p-5 border border-slate-200 rounded-xl shadow-sm text-sm text-slate-700">
+                      <h4 className="font-semibold text-slate-900 text-base mb-2">CEO Remarks</h4>
+                      <div className="bg-white border border-slate-200 rounded-lg p-4 italic text-slate-600">{deviation.ceoRemarks || 'No remarks provided.'}</div>
+                      {deviation.ceoAttachments && deviation.ceoAttachments.length > 0 && (
+                        <div className="mt-3">
+                          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5">CEO Attachments</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {deviation.ceoAttachments.map((file: any, index: number) => (
+                              <div key={index} className="flex items-center justify-between p-2 bg-white border border-slate-200 rounded-lg text-xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                                  <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                                </div>
+                                <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-slate-50 text-slate-500 hover:text-orange-500 rounded border border-transparent hover:border-slate-200 cursor-pointer">
+                                  <Download className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        Approved by <span className="font-semibold">{deviation.ceo?.firstName} {deviation.ceo?.lastName}</span> on {deviation.ceoSignedAt && new Date(deviation.ceoSignedAt).toLocaleString()}
+                      </div>
+                    </div>
                 )}
 
                 {deviation.status === 'PENDING_QUALITY_HEAD' && isQualityHead && (
                   <div className="bg-emerald-50 p-5 border border-emerald-200 rounded-xl shadow-sm">
                     <h4 className="font-semibold text-emerald-900 text-base mb-4">Quality Head Final Approval</h4>
                     <p className="text-sm text-emerald-700 mb-4">You are the final approver in this flow. Please provide any conclusive remarks and click approve to completely close this deviation record.</p>
-                    <textarea rows={3} className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-4" placeholder="Quality Head Remarks (optional)..." value={qualityHeadRemark} onChange={(e) => setQualityHeadRemark(e.target.value)} />
+                    <textarea rows={3} className="w-full px-3 py-2 border border-emerald-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 mb-3" placeholder="Quality Head Remarks (optional)..." value={qualityHeadRemark} onChange={(e) => setQualityHeadRemark(e.target.value)} />
+                    <div className="mb-4">
+                      <label className="block text-xs font-semibold text-emerald-800 uppercase mb-1">Optional Attachments</label>
+                      <input type="file" multiple onChange={handleQualityHeadAttachmentUpload} className="block w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-100 file:text-emerald-850 hover:file:bg-emerald-200 cursor-pointer" />
+                      {qualityHeadAttachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {qualityHeadAttachments.map((f, i) => (
+                            <span key={i} className="inline-flex items-center gap-1.5 bg-white border border-emerald-200 px-2 py-0.5 rounded-md text-xs text-emerald-800">
+                              {f.name}
+                              <button type="button" onClick={() => setQualityHeadAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-emerald-450 hover:text-emerald-600 font-bold">&times;</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button onClick={handleQualityHeadApprove} disabled={loading} className="bg-emerald-600 text-white px-5 py-2.5 rounded-lg transition shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 flex items-center gap-2 font-medium">
                       <CheckCircle className="w-5 h-5" /> Finalize & Close Deviation
                     </button>
@@ -437,6 +712,24 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                     <h4 className="font-semibold text-emerald-800 text-base mb-2 flex items-center gap-2"><CheckCircle className="w-5 h-5" /> Final Approval Completed (Quality Head)</h4>
                     {deviation.qualityHeadRemarks && (
                        <div className="bg-white border border-emerald-100 rounded-lg p-4 italic text-emerald-800 mt-2 mb-3">{deviation.qualityHeadRemarks}</div>
+                    )}
+                    {deviation.qualityHeadAttachments && deviation.qualityHeadAttachments.length > 0 && (
+                      <div className="mt-3">
+                        <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wider block mb-1.5">Quality Head Attachments</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {deviation.qualityHeadAttachments.map((file: any, index: number) => (
+                            <div key={index} className="flex items-center justify-between p-2 bg-white border border-emerald-100 rounded-lg text-xs">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <FileText className="w-4 h-4 text-emerald-650 shrink-0" />
+                                <span className="font-bold text-emerald-800 truncate max-w-[200px]">{file.name}</span>
+                              </div>
+                              <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-emerald-50 text-emerald-600 hover:text-emerald-800 rounded border border-transparent hover:border-emerald-100 cursor-pointer">
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                     <p className="text-emerald-700 mt-2">Approved by Quality Head (<span className="font-semibold">{deviation.qualityHead?.firstName} {deviation.qualityHead?.lastName}</span>) on {deviation.qualityHeadSignedAt && new Date(deviation.qualityHeadSignedAt).toLocaleString()}</p>
                   </div>
@@ -499,24 +792,39 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
             )}
           </div>
           
-          <div className="p-6 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end gap-3 shrink-0">
-            <button
-              type="button"
-              className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition"
-              onClick={onClose}
-            >
-              {isNew ? 'Cancel' : 'Close'}
-            </button>
-            {isNew && (
+          <div className="p-6 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-between items-center shrink-0">
+            <div>
+              {!isNew && user?.role === 'admin' && (
+                <button
+                  type="button"
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition shadow-lg shadow-red-500/20 font-medium flex items-center gap-2"
+                  onClick={handleDelete}
+                  disabled={loading}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {loading ? 'Deleting...' : 'Delete Deviation'}
+                </button>
+              )}
+            </div>
+            <div className="flex gap-3">
               <button
                 type="button"
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-lg shadow-blue-500/30 flex items-center justify-center font-medium disabled:opacity-50"
-                onClick={handleCreate}
-                disabled={loading}
+                className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition"
+                onClick={onClose}
               >
-                {loading ? 'Creating...' : 'Create Deviation'}
+                {isNew ? 'Cancel' : 'Close'}
               </button>
-            )}
+              {isNew && (
+                <button
+                  type="button"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-lg shadow-blue-500/30 flex items-center justify-center font-medium disabled:opacity-50"
+                  onClick={handleCreate}
+                  disabled={loading}
+                >
+                  {loading ? 'Creating...' : 'Create Deviation'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, UseGuards, Request, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, Request, Query } from '@nestjs/common';
 import { ProductDeviationService } from './product-deviation.service';
 import { CreateProductDeviationDto, UpdateActionPlanDto, AddMarketingRemarkDto, ApprovePlantHeadDto, ApproveCeoDto, ApproveQualityHeadDto } from './dto/product-deviation.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -51,5 +51,10 @@ export class ProductDeviationController {
     @Put(':id/quality-head')
     approveQualityHead(@Param('id') id: string, @Body() dto: ApproveQualityHeadDto, @Request() req) {
         return this.productDeviationService.approveQualityHead(id, dto, req.user.userId);
+    }
+
+    @Delete(':id')
+    delete(@Param('id') id: string, @Request() req) {
+        return this.productDeviationService.delete(id, req.user.userId);
     }
 }

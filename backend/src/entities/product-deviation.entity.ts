@@ -35,6 +35,9 @@ export class ProductDeviation {
     @Column({ type: 'numeric', nullable: true })
     quantityUnderDeviation: number;
 
+    @Column({ type: 'numeric', nullable: true })
+    quantityUnderDeviationPcs: number;
+
     @Column({ nullable: true })
     natureOfDeviation: string;
 
@@ -127,6 +130,24 @@ export class ProductDeviation {
 
     @Column({ type: 'jsonb', nullable: true })
     attachments: { name: string; fileData: string }[];
+
+    @Column({ type: 'jsonb', nullable: true })
+    marketingAttachments: { name: string; fileData: string }[];
+
+    @Column({ type: 'jsonb', nullable: true })
+    ceoAttachments: { name: string; fileData: string }[];
+
+    @Column({ type: 'jsonb', nullable: true })
+    plantHeadAttachments: { name: string; fileData: string }[];
+
+    @Column({ type: 'jsonb', nullable: true })
+    qualityHeadAttachments: { name: string; fileData: string }[];
+
+    @Column({ type: 'jsonb', nullable: true })
+    actionPlanAttachments: { name: string; fileData: string }[];
+
+    @Column({ default: false })
+    isDeleted: boolean;
 
     @OneToMany(() => AuditLog, (log) => log.productDeviation)
     auditLogs: AuditLog[];

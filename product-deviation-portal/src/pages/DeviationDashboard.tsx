@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Eye, FileText, LogOut, Search, RefreshCw } from 'lucide-react';
+import { Plus, Eye, FileText, LogOut, Search, RefreshCw, HelpCircle } from 'lucide-react';
 import api from '../api';
 import { generateDeviationPdf } from '../utils/generateDeviationPdf';
 import { formatDate } from '../utils/dateFormatter';
+import UserGuideModal from '../components/UserGuideModal';
 
 interface Deviation {
   id: string;
@@ -31,6 +32,7 @@ export default function DeviationDashboard() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   
   const navigate = useNavigate();
   const userString = localStorage.getItem('pd_user');
@@ -100,9 +102,18 @@ export default function DeviationDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsGuideOpen(true)}
+              className="h-11 px-4 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              title="User Guide"
+            >
+              <HelpCircle className="w-4 h-4 text-orange-500" />
+              <span>User Guide</span>
+            </button>
+
             {user && (
-              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="hidden md:flex items-center gap-2 px-3 h-11 bg-slate-50 rounded-xl border border-slate-100 shrink-0">
                 <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-bold text-xs">
                   {user.firstName[0]}
                 </div>
@@ -119,11 +130,11 @@ export default function DeviationDashboard() {
             
             <button 
               onClick={handleLogout}
-              className="p-2.5 bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center gap-2 text-xs font-bold"
+              className="h-11 px-4 bg-slate-50 hover:bg-red-50 text-slate-650 hover:text-red-650 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
               title="Sign Out"
             >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Sign Out</span>
+              <LogOut className="w-4 h-4 text-red-500" />
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
@@ -209,7 +220,7 @@ export default function DeviationDashboard() {
               className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-100 font-bold text-sm cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              Create Deviation
+              New Deviation
             </button>
           </div>
         </section>
@@ -303,6 +314,8 @@ export default function DeviationDashboard() {
       <footer className="bg-white border-t border-slate-200 py-6 mt-8 text-center text-slate-400 text-[10px] tracking-widest uppercase">
         &copy; 2026 Borosil Renewables Ltd. All Rights Reserved.
       </footer>
+
+      <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>
   );
 }

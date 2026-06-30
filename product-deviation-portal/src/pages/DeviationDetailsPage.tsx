@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Clock, Save, FileText, Loader2, AlertCircle, ShieldAlert, Download } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Clock, Save, FileText, Loader2, AlertCircle, ShieldAlert, Download, Trash2, LogOut, HelpCircle } from 'lucide-react';
 import api from '../api';
 import { generateDeviationPdf } from '../utils/generateDeviationPdf';
 import { formatDate, formatDateTime } from '../utils/dateFormatter';
+import UserGuideModal from '../components/UserGuideModal';
 
 export default function DeviationDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -12,10 +13,17 @@ export default function DeviationDetailsPage() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   // Current logged in user context
   const userString = localStorage.getItem('pd_user');
   const user = userString ? JSON.parse(userString) : null;
+
+  const handleLogout = () => {
+    localStorage.removeItem('pd_token');
+    localStorage.removeItem('pd_user');
+    navigate('/login');
+  };
 
   // Config settings
   const [marketingConfigId, setMarketingConfigId] = useState<string | null>(null);
@@ -34,6 +42,78 @@ export default function DeviationDetailsPage() {
   const [plantHeadRemark, setPlantHeadRemark] = useState('');
   const [ceoRemark, setCeoRemark] = useState('');
   const [qualityHeadRemark, setQualityHeadRemark] = useState('');
+
+  // Attachment states for each approval step
+  const [marketingAttachments, setMarketingAttachments] = useState<any[]>([]);
+  const [plantHeadAttachments, setPlantHeadAttachments] = useState<any[]>([]);
+  const [ceoAttachments, setCeoAttachments] = useState<any[]>([]);
+  const [qualityHeadAttachments, setQualityHeadAttachments] = useState<any[]>([]);
+  const [actionPlanAttachments, setActionPlanAttachments] = useState<any[]>([]);
+
+  const handleActionPlanAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setActionPlanAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleMarketingAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMarketingAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handlePlantHeadAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPlantHeadAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleCeoAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCeoAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const handleQualityHeadAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setQualityHeadAttachments(prev => [...prev, { name: file.name, fileData: reader.result as string }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
 
   const downloadAttachment = (file: { name: string; fileData: string }) => {
     const link = document.createElement('a');
@@ -99,7 +179,10 @@ export default function DeviationDetailsPage() {
     }
     setActionLoading(true);
     try {
-      await api.put(`/product-deviation/${id}/action`, actionData);
+      await api.put(`/product-deviation/${id}/action`, { 
+        ...actionData, 
+        attachments: actionPlanAttachments 
+      });
       await fetchDeviationDetails();
     } catch (err: any) {
       console.error(err);
@@ -116,7 +199,10 @@ export default function DeviationDetailsPage() {
     }
     setActionLoading(true);
     try {
-      await api.put(`/product-deviation/${id}/marketing`, { marketingRemarks: marketingRemark });
+      await api.put(`/product-deviation/${id}/marketing`, { 
+        marketingRemarks: marketingRemark,
+        attachments: marketingAttachments 
+      });
       await fetchDeviationDetails();
     } catch (err: any) {
       console.error(err);
@@ -129,7 +215,10 @@ export default function DeviationDetailsPage() {
   const handlePlantHeadApprove = async () => {
     setActionLoading(true);
     try {
-      await api.put(`/product-deviation/${id}/plant-head`, { plantHeadRemarks: plantHeadRemark });
+      await api.put(`/product-deviation/${id}/plant-head`, { 
+        plantHeadRemarks: plantHeadRemark,
+        attachments: plantHeadAttachments 
+      });
       await fetchDeviationDetails();
     } catch (err: any) {
       console.error(err);
@@ -142,7 +231,10 @@ export default function DeviationDetailsPage() {
   const handleCeoApprove = async () => {
     setActionLoading(true);
     try {
-      await api.put(`/product-deviation/${id}/ceo`, { ceoRemarks: ceoRemark });
+      await api.put(`/product-deviation/${id}/ceo`, { 
+        ceoRemarks: ceoRemark,
+        attachments: ceoAttachments 
+      });
       await fetchDeviationDetails();
     } catch (err: any) {
       console.error(err);
@@ -155,11 +247,31 @@ export default function DeviationDetailsPage() {
   const handleQualityHeadApprove = async () => {
     setActionLoading(true);
     try {
-      await api.put(`/product-deviation/${id}/quality-head`, { qualityHeadRemarks: qualityHeadRemark });
+      await api.put(`/product-deviation/${id}/quality-head`, { 
+        qualityHeadRemarks: qualityHeadRemark,
+        attachments: qualityHeadAttachments 
+      });
       await fetchDeviationDetails();
     } catch (err: any) {
       console.error(err);
       alert(err.response?.data?.message || 'Error finalizing deviation record.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this entire product deviation entry? This action cannot be undone.')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await api.delete(`/product-deviation/${id}`);
+      alert('Product deviation deleted successfully.');
+      navigate('/dashboard');
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to delete product deviation.');
     } finally {
       setActionLoading(false);
     }
@@ -203,12 +315,13 @@ export default function DeviationDetailsPage() {
   const isPlantHead = plantHeadConfigId ? user?.id === plantHeadConfigId : user?.role === 'admin';
   const isCeo = ceoConfigId ? user?.id === ceoConfigId : user?.role === 'admin';
   const isQualityHead = qualityHeadConfigId ? user?.id === qualityHeadConfigId : user?.role === 'admin';
+  const isAdmin = user?.role === 'admin';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Navigation Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/dashboard')}
@@ -224,22 +337,66 @@ export default function DeviationDetailsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {isAdmin && (
+              <button
+                onClick={handleDelete}
+                disabled={actionLoading}
+                className="h-11 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl flex items-center gap-2 transition-all shadow-md shadow-rose-100 font-bold text-sm cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            )}
             {deviation.status === 'CLOSED' && (
               <button
                 onClick={() => generateDeviationPdf(deviation)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition-all shadow-md shadow-emerald-100 font-bold text-sm cursor-pointer"
+                className="h-11 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-2 transition-all shadow-md shadow-emerald-100 font-bold text-sm cursor-pointer shrink-0"
               >
                 <FileText className="w-4 h-4" />
                 Export PDF
               </button>
             )}
+
+            <button 
+              onClick={() => setIsGuideOpen(true)}
+              className="h-11 px-4 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              title="User Guide"
+            >
+              <HelpCircle className="w-4 h-4 text-orange-500" />
+              <span>User Guide</span>
+            </button>
+            
+            {user && (
+              <div className="hidden md:flex items-center gap-2 px-3 h-11 bg-slate-50 rounded-xl border border-slate-100 shrink-0">
+                <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-605 font-bold text-xs">
+                  {user.firstName[0]}
+                </div>
+                <div className="text-left">
+                  <div className="text-xs font-bold text-slate-800 leading-tight">
+                    {user.firstName} {user.lastName}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                    {user.role} {user.department ? `| ${user.department}` : ''}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <button 
+              onClick={handleLogout}
+              className="h-11 px-4 bg-slate-50 hover:bg-red-50 text-slate-650 hover:text-red-650 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4 text-red-500" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       </header>
 
       {/* Main Workspace */}
-      <main className="max-w-4xl mx-auto px-6 py-8 flex-1 w-full space-y-6">
+      <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full space-y-6">
         
         {/* Basic Information card */}
         <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
@@ -279,6 +436,12 @@ export default function DeviationDetailsPage() {
               <span className="text-slate-400 font-medium block text-xs">Quantity under Deviation</span>
               <span className="font-bold text-slate-700">{deviation.quantityUnderDeviation} sqm</span>
             </div>
+            {deviation.quantityUnderDeviationPcs !== null && deviation.quantityUnderDeviationPcs !== undefined && (
+              <div>
+                <span className="text-slate-400 font-medium block text-xs">Quantity under Deviation (pcs)</span>
+                <span className="font-bold text-slate-700">{deviation.quantityUnderDeviationPcs} pcs</span>
+              </div>
+            )}
             <div className="col-span-1 md:col-span-2">
               <span className="text-slate-400 font-medium block text-xs">Nature of Deviation</span>
               <span className="font-bold text-slate-800">{deviation.natureOfDeviation}</span>
@@ -399,6 +562,21 @@ export default function DeviationDetailsPage() {
                 />
               </div>
               
+              <div className="space-y-2">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Optional Attachments</label>
+                <input type="file" multiple onChange={handleActionPlanAttachmentUpload} className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer" />
+                {actionPlanAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {actionPlanAttachments.map((f, i) => (
+                      <span key={i} className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl text-xs font-bold text-slate-600">
+                        {f.name}
+                        <button type="button" onClick={() => setActionPlanAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
               <div className="flex justify-end pt-2">
                 <button 
                   onClick={handleActionSign} 
@@ -434,6 +612,24 @@ export default function DeviationDetailsPage() {
                 <span className="text-slate-400 font-medium block text-xs">Disposal Action</span>
                 <span className="font-bold text-slate-700">{deviation.disposalAction || 'N/A'}</span>
               </div>
+              {deviation.actionPlanAttachments && deviation.actionPlanAttachments.length > 0 && (
+                <div className="space-y-1.5 mt-2">
+                  <span className="text-slate-400 font-bold text-[10px] uppercase block tracking-wider">Action Plan Attachments</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {deviation.actionPlanAttachments.map((file: any, index: number) => (
+                      <div key={index} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                          <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                        </div>
+                        <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-white text-slate-500 hover:text-orange-500 rounded-lg border border-transparent hover:border-slate-200 cursor-pointer">
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="italic text-slate-400 text-xs font-semibold py-4 flex items-center justify-center gap-2">
@@ -454,6 +650,20 @@ export default function DeviationDetailsPage() {
               value={marketingRemark} 
               onChange={(e) => setMarketingRemark(e.target.value)} 
             />
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Optional Attachments</label>
+              <input type="file" multiple onChange={handleMarketingAttachmentUpload} className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer" />
+              {marketingAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {marketingAttachments.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl text-xs font-bold text-slate-600">
+                      {f.name}
+                      <button type="button" onClick={() => setMarketingAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-slate-600 font-bold">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex justify-end">
               <button 
                 onClick={handleMarketingSign} 
@@ -474,6 +684,24 @@ export default function DeviationDetailsPage() {
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-slate-600 font-medium text-sm leading-relaxed">
               {deviation.marketingRemarks || 'No remarks provided.'}
             </div>
+            {deviation.marketingAttachments && deviation.marketingAttachments.length > 0 && (
+              <div className="space-y-1.5 mt-2">
+                <span className="text-slate-400 font-bold text-[10px] uppercase block tracking-wider">Marketing Attachments</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {deviation.marketingAttachments.map((file: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                        <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                      </div>
+                      <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-white text-slate-500 hover:text-orange-500 rounded-lg border border-transparent hover:border-slate-200 cursor-pointer">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-50">
               <CheckCircle className="w-4 h-4 text-green-500" />
               <span>Signed by: {deviation.marketingPerson?.firstName} {deviation.marketingPerson?.lastName}</span>
@@ -494,6 +722,20 @@ export default function DeviationDetailsPage() {
               value={plantHeadRemark} 
               onChange={(e) => setPlantHeadRemark(e.target.value)} 
             />
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold text-amber-800 uppercase tracking-widest ml-1">Optional Attachments</label>
+              <input type="file" multiple onChange={handlePlantHeadAttachmentUpload} className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer" />
+              {plantHeadAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {plantHeadAttachments.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1.5 bg-white border border-amber-200 px-2.5 py-1 rounded-xl text-xs font-bold text-amber-800">
+                      {f.name}
+                      <button type="button" onClick={() => setPlantHeadAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-amber-400 hover:text-amber-600 font-bold">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex justify-end">
               <button 
                 onClick={handlePlantHeadApprove} 
@@ -519,6 +761,20 @@ export default function DeviationDetailsPage() {
               value={ceoRemark} 
               onChange={(e) => setCeoRemark(e.target.value)} 
             />
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold text-amber-800 uppercase tracking-widest ml-1">Optional Attachments</label>
+              <input type="file" multiple onChange={handleCeoAttachmentUpload} className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer" />
+              {ceoAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {ceoAttachments.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1.5 bg-white border border-amber-200 px-2.5 py-1 rounded-xl text-xs font-bold text-amber-800">
+                      {f.name}
+                      <button type="button" onClick={() => setCeoAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-amber-400 hover:text-amber-600 font-bold">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex justify-end">
               <button 
                 onClick={handleCeoApprove} 
@@ -539,6 +795,24 @@ export default function DeviationDetailsPage() {
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-slate-600 font-medium text-sm leading-relaxed">
               {deviation.plantHeadRemarks || 'No remarks provided.'}
             </div>
+            {deviation.plantHeadAttachments && deviation.plantHeadAttachments.length > 0 && (
+              <div className="space-y-1.5 mt-2">
+                <span className="text-slate-400 font-bold text-[10px] uppercase block tracking-wider">Plant Head Attachments</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {deviation.plantHeadAttachments.map((file: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                        <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                      </div>
+                      <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-white text-slate-500 hover:text-orange-500 rounded-lg border border-transparent hover:border-slate-200 cursor-pointer">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-50">
               <CheckCircle className="w-4 h-4 text-green-500" />
               <span>Approved by: {deviation.plantHead?.firstName} {deviation.plantHead?.lastName}</span>
@@ -554,6 +828,24 @@ export default function DeviationDetailsPage() {
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-slate-600 font-medium text-sm leading-relaxed">
               {deviation.ceoRemarks || 'No remarks provided.'}
             </div>
+            {deviation.ceoAttachments && deviation.ceoAttachments.length > 0 && (
+              <div className="space-y-1.5 mt-2">
+                <span className="text-slate-400 font-bold text-[10px] uppercase block tracking-wider">CEO Attachments</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {deviation.ceoAttachments.map((file: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                        <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                      </div>
+                      <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-white text-slate-500 hover:text-orange-500 rounded-lg border border-transparent hover:border-slate-200 cursor-pointer">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-50">
               <CheckCircle className="w-4 h-4 text-green-500" />
               <span>Approved by: {deviation.ceo?.firstName} {deviation.ceo?.lastName}</span>
@@ -574,6 +866,20 @@ export default function DeviationDetailsPage() {
               value={qualityHeadRemark} 
               onChange={(e) => setQualityHeadRemark(e.target.value)} 
             />
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold text-emerald-800 uppercase tracking-widest ml-1">Optional Attachments</label>
+              <input type="file" multiple onChange={handleQualityHeadAttachmentUpload} className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200 cursor-pointer" />
+              {qualityHeadAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {qualityHeadAttachments.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1.5 bg-white border border-emerald-200 px-2.5 py-1 rounded-xl text-xs font-bold text-emerald-800">
+                      {f.name}
+                      <button type="button" onClick={() => setQualityHeadAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-emerald-400 hover:text-emerald-600 font-bold">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex justify-end">
               <button 
                 onClick={handleQualityHeadApprove} 
@@ -597,6 +903,24 @@ export default function DeviationDetailsPage() {
             {deviation.qualityHeadRemarks && (
               <div className="p-3 bg-white rounded-xl border border-emerald-100 italic text-emerald-800 font-medium text-sm leading-relaxed">
                 {deviation.qualityHeadRemarks}
+              </div>
+            )}
+            {deviation.qualityHeadAttachments && deviation.qualityHeadAttachments.length > 0 && (
+              <div className="space-y-1.5 mt-2">
+                <span className="text-emerald-800 font-bold text-[10px] uppercase block tracking-wider">Quality Head Attachments</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {deviation.qualityHeadAttachments.map((file: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between p-2.5 bg-white border border-emerald-100 rounded-xl text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-bold text-emerald-850 truncate max-w-[200px]">{file.name}</span>
+                      </div>
+                      <button onClick={() => downloadAttachment(file)} className="p-1 hover:bg-emerald-50 text-emerald-600 hover:text-emerald-850 rounded-lg border border-transparent hover:border-emerald-100 cursor-pointer">
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             <p className="text-[11px] text-emerald-700 font-semibold mt-2">
@@ -658,6 +982,8 @@ export default function DeviationDetailsPage() {
       <footer className="bg-white border-t border-slate-200 py-6 mt-8 text-center text-slate-400 text-[10px] tracking-widest uppercase">
         &copy; 2026 Borosil Renewables Ltd. All Rights Reserved.
       </footer>
+
+      <UserGuideModal isOpen={isGuideOpen} onClose={() => setIsGuideOpen(false)} />
     </div>
   );
 }

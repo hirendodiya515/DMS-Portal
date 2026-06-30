@@ -38,6 +38,7 @@ export class ProductDeviationService {
         
         const lastDeviation = await this.productDeviationRepo.createQueryBuilder('dev')
             .where('dev.serialNumber LIKE :pattern', { pattern: `PD-${year}-${month}-%` })
+            .andWhere('dev.isDeleted = :isDeleted', { isDeleted: false })
             .orderBy('dev.serialNumber', 'DESC')
             .getOne();
 
@@ -134,6 +135,7 @@ export class ProductDeviationService {
             endDate: new Date(createDto.endDate),
             totalQuantityProduced: createDto.totalQuantityProduced,
             quantityUnderDeviation: createDto.quantityUnderDeviation,
+            quantityUnderDeviationPcs: createDto.quantityUnderDeviationPcs,
             natureOfDeviation: createDto.natureOfDeviation,
             initiatorName: createDto.initiatorName,
             attachments: createDto.attachments,
@@ -163,6 +165,7 @@ export class ProductDeviationService {
 
     async findAll() {
         return this.productDeviationRepo.find({
+            where: { isDeleted: false },
             relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead', 'ceo'],
             order: { createdAt: 'DESC' }
         });
@@ -170,7 +173,7 @@ export class ProductDeviationService {
 
     async findOne(id: string) {
         const deviation = await this.productDeviationRepo.findOne({
-            where: { id },
+            where: { id, isDeleted: false },
             relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead', 'ceo', 'auditLogs', 'auditLogs.user'],
         });
         if (!deviation) throw new NotFoundException('Product Deviation not found');
@@ -180,19 +183,20 @@ export class ProductDeviationService {
     }
 
     async getSummary() {
-        const total = await this.productDeviationRepo.count();
+        const total = await this.productDeviationRepo.count({ where: { isDeleted: false } });
         const open = await this.productDeviationRepo.count({
             where: [
-                { status: ProductDeviationStatus.OPEN },
-                { status: ProductDeviationStatus.PENDING_MARKETING },
-                { status: ProductDeviationStatus.PENDING_PLANT_HEAD },
-                { status: ProductDeviationStatus.PENDING_QUALITY_HEAD }
+                { status: ProductDeviationStatus.OPEN, isDeleted: false },
+                { status: ProductDeviationStatus.PENDING_MARKETING, isDeleted: false },
+                { status: ProductDeviationStatus.PENDING_PLANT_HEAD, isDeleted: false },
+                { status: ProductDeviationStatus.PENDING_QUALITY_HEAD, isDeleted: false }
             ]
         });
 
         const rawMonthWise = await this.productDeviationRepo.query(`
             SELECT TO_CHAR("createdAt", 'YYYY-MM') as month, COUNT(*) as count 
             FROM product_deviations 
+            WHERE "isDeleted" = false
             GROUP BY TO_CHAR("createdAt", 'YYYY-MM') 
             ORDER BY month DESC LIMIT 12
         `);
@@ -200,6 +204,7 @@ export class ProductDeviationService {
         const rawDeviationMonthWise = await this.productDeviationRepo.query(`
             SELECT COALESCE(TO_CHAR("startDate", 'YYYY-MM'), 'Unspecified Date') as month, COUNT(*) as count 
             FROM product_deviations 
+            WHERE "isDeleted" = false
             GROUP BY TO_CHAR("startDate", 'YYYY-MM') 
             ORDER BY month DESC LIMIT 12
         `);
@@ -231,6 +236,13 @@ export class ProductDeviationService {
         if (dto.correctiveAction !== undefined) deviation.correctiveAction = dto.correctiveAction;
         if (dto.rootCauseAnalysis !== undefined) deviation.rootCauseAnalysis = dto.rootCauseAnalysis;
         if (dto.disposalAction !== undefined) deviation.disposalAction = dto.disposalAction;
+
+        if (dto.attachments && dto.attachments.length > 0) {
+            deviation.actionPlanAttachments = [
+                ...(deviation.actionPlanAttachments || []),
+                ...dto.attachments
+            ];
+        }
 
         responsibleRecord.signedAt = new Date();
         await this.responsibleRepo.save(responsibleRecord);
@@ -283,6 +295,7 @@ export class ProductDeviationService {
         deviation.marketingPersonId = userId;
         deviation.marketingPerson = { id: userId } as any;
         deviation.marketingSignedAt = new Date();
+        deviation.marketingAttachments = dto.attachments || [];
         deviation.status = ProductDeviationStatus.PENDING_PLANT_HEAD;
 
         await this.productDeviationRepo.save(deviation);
@@ -315,6 +328,7 @@ export class ProductDeviationService {
         deviation.plantHeadId = userId;
         deviation.plantHead = { id: userId } as any;
         deviation.plantHeadSignedAt = new Date();
+        deviation.plantHeadAttachments = dto.attachments || [];
         deviation.status = ProductDeviationStatus.PENDING_QUALITY_HEAD;
 
         await this.productDeviationRepo.save(deviation);
@@ -347,6 +361,7 @@ export class ProductDeviationService {
         deviation.ceoId = userId;
         deviation.ceo = { id: userId } as any;
         deviation.ceoSignedAt = new Date();
+        deviation.ceoAttachments = dto.attachments || [];
         deviation.status = ProductDeviationStatus.PENDING_QUALITY_HEAD;
 
         await this.productDeviationRepo.save(deviation);
@@ -379,6 +394,7 @@ export class ProductDeviationService {
         deviation.qualityHeadId = userId;
         deviation.qualityHead = { id: userId } as any;
         deviation.qualityHeadSignedAt = new Date();
+        deviation.qualityHeadAttachments = dto.attachments || [];
         deviation.status = ProductDeviationStatus.CLOSED;
 
         await this.productDeviationRepo.save(deviation);
@@ -399,10 +415,10 @@ export class ProductDeviationService {
 
         const openDeviations = await this.productDeviationRepo.find({
             where: [
-                { status: ProductDeviationStatus.OPEN },
-                { status: ProductDeviationStatus.PENDING_MARKETING },
-                { status: ProductDeviationStatus.PENDING_PLANT_HEAD },
-                { status: ProductDeviationStatus.PENDING_QUALITY_HEAD }
+                { status: ProductDeviationStatus.OPEN, isDeleted: false },
+                { status: ProductDeviationStatus.PENDING_MARKETING, isDeleted: false },
+                { status: ProductDeviationStatus.PENDING_PLANT_HEAD, isDeleted: false },
+                { status: ProductDeviationStatus.PENDING_QUALITY_HEAD, isDeleted: false }
             ]
         });
 
@@ -415,5 +431,21 @@ export class ProductDeviationService {
                 await this.triggerWorkflowEmail(dev.id);
             }
         }
+    }
+
+    async delete(id: string, userId: string) {
+        const user = await this.userRepo.findOne({ where: { id: userId } });
+        if (!user || user.role !== UserRole.ADMIN) {
+            throw new ForbiddenException('Only admin users can delete deviations.');
+        }
+
+        const deviation = await this.productDeviationRepo.findOne({ where: { id } });
+        if (!deviation) throw new NotFoundException('Product Deviation not found');
+
+        deviation.isDeleted = true;
+        await this.productDeviationRepo.save(deviation);
+
+        await this.logAction(AuditAction.DELETE, userId, id, 'Soft-deleted Product Deviation');
+        return { success: true };
     }
 }
