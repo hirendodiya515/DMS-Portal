@@ -15,6 +15,21 @@ import {
 
 const changeLog = [
   {
+    version: '3.5.0',
+    date: '30 June 2026',
+    title: 'Product Deviation Portal Upgrades & Interactive User Guidelines',
+    changes: [
+      'Integrated Quantity Under Deviation field mapped in both pcs and sqm to track physical defect volume',
+      'Added CEO and Plant Head joint/parallel approvals stage allowing either authority to advance the workflow',
+      'Enabled optional file attachments for HOD, CEO, Plant Head, and Quality Head sign-offs with Base64 document persistence',
+      'Added optional containment evidence uploads for responsible persons with automatic multi-person file concatenation',
+      'Engineered secure administrator-only soft-delete capability that preserves sequential number auditing without sequence gaps',
+      'Rendered official standard document control headers (Doc no.: MR/L4/013, Rev date: 01.07.2026) in PDF report exports',
+      'Designed an interactive User Guide modal simulating Login layout, workspace headers, metric counters, creation form hover tooltips, and email alerts',
+      'Upgraded page and header widths to max-w-7xl, embedding user profiles and logout buttons for consistent desktop navigation'
+    ]
+  },
+  {
     version: '3.4.0',
     date: '24 June 2026',
     title: 'Local AI Agent Integration & Streaming Copilot',
@@ -304,7 +319,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v3.4.0
+                    v3.5.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>
