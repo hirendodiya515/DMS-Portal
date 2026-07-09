@@ -91,21 +91,21 @@ export default function DeviationDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Top Navigation Bar */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/85 sticky top-0 z-40 shadow-soft">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="Borosil Logo" className="h-10 w-auto object-contain" />
             <div className="h-8 w-[1px] bg-slate-200 mx-1"></div>
             <div>
-              <h1 className="text-lg font-black text-slate-800 tracking-tight uppercase">Product Deviation Portal</h1>
-              <p className="text-xs text-slate-400 font-medium font-sans">Integrated Document Management System</p>
+              <h1 className="text-base font-black text-slate-800 tracking-tight uppercase">Product Deviation Portal</h1>
+              <p className="text-[10px] text-slate-450 font-bold uppercase tracking-wider font-sans">Integrated Document Management System</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsGuideOpen(true)}
-              className="h-11 px-4 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              className="h-11 px-4 bg-slate-100/50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-xl border border-slate-200/80 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0 hover:scale-102 active:scale-98"
               title="User Guide"
             >
               <HelpCircle className="w-4 h-4 text-orange-500" />
@@ -113,7 +113,7 @@ export default function DeviationDashboard() {
             </button>
 
             {user && (
-              <div className="hidden md:flex items-center gap-2 px-3 h-11 bg-slate-50 rounded-xl border border-slate-100 shrink-0">
+              <div className="hidden md:flex items-center gap-2 px-3.5 h-11 bg-slate-100/50 rounded-xl border border-slate-200/80 shrink-0 shadow-sm">
                 <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-bold text-xs">
                   {user.firstName[0]}
                 </div>
@@ -130,7 +130,7 @@ export default function DeviationDashboard() {
             
             <button 
               onClick={handleLogout}
-              className="h-11 px-4 bg-slate-50 hover:bg-red-50 text-slate-650 hover:text-red-650 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              className="h-11 px-4 bg-slate-100/50 hover:bg-red-50 text-slate-650 hover:text-red-650 rounded-xl border border-slate-200/80 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0 hover:scale-102 active:scale-98"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4 text-red-500" />
@@ -144,56 +144,60 @@ export default function DeviationDashboard() {
       <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full space-y-6">
         
         {/* Dashboard metrics */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Total Deviations</span>
-            <div className="flex items-baseline justify-between mt-2">
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-soft flex flex-col justify-between relative overflow-hidden group hover:shadow-premium hover:-translate-y-0.5 transition-all duration-300 min-h-[110px]">
+            <span className="text-[10px] font-bold text-slate-450 uppercase tracking-widest block relative z-10">Total Deviations</span>
+            <div className="flex items-baseline justify-between mt-2 relative z-10">
               <span className="text-3xl font-black text-slate-800">{stats.total}</span>
-              <span className="p-1 px-2 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-md">All time</span>
+              <span className="p-1 px-2 text-[9px] font-bold bg-slate-100 text-slate-600 rounded-lg">All time</span>
             </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-80 group-hover:opacity-100 transition-opacity"></div>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Active (Open)</span>
-            <div className="flex items-baseline justify-between mt-2">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-soft flex flex-col justify-between relative overflow-hidden group hover:shadow-premium hover:-translate-y-0.5 transition-all duration-300 min-h-[110px]">
+            <span className="text-[10px] font-bold text-slate-450 uppercase tracking-widest block relative z-10">Active (Open)</span>
+            <div className="flex items-baseline justify-between mt-2 relative z-10">
               <span className="text-3xl font-black text-rose-600">{stats.open}</span>
-              <span className="p-1 px-2 text-[10px] font-bold bg-rose-50 text-rose-600 rounded-md">Requires action</span>
+              <span className="p-1 px-2 text-[9px] font-bold bg-rose-50 text-rose-600 rounded-lg">Requires action</span>
             </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 to-orange-500 opacity-80 group-hover:opacity-100 transition-opacity"></div>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Pending Approval</span>
-            <div className="flex items-baseline justify-between mt-2">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-soft flex flex-col justify-between relative overflow-hidden group hover:shadow-premium hover:-translate-y-0.5 transition-all duration-300 min-h-[110px]">
+            <span className="text-[10px] font-bold text-slate-455 uppercase tracking-widest block relative z-10">Pending Approval</span>
+            <div className="flex items-baseline justify-between mt-2 relative z-10">
               <span className="text-3xl font-black text-amber-600">{stats.pending}</span>
-              <span className="p-1 px-2 text-[10px] font-bold bg-amber-50 text-amber-600 rounded-md">In workflow</span>
+              <span className="p-1 px-2 text-[9px] font-bold bg-amber-50 text-amber-600 rounded-lg">In workflow</span>
             </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-yellow-500 opacity-80 group-hover:opacity-100 transition-opacity"></div>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Closed Deviations</span>
-            <div className="flex items-baseline justify-between mt-2">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-soft flex flex-col justify-between relative overflow-hidden group hover:shadow-premium hover:-translate-y-0.5 transition-all duration-300 min-h-[110px]">
+            <span className="text-[10px] font-bold text-slate-455 uppercase tracking-widest block relative z-10">Closed Deviations</span>
+            <div className="flex items-baseline justify-between mt-2 relative z-10">
               <span className="text-3xl font-black text-emerald-600">{stats.closed}</span>
-              <span className="p-1 px-2 text-[10px] font-bold bg-emerald-50 text-emerald-600 rounded-md">Archived</span>
+              <span className="p-1 px-2 text-[9px] font-bold bg-emerald-50 text-emerald-600 rounded-lg">Archived</span>
             </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500 opacity-80 group-hover:opacity-100 transition-opacity"></div>
           </div>
         </section>
 
         {/* Action and Filtering Row */}
-        <section className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+        <section className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-soft">
           <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-450" />
               <input
                 type="text"
                 placeholder="Search by Sr No, Line, Nature, Creator..."
-                className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-100 focus:border-orange-500 rounded-xl outline-none transition-all font-medium"
+                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200/85 focus:border-orange-500 focus:bg-white rounded-xl outline-none transition-all font-medium text-slate-700"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             
             <select
-              className="px-3 py-2 text-sm bg-slate-50 border border-slate-100 focus:border-orange-500 rounded-xl outline-none font-medium text-slate-600"
+              className="px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200/85 focus:border-orange-500 focus:bg-white rounded-xl outline-none font-medium text-slate-650 transition-all"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
@@ -209,7 +213,7 @@ export default function DeviationDashboard() {
           <div className="flex items-center gap-2">
             <button
               onClick={fetchDeviations}
-              className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-100 rounded-xl transition-all cursor-pointer"
+              className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/80 rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm"
               title="Refresh"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -217,7 +221,7 @@ export default function DeviationDashboard() {
             
             <button
               onClick={() => navigate('/new-deviation')}
-              className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-100 font-bold text-sm cursor-pointer"
+              className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-500/20 font-bold text-sm cursor-pointer hover:-translate-y-0.5 active:translate-y-0"
             >
               <Plus className="w-4 h-4" />
               New Deviation
@@ -226,10 +230,10 @@ export default function DeviationDashboard() {
         </section>
 
         {/* Deviations List Table */}
-        <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <section className="bg-white rounded-2xl border border-slate-200/80 shadow-soft overflow-hidden">
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full border-collapse text-left text-sm text-slate-600">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-bold tracking-widest border-b border-slate-100">
+              <thead className="bg-slate-50/70 text-slate-500 uppercase text-[9px] font-bold tracking-widest border-b border-slate-200/80">
                 <tr>
                   <th className="py-4 px-6">Sr No. / Line</th>
                   <th className="py-4 px-6">Nature of Deviation</th>
@@ -242,12 +246,12 @@ export default function DeviationDashboard() {
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {filteredDeviations.map((dev) => (
-                  <tr key={dev.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-4 px-6 font-bold text-slate-800">
+                  <tr key={dev.id} className="hover:bg-slate-50/40 transition-colors">
+                    <td className="py-4 px-6 font-bold text-slate-850">
                       <div>{dev.serialNumber}</div>
-                      <div className="text-[10px] text-slate-400 font-medium">Line: {dev.line}</div>
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5">Line: {dev.line}</div>
                     </td>
-                    <td className="py-4 px-6 font-medium text-slate-600 max-w-xs truncate" title={dev.natureOfDeviation}>
+                    <td className="py-4 px-6 font-medium text-slate-650 max-w-xs truncate" title={dev.natureOfDeviation}>
                       {dev.natureOfDeviation}
                     </td>
                     <td className="py-4 px-6 font-medium text-slate-500">
@@ -261,9 +265,9 @@ export default function DeviationDashboard() {
                     </td>
                     <td className="py-4 px-6">
                       <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
-                        dev.status === 'CLOSED' ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/10' :
-                        dev.status === 'OPEN' ? 'bg-rose-50 text-rose-700 ring-rose-600/10' :
-                        'bg-amber-50 text-amber-800 ring-amber-600/10'
+                        dev.status === 'CLOSED' ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/10 border border-emerald-100' :
+                        dev.status === 'OPEN' ? 'bg-rose-50 text-rose-700 ring-rose-600/10 border border-rose-100' :
+                        'bg-amber-50 text-amber-800 ring-amber-600/10 border border-amber-100'
                       }`}>
                         {dev.status.replace(/_/g, ' ')}
                       </span>
@@ -273,7 +277,7 @@ export default function DeviationDashboard() {
                         {dev.status === 'CLOSED' && (
                           <button
                             onClick={() => generateDeviationPdf(dev)}
-                            className="text-emerald-600 hover:text-emerald-800 font-bold flex items-center gap-1.5 transition-colors bg-emerald-50 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer border border-emerald-100"
+                            className="text-emerald-700 hover:text-white font-bold flex items-center gap-1.5 transition-all bg-emerald-50 hover:bg-emerald-600 px-3 py-2 rounded-xl text-xs cursor-pointer border border-emerald-150 shadow-sm hover:shadow-md active:scale-95"
                             title="Download PDF Report"
                           >
                             <FileText className="w-3.5 h-3.5" /> PDF
@@ -281,7 +285,7 @@ export default function DeviationDashboard() {
                         )}
                         <button
                           onClick={() => navigate(`/deviation/${dev.id}`)}
-                          className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1.5 transition-colors bg-blue-50 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer border border-blue-100"
+                          className="text-blue-700 hover:text-white font-bold flex items-center gap-1.5 transition-all bg-blue-50 hover:bg-blue-600 px-3 py-2 rounded-xl text-xs cursor-pointer border border-blue-150 shadow-sm hover:shadow-md active:scale-95"
                         >
                           <Eye className="w-3.5 h-3.5" /> View
                         </button>

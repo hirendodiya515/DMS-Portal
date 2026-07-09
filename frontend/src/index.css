@@ -2,19 +2,20 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Main Theme Variables - Clean, light theme with soft slate-blue backgrounds and rich blue accents */
+    --background: 210 40% 98%;      /* Very soft slate-gray background so white cards stand out */
+    --foreground: 222.2 47.4% 11.2%; /* Deep slate-gray text */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;               /* Pure white cards */
+    --card-foreground: 222.2 47.4% 11.2%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 222.2 47.4% 11.2%;
 
-    --primary: 222.2 47.4% 11.2%;
+    --primary: 221.2 83.2% 53.3%;    /* Sapphire Blue (blue-600) */
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96.1%;
+    --secondary: 210 40% 96.1%;      /* Soft blue-gray */
     --secondary-foreground: 222.2 47.4% 11.2%;
 
     --muted: 210 40% 96.1%;
@@ -26,11 +27,11 @@
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 214.3 32% 91%;        /* Soft borders */
+    --input: 214.3 32% 91%;
+    --ring: 221.2 83.2% 53.3%;       /* Ring focus color matches primary */
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;               /* Refined, modern rounded corners */
   }
 
   .dark {
@@ -71,12 +72,31 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
+}
+
+/* Glassmorphism card utility */
+.glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Premium shadows */
+.shadow-soft {
+  box-shadow: 0 4px 20px -2px rgba(51, 65, 85, 0.05), 0 2px 8px -1px rgba(51, 65, 85, 0.03);
+}
+
+.shadow-premium {
+  box-shadow: 0 10px 30px -10px rgba(51, 65, 85, 0.08), 0 1px 3px -1px rgba(51, 65, 85, 0.03);
 }
 
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -84,10 +104,10 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #334155; /* slate-700 */
-  border-radius: 20px;
+  background-color: rgba(148, 163, 184, 0.3); /* slate-400 with opacity */
+  border-radius: 9999px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #475569; /* slate-600 */
+  background-color: rgba(100, 116, 139, 0.5); /* slate-500 with opacity */
 }

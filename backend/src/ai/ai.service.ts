@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, ILike, In, Like, LessThan, Between } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -77,10 +77,32 @@ export class AiService {
         const contextParts: string[] = [];
         const today = new Date();
 
-        // Helper to match user query against a list of dynamic database departments/categories
-        const matchDepartment = (depts: string[]): string[] => {
-            return depts.filter(d => d && queryLower.includes(d.toLowerCase()));
-        };
+        // Standard system departments for fallback matching
+        const systemDepts = ['tempering', 'furnace', 'annealed packing', 'warehouse', 'quality', 'qc', 'hr', 'mr', 'maintenance', 'store', 'production'];
+        const matchedDepts = systemDepts.filter(d => queryLower.includes(d));
+
+        // Global System Status Summary (extremely fast counts to give the AI a high-level system map)
+        try {
+            const [docCount, approvedDocsCount, eqCount, overdueEqCount, prodDevCount, procDevCount, mocCount] = await Promise.all([
+                this.docRepo.count(),
+                this.docRepo.count({ where: { status: 'approved' as any } }),
+                this.eqRepo.count(),
+                this.eqRepo.count({ where: { status: 'active' as any, nextCalibrationDate: LessThan(today) } }),
+                this.prodDevRepo.count(),
+                this.procDevRepo.count(),
+                this.mocRepo.count()
+            ]);
+
+            contextParts.push(
+                `### DMS Global Live Overview:\n` +
+                `- Document Library: ${approvedDocsCount} Approved / ${docCount} Total\n` +
+                `- Calibration & Instruments: ${overdueEqCount} Overdue / ${eqCount} Total\n` +
+                `- Deviations: ${prodDevCount} Product / ${procDevCount} Process\n` +
+                `- Management of Change (MOC): ${mocCount} Records\n`
+            );
+        } catch (e) {
+            this.logger.error('Failed to query global DMS summary', e.message);
+        }
 
         // 1. Audit / Participant Check
         if (
@@ -89,78 +111,121 @@ export class AiService {
             queryLower.includes('plan') || 
             queryLower.includes('auditor') || 
             queryLower.includes('auditee') ||
-            queryLower.includes('participant')
+            queryLower.includes('participant') ||
+            queryLower.includes('june') || queryLower.includes('july') || queryLower.includes('august')
         ) {
             try {
-                // Fetch all registered participants (Auditors and Auditees)
-                const participants = await this.participantRepo.find();
-                const auditors = participants.filter(p => p.type === 'auditor');
-                const auditees = participants.filter(p => p.type === 'auditee');
+                // Fetch participants selectively or search by name if present
+                const queryWords = queryLower.split(/[^a-z0-9]/).filter(w => w.length > 2 && !['audit', 'plan', 'schedule', 'june', 'july', 'august'].includes(w));
+                let matchedParticipants: AuditParticipant[] = [];
+                if (queryWords.length > 0) {
+                    matchedParticipants = await this.participantRepo.find({
+                        where: queryWords.map(w => ({ name: ILike(`%${w}%`) })),
+                        take: 5
+                    });
+                }
+
+                // Get participant and auditor/auditee counts directly
+                const auditorsCount = await this.participantRepo.count({ where: { type: 'auditor' as any } });
+                const auditeesCount = await this.participantRepo.count({ where: { type: 'auditee' as any } });
 
                 let auditText = `### Audit System Status:\n` +
-                    `- Total Auditors: ${auditors.length}\n` +
-                    `- Total Auditees: ${auditees.length}\n\n`;
+                    `- Total Auditors: ${auditorsCount}\n` +
+                    `- Total Auditees: ${auditeesCount}\n\n`;
 
-                // Specific person search in participants
-                const matchedParticipants = participants.filter(p => p.name && queryLower.includes(p.name.toLowerCase()));
                 if (matchedParticipants.length > 0) {
                     auditText += `### Matched Audit Participants:\n` +
                         matchedParticipants.map(p => `- Name: ${p.name}, Email: ${p.email}, Type: ${p.type.toUpperCase()}, Department: ${p.department || 'N/A'}`).join('\n') + '\n\n';
                 }
 
-                // Dynamic department filter
-                const uniqueDepts = Array.from(new Set(participants.map(p => p.department).filter((d): d is string => !!d && d.trim() !== '')));
-                const matchedDepts = matchDepartment(uniqueDepts);
-                if (matchedDepts.length > 0) {
-                    auditText += `### Registered Auditees for Requested Departments:\n`;
-                    for (const dept of matchedDepts) {
-                        const deptAuditees = auditees.filter(a => a.department && a.department.toLowerCase() === dept.toLowerCase());
-                        if (deptAuditees.length > 0) {
-                            auditText += `- ${dept.toUpperCase()}: ` + deptAuditees.map(a => `${a.name} (${a.email})`).join(', ') + '\n';
+                // Audit Month plans checks
+                const monthMapping: { [key: string]: string } = {
+                    january: '01', jan: '01',
+                    february: '02', feb: '02',
+                    march: '03', mar: '03',
+                    april: '04', apr: '04',
+                    may: '05',
+                    june: '06', jun: '06',
+                    july: '07', jul: '07',
+                    august: '08', aug: '08',
+                    september: '09', sep: '09',
+                    october: '10', oct: '10',
+                    november: '11', nov: '11',
+                    december: '12', dec: '12'
+                };
+
+                const yearMatch = queryLower.match(/\b(20\d{2})\b/);
+                const queryYearStr = yearMatch ? yearMatch[1] : today.getFullYear().toString();
+                const queryYearNum = yearMatch ? parseInt(yearMatch[1], 10) : today.getFullYear();
+                const matchedMonthNames = Object.keys(monthMapping).filter(m => queryLower.includes(m));
+
+                if (matchedMonthNames.length > 0) {
+                    const monthQueries: any[] = [];
+                    for (const mName of matchedMonthNames) {
+                        const mNum = monthMapping[mName];
+                        if (yearMatch) {
+                            monthQueries.push({ month: Like(`${queryYearStr}-${mNum}%`) });
                         } else {
-                            auditText += `- ${dept.toUpperCase()}: No registered auditees.\n`;
+                            monthQueries.push({ month: Like(`%-${mNum}%`) });
                         }
                     }
-                    auditText += '\n';
+
+                    const monthPlans = await this.planRepo.find({
+                        where: monthQueries,
+                        take: 15
+                    });
+                    if (monthPlans.length > 0) {
+                        auditText += `### Audit Plans for Requested Months:\n` +
+                            monthPlans.map(p => `- Dept: ${p.department}, Month: ${p.month}, Status: ${p.isPlanned ? 'Planned' : 'Unplanned'}, Outcome: ${p.outcome || 'Pending'}`).join('\n') + '\n\n';
+                    }
                 }
 
-                // Month checks (e.g. "Planned in June")
-                const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december', 'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-                const matchedMonths = months.filter(m => queryLower.includes(m));
+                // Schedules summary & list
+                const schedulesCount = await this.schedRepo.count();
+                const completedCount = await this.schedRepo.count({ where: { status: 'Completed' as any } });
                 
-                // Fetch audit schedules & plans
-                const schedules = await this.schedRepo.find({ relations: ['auditors'] });
-                const plans = await this.planRepo.find();
+                auditText += `### Audit Schedule Summary:\n` +
+                    `- Total Audits Scheduled: ${schedulesCount}\n` +
+                    `- Completed Audits: ${completedCount}\n\n`;
 
-                if (matchedMonths.length > 0) {
-                    auditText += `### Audit Plans for Requested Months:\n`;
-                    for (const m of matchedMonths) {
-                        const monthPlans = plans.filter(p => p.month && p.month.toLowerCase().includes(m));
-                        if (monthPlans.length > 0) {
-                            auditText += monthPlans.map(p => `- Dept: ${p.department}, Month: ${p.month}, Status: ${p.isPlanned ? 'Planned' : 'Unplanned'}, Outcome: ${p.outcome || 'Pending'}`).join('\n') + '\n';
+                // Fetch schedules if user asks for schedules, department, or a specific month/year
+                if (queryLower.includes('schedule') || queryLower.includes('upcoming') || matchedDepts.length > 0 || matchedMonthNames.length > 0) {
+                    const whereConditions: any[] = [];
+
+                    // 1. Department match
+                    if (matchedDepts.length > 0) {
+                        matchedDepts.forEach(d => {
+                            whereConditions.push({ department: ILike(`%${d}%`) });
+                        });
+                    }
+
+                    // 2. Month/Year match
+                    if (matchedMonthNames.length > 0) {
+                        for (const mName of matchedMonthNames) {
+                            const mNum = parseInt(monthMapping[mName], 10);
+                            const startDate = new Date(queryYearNum, mNum - 1, 1);
+                            const endDate = new Date(queryYearNum, mNum, 1);
+
+                            if (whereConditions.length > 0) {
+                                whereConditions.forEach(cond => {
+                                    cond.date = Between(startDate, endDate);
+                                });
+                            } else {
+                                whereConditions.push({ date: Between(startDate, endDate) });
+                            }
                         }
                     }
-                    auditText += '\n';
-                }
 
-                // General Audit schedules summary
-                if (schedules.length > 0) {
-                    const upcoming = schedules.filter(s => new Date(s.date) >= today);
-                    const completed = schedules.filter(s => s.status as string === 'completed');
-                    auditText += `### Audit Schedule Summary:\n` +
-                        `- Total Audits Scheduled: ${schedules.length}\n` +
-                        `- Completed Audits: ${completed.length}\n` +
-                        `- Upcoming Audits: ${upcoming.length}\n\n`;
+                    const targetSchedules = await this.schedRepo.find({
+                        where: whereConditions.length > 0 ? whereConditions : {},
+                        relations: ['auditors'],
+                        order: { date: 'DESC' },
+                        take: 15
+                    });
 
-                    if (queryLower.includes('schedule') || queryLower.includes('upcoming') || matchedDepts.length > 0) {
-                        const targetSchedules = matchedDepts.length > 0 
-                            ? schedules.filter(s => matchedDepts.some(d => s.department && s.department.toLowerCase().includes(d.toLowerCase())))
-                            : schedules.slice(0, 15);
-                        
-                        if (targetSchedules.length > 0) {
-                            auditText += `### Detailed Audit Schedules:\n` +
-                                targetSchedules.map(s => `- Dept: ${s.department}, Date: ${new Date(s.date).toLocaleDateString()}, Scope: ${s.scope}, Status: ${s.status}, Auditors: ${s.auditors && s.auditors.length > 0 ? s.auditors.map(a => a.name).join(', ') : 'None'}`).join('\n') + '\n\n';
-                        }
+                    if (targetSchedules.length > 0) {
+                        auditText += `### Detailed Audit Schedules:\n` +
+                            targetSchedules.map(s => `- Dept: ${s.department}, Date: ${new Date(s.date).toLocaleDateString()}, Scope: ${s.scope}, Status: ${s.status}, Auditors: ${s.auditors && s.auditors.length > 0 ? s.auditors.map(a => a.name).join(', ') : 'None'}`).join('\n') + '\n\n';
                     }
                 }
 
@@ -171,24 +236,40 @@ export class AiService {
         }
 
         // 2. Equipment & Calibration check
-        if (queryLower.includes('calibrat') || queryLower.includes('equipment') || queryLower.includes('instrument') || queryLower.includes('measurement') || queryLower.includes('maintenance')) {
+        if (
+            queryLower.includes('calibrat') || 
+            queryLower.includes('equipment') || 
+            queryLower.includes('instrument') || 
+            queryLower.includes('measurement') || 
+            queryLower.includes('maintenance') || 
+            queryLower.includes('plunger') || 
+            queryLower.includes('calib')
+        ) {
             try {
-                const allEq = await this.eqRepo.find();
-                const activeEq = allEq.filter(e => e.status as string === 'Active');
-                const maintenanceEq = allEq.filter(e => e.status as string === 'Maintenance' || e.status as string === 'Inactive');
-                const overdueEq = allEq.filter(e => e.nextCalibrationDate && new Date(e.nextCalibrationDate) < today && e.status as string !== 'Maintenance' && e.status as string !== 'Inactive');
+                // Total counts
+                const totalEq = await this.eqRepo.count();
+                const activeEqCount = await this.eqRepo.count({ where: { status: 'active' as any } });
+                const maintenanceEqCount = await this.eqRepo.count({ where: { status: In(['maintenance', 'inactive'] as any[]) } });
+                const overdueEqCount = await this.eqRepo.count({ where: { status: 'active' as any, nextCalibrationDate: LessThan(today) } });
 
                 let eqText = `### Calibration & Equipment Summary:\n` +
-                    `- Total Instruments: ${allEq.length}\n` +
-                    `- Active Instruments: ${activeEq.length}\n` +
-                    `- Under Maintenance / Inactive: ${maintenanceEq.length}\n` +
-                    `- Overdue for Calibration: ${overdueEq.length}\n\n`;
+                    `- Total Instruments: ${totalEq}\n` +
+                    `- Active Instruments: ${activeEqCount}\n` +
+                    `- Under Maintenance / Inactive: ${maintenanceEqCount}\n` +
+                    `- Overdue for Calibration: ${overdueEqCount}\n\n`;
 
-                // Specific equipment match by number or name (e.g. "E-101" or "Vernier")
-                const matchedEq = allEq.filter(e => 
-                    (e.equipmentNumber && queryLower.includes(e.equipmentNumber.toLowerCase())) ||
-                    (e.name && queryLower.includes(e.name.toLowerCase()))
-                );
+                // Targeted equipment search (Ensure plunger or serial matches always work!)
+                let matchedEq: Equipment[] = [];
+                const searchTerms = queryLower.split(/[^a-z0-9]/).filter(w => w.length > 2 && !['due', 'sop', 'give', 'the', 'calibration', 'calib'].includes(w));
+                if (searchTerms.length > 0) {
+                    matchedEq = await this.eqRepo.find({
+                        where: [
+                            ...searchTerms.map(term => ({ name: ILike(`%${term}%`) })),
+                            ...searchTerms.map(term => ({ equipmentNumber: ILike(`%${term}%`) }))
+                        ],
+                        take: 5
+                    });
+                }
                 if (matchedEq.length > 0) {
                     eqText += `### Matched Instruments:\n` +
                         matchedEq.map(e => `- No: ${e.equipmentNumber}, Name: ${e.name}, Location: ${e.location || 'N/A'}, Dept: ${e.department}, Status: ${e.status}, Next Calib: ${e.nextCalibrationDate ? new Date(e.nextCalibrationDate).toLocaleDateString() : 'N/A'}`).join('\n') + '\n\n';
@@ -196,6 +277,11 @@ export class AiService {
 
                 // If asking about overdue
                 if (queryLower.includes('overdue') || queryLower.includes('due') || queryLower.includes('pending')) {
+                    const overdueEq = await this.eqRepo.find({
+                        where: { status: 'active' as any, nextCalibrationDate: LessThan(today) },
+                        order: { nextCalibrationDate: 'ASC' },
+                        take: 15
+                    });
                     if (overdueEq.length > 0) {
                         eqText += `### Overdue Instruments:\n` +
                             overdueEq.map(e => `- No: ${e.equipmentNumber}, Name: ${e.name}, Dept: ${e.department}, Next Calib: ${e.nextCalibrationDate ? new Date(e.nextCalibrationDate).toLocaleDateString() : 'N/A'}`).join('\n') + '\n\n';
@@ -206,22 +292,25 @@ export class AiService {
 
                 // If asking about maintenance
                 if (queryLower.includes('maintenance') || queryLower.includes('inactive')) {
+                    const maintenanceEq = await this.eqRepo.find({
+                        where: { status: In(['maintenance', 'inactive'] as any[]) },
+                        take: 15
+                    });
                     if (maintenanceEq.length > 0) {
                         eqText += `### Instruments under Maintenance / Inactive:\n` +
                             maintenanceEq.map(e => `- No: ${e.equipmentNumber}, Name: ${e.name}, Dept: ${e.department}, Status: ${e.status}`).join('\n') + '\n\n';
                     }
                 }
 
-                // Filter by department
-                const uniqueDepts = Array.from(new Set(allEq.map(e => e.department).filter((d): d is string => !!d && d.trim() !== '')));
-                const matchedDepts = matchDepartment(uniqueDepts);
+                // Filter by department (if no matched equipment details are listed)
                 if (matchedDepts.length > 0 && matchedEq.length === 0) {
-                    eqText += `### Instruments in Requested Departments:\n`;
-                    for (const dept of matchedDepts) {
-                        const deptEq = allEq.filter(e => e.department && e.department.toLowerCase() === dept.toLowerCase());
-                        if (deptEq.length > 0) {
-                            eqText += `For ${dept.toUpperCase()}:\n` + deptEq.slice(0, 10).map(e => `- No: ${e.equipmentNumber}, Name: ${e.name}, Status: ${e.status}`).join('\n') + '\n';
-                        }
+                    const deptEq = await this.eqRepo.find({
+                        where: matchedDepts.map(d => ({ department: ILike(`%${d}%`) })),
+                        take: 15
+                    });
+                    if (deptEq.length > 0) {
+                        eqText += `### Instruments in Requested Departments:\n` +
+                            deptEq.map(e => `- No: ${e.equipmentNumber}, Name: ${e.name}, Status: ${e.status}, Dept: ${e.department}`).join('\n') + '\n\n';
                     }
                 }
 
@@ -232,53 +321,71 @@ export class AiService {
         }
 
         // 3. Document check
-        if (queryLower.includes('document') || queryLower.includes('sop') || queryLower.includes('policy') || queryLower.includes('procedure') || queryLower.includes('manual') || queryLower.includes('format')) {
+        if (
+            queryLower.includes('document') || 
+            queryLower.includes('sop') || 
+            queryLower.includes('policy') || 
+            queryLower.includes('procedure') || 
+            queryLower.includes('manual') || 
+            queryLower.includes('format')
+        ) {
             try {
-                const allDocs = await this.docRepo.find();
-                const approved = allDocs.filter(d => d.status === 'approved' as any);
-                const draft = allDocs.filter(d => d.status === 'draft' as any);
-                const review = allDocs.filter(d => d.status === 'review' as any || d.status === 'under review' as any);
+                // Counts
+                const totalDocs = await this.docRepo.count();
+                const approvedDocsCount = await this.docRepo.count({ where: { status: 'approved' as any } });
+                const draftDocsCount = await this.docRepo.count({ where: { status: 'draft' as any } });
+                const reviewDocsCount = await this.docRepo.count({ where: { status: 'under_review' as any } });
 
                 let docText = `### Document Management System Summary:\n` +
-                    `- Total Documents: ${allDocs.length}\n` +
-                    `- Approved Documents: ${approved.length}\n` +
-                    `- Draft Documents: ${draft.length}\n` +
-                    `- Under Review Documents: ${review.length}\n\n`;
+                    `- Total Documents: ${totalDocs}\n` +
+                    `- Approved Documents: ${approvedDocsCount}\n` +
+                    `- Draft Documents: ${draftDocsCount}\n` +
+                    `- Under Review Documents: ${reviewDocsCount}\n\n`;
 
-                // Specific document search by title or number (supporting substring search in both directions)
-                const matchedDocs = allDocs.filter(d => 
-                    (d.documentNumber && (queryLower.includes(d.documentNumber.toLowerCase()) || d.documentNumber.toLowerCase().includes(queryLower))) ||
-                    (d.title && (queryLower.includes(d.title.toLowerCase()) || d.title.toLowerCase().includes(queryLower)))
-                );
+                // Specific document search by title or number (token-based check)
+                let matchedDocs: Document[] = [];
+                const docSearchTerms = queryLower.split(/[^a-z0-9]/).filter(w => w.length > 2 && !['sop', 'sop/work', 'instruction', 'procedure', 'policy', 'manual', 'document', 'give', 'summary', 'show'].includes(w));
+                if (docSearchTerms.length > 0) {
+                    matchedDocs = await this.docRepo.find({
+                        where: [
+                            ...docSearchTerms.map(term => ({ title: ILike(`%${term}%`) })),
+                            ...docSearchTerms.map(term => ({ documentNumber: ILike(`%${term}%`) }))
+                        ],
+                        take: 5
+                    });
+                }
+                
+                // Fallback for line-specific matches (e.g. TL1, TL3)
+                if (matchedDocs.length === 0) {
+                    const lines = ['tl1', 'tl3', 'tl4', 'tl6', 'tl7', 'tl8'];
+                    const matchedLines = lines.filter(l => queryLower.includes(l));
+                    if (matchedLines.length > 0) {
+                        matchedDocs = await this.docRepo.find({
+                            where: matchedLines.map(l => ({ title: ILike(`%${l}%`) })),
+                            take: 5
+                        });
+                    }
+                }
+
                 if (matchedDocs.length > 0) {
                     docText += `### Matched Documents:\n` +
-                        matchedDocs.map(d => `- Title: ${d.title}, Number: ${d.documentNumber || 'N/A'}, Type: ${d.type}, Status: ${(d.status as string).toUpperCase()}, Departments: ${d.departments ? d.departments.join(', ') : 'All'}`).join('\n') + '\n\n';
+                        matchedDocs.map(d => {
+                            const okfMeta = this.kbService.getOkfMetadata(d.id);
+                            const summaryText = okfMeta ? `\n  * OKF Summary: ${okfMeta.summary}` : '';
+                            return `- Title: ${d.title}, Number: ${d.documentNumber || 'N/A'}, Type: ${d.type}, Status: ${(d.status as string).toUpperCase()}, Departments: ${d.departments ? d.departments.join(', ') : 'All'}${summaryText}`;
+                        }).join('\n') + '\n\n';
                 }
 
                 // If filtering by type (SOP, Policy, etc.) and/or department
                 const types = ['sop', 'policy', 'procedure', 'manual', 'format', 'work instruction', 'work_instruction', 'record', 'report'];
                 const matchedTypes = types.filter(t => queryLower.includes(t));
 
-                const uniqueDepts = Array.from(new Set(allDocs.flatMap(d => d.departments || []).filter(d => !!d && d.trim() !== '')));
-                let allSystemDepts = uniqueDepts;
-                try {
-                    const orgNodes = await this.orgRepo.find({ select: ['department'] });
-                    const orgDepts = orgNodes.map(n => n.department).filter((d): d is string => !!d && d.trim() !== '');
-                    allSystemDepts = Array.from(new Set([...uniqueDepts, ...orgDepts]));
-                } catch (err) {
-                    this.logger.error('Failed to query organization chart departments for document matching', err.message);
-                }
-
-                const matchedDepts = matchDepartment(allSystemDepts);
-
                 if (matchedTypes.length > 0 || matchedDepts.length > 0) {
-                    let filteredDocs = allDocs;
-
+                    const findOptions: any = { take: 50 };
                     if (matchedTypes.length > 0) {
-                        filteredDocs = filteredDocs.filter(d => 
-                            d.type && matchedTypes.some(mt => d.type.toLowerCase().includes(mt))
-                        );
+                        findOptions.where = matchedTypes.map(t => ({ type: ILike(`%${t}%`) }));
                     }
+                    let filteredDocs = await this.docRepo.find(findOptions);
 
                     if (matchedDepts.length > 0) {
                         filteredDocs = filteredDocs.filter(d => 
@@ -313,45 +420,48 @@ export class AiService {
             queryLower.includes('hazard') || 
             queryLower.includes('eaa') || 
             queryLower.includes('qra') || 
-            queryLower.includes('furnace') ||
             queryLower.includes('threat') ||
             queryLower.includes('severity')
         ) {
             try {
-                const hiraRisks = await this.hiraRepo.find();
-                const eaaRisks = await this.eaaRepo.find();
-                const qraRisks = await this.qraRepo.find();
+                // Get high risk counts directly
+                const hiraCount = await this.hiraRepo.count();
+                const eaaCount = await this.eaaRepo.count();
+                const qraCount = await this.qraRepo.count();
 
-                const hiraHigh = hiraRisks.filter(r => r.maxRiskLevel === 'high' || r.maxRiskLevel === 'critical');
-                const eaaHigh = eaaRisks.filter(r => r.maxRiskLevel === 'high' || r.maxRiskLevel === 'critical');
-                const qraHigh = qraRisks.filter(r => r.maxRiskLevel === 'high' || r.maxRiskLevel === 'critical');
+                const hiraHighCount = await this.hiraRepo.count({ where: { maxRiskLevel: In(['high', 'critical'] as any[]) } });
+                const eaaHighCount = await this.eaaRepo.count({ where: { maxRiskLevel: In(['high', 'critical'] as any[]) } });
+                const qraHighCount = await this.qraRepo.count({ where: { maxRiskLevel: In(['high', 'critical'] as any[]) } });
 
                 let riskText = `### Hazard & Risk Assessment Summary:\n` +
-                    `- HIRA (Occupational Safety): Total: ${hiraRisks.length}, Critical/High ("Red" Risks): ${hiraHigh.length}\n` +
-                    `- EAA (Environmental Aspects): Total: ${eaaRisks.length}, Critical/High ("Red" Risks): ${eaaHigh.length}\n` +
-                    `- QRA (Quantitative Risk): Total: ${qraRisks.length}, Critical/High ("Red" Risks): ${qraHigh.length}\n\n`;
+                    `- HIRA (Occupational Safety): Total: ${hiraCount}, Critical/High ("Red" Risks): ${hiraHighCount}\n` +
+                    `- EAA (Environmental Aspect): Total: ${eaaCount}, Critical/High Risks: ${eaaHighCount}\n` +
+                    `- QRA (Quality Risks): Total: ${qraCount}, Critical/High Risks: ${qraHighCount}\n\n`;
 
-                // If asking about high/red/critical risks
-                if (queryLower.includes('high') || queryLower.includes('critical') || queryLower.includes('red')) {
+                // If asking about critical risks, fetch details for top 10
+                if (queryLower.includes('critical') || queryLower.includes('high') || queryLower.includes('red') || queryLower.includes('severity')) {
+                    const hiraHigh = await this.hiraRepo.find({ where: { maxRiskLevel: In(['high', 'critical'] as any[]) }, take: 10 });
+                    const eaaHigh = await this.eaaRepo.find({ where: { maxRiskLevel: In(['high', 'critical'] as any[]) }, take: 10 });
                     if (hiraHigh.length > 0) {
-                        riskText += `### High/Critical HIRA Risks:\n` +
-                            hiraHigh.slice(0, 10).map(r => `- No: ${r.riskNumber}, Activity: ${r.activity}, Task: ${r.task || 'N/A'}, Dept: ${r.department}, RiskLevel: ${r.maxRiskLevel.toUpperCase()}`).join('\n') + '\n\n';
+                        riskText += `### High HIRA (Occupational Safety) Risks (Top 10):\n` +
+                            hiraHigh.map(r => `- No: ${r.riskNumber}, Activity: ${r.activity}, Task: ${r.task || 'N/A'}, MaxLevel: ${r.maxRiskLevel.toUpperCase()}`).join('\n') + '\n\n';
                     }
                     if (eaaHigh.length > 0) {
-                        riskText += `### High/Critical EAA Risks:\n` +
-                            eaaHigh.slice(0, 10).map(r => `- No: ${r.riskNumber}, Process: ${r.process}, Area: ${r.area || 'N/A'}, MaxLevel: ${r.maxRiskLevel.toUpperCase()}`).join('\n') + '\n\n';
+                        riskText += `### High EAA (Environmental Aspect) Risks (Top 10):\n` +
+                            eaaHigh.map(r => `- No: ${r.riskNumber}, Process: ${r.process}, Area: ${r.area || 'N/A'}, MaxLevel: ${r.maxRiskLevel.toUpperCase()}`).join('\n') + '\n\n';
                     }
                 }
 
-                // Dynamic department match for risks (e.g. "Risks in Furnace")
-                const allHiraDepts = Array.from(new Set(hiraRisks.map(r => r.department).filter((d): d is string => !!d && d.trim() !== '')));
-                const matchedDepts = matchDepartment(allHiraDepts);
+                // Dynamic department match for risks
                 if (matchedDepts.length > 0) {
                     riskText += `### Filtered Risks for Requested Departments:\n`;
                     for (const dept of matchedDepts) {
-                        const deptHira = hiraRisks.filter(r => r.department && r.department.toLowerCase() === dept.toLowerCase());
+                        const deptHira = await this.hiraRepo.find({
+                            where: { department: ILike(`%${dept}%`) },
+                            take: 10
+                        });
                         if (deptHira.length > 0) {
-                            riskText += `For HIRA in ${dept.toUpperCase()}:\n` + deptHira.slice(0, 10).map(r => `- RiskNo: ${r.riskNumber}, Activity: ${r.activity}, Risk: ${r.maxRiskLevel.toUpperCase()}`).join('\n') + '\n';
+                            riskText += `For HIRA in ${dept.toUpperCase()}:\n` + deptHira.map(r => `- RiskNo: ${r.riskNumber}, Activity: ${r.activity}, Risk: ${r.maxRiskLevel.toUpperCase()}`).join('\n') + '\n';
                         }
                     }
                 }
@@ -363,16 +473,23 @@ export class AiService {
         }
 
         // 5. Org Chart check
-        if (queryLower.includes('org') || queryLower.includes('chart') || queryLower.includes('people') || queryLower.includes('employee') || queryLower.includes('hierarchy') || queryLower.includes('designation')) {
+        if (
+            queryLower.includes('org') || 
+            queryLower.includes('chart') || 
+            queryLower.includes('people') || 
+            queryLower.includes('employee') || 
+            queryLower.includes('hierarchy') || 
+            queryLower.includes('designation') ||
+            queryLower.includes('report')
+        ) {
             try {
                 const count = await this.orgRepo.count();
-                const nodes = await this.orgRepo.find({
-                    take: 50,
-                });
+                const nodes = await this.orgRepo.find({ take: 25 }); // Only load first 25 for general overview to save context space
+
                 contextParts.push(
                     `### Organization Chart Metadata:\n` +
                     `- Total Number of Employees Registered in System: ${count}\n\n` +
-                    `### List of Organization Members (First 50 employees shown for reference):\n` +
+                    `### List of Organization Members (First 25 employees shown for reference):\n` +
                     (nodes.length > 0 
                         ? nodes.map(n => `- Name: ${n.name}, Designation: ${n.designation || 'N/A'}, Department: ${n.department || 'N/A'}`).join('\n')
                         : '- No employees currently listed.')
@@ -384,37 +501,25 @@ export class AiService {
 
         // 5b. Specific Employee or Role Check (Matches names/designations dynamically and resolves reporting structure)
         try {
-            const allNodes = await this.orgRepo.find({ select: ['id', 'parentId', 'name', 'designation', 'department'] });
-            
-            // Build ID to Name map for manager lookup
-            const idToNameMap = new Map<string, string>();
-            allNodes.forEach(n => idToNameMap.set(n.id, n.name));
+            // Check if any word in query matches an employee name or designation
+            const searchWords = queryLower.split(/[^a-z0-9]/).filter(w => w.length > 2 && !['give', 'show', 'who', 'reports', 'the', 'chart', 'org'].includes(w));
+            let matchedNodes: OrgNode[] = [];
 
-            const matchedNodes = allNodes.filter(n => {
-                if (!n.name) return false;
-                const lowerName = n.name.toLowerCase();
-                const lowerDesig = n.designation ? n.designation.toLowerCase() : '';
-                
-                // Match full name
-                if (queryLower.includes(lowerName)) return true;
-
-                // Match specific designations
-                if (lowerDesig && (
-                    queryLower.includes(lowerDesig) || 
-                    (lowerDesig === 'ceo' && queryLower.includes('ceo')) ||
-                    (lowerDesig === 'cfo' && queryLower.includes('cfo'))
-                )) return true;
-
-                // Match split name parts
-                const nameParts = lowerName.split(/\s+/).filter(part => part.length > 2);
-                if (nameParts.length >= 2) {
-                    const matches = nameParts.filter(part => queryLower.includes(part)).length;
-                    return matches >= 2;
-                }
-                return false;
-            });
+            if (searchWords.length > 0) {
+                matchedNodes = await this.orgRepo.find({
+                    where: [
+                        ...searchWords.map(w => ({ name: ILike(`%${w}%`) })),
+                        ...searchWords.map(w => ({ designation: ILike(`%${w}%`) }))
+                    ]
+                });
+            }
 
             if (matchedNodes.length > 0) {
+                // Fetch all nodes to resolve reporting tree structure correctly in memory
+                const allNodes = await this.orgRepo.find({ select: ['id', 'parentId', 'name', 'designation', 'department'] });
+                const idToNameMap = new Map<string, string>();
+                allNodes.forEach(n => idToNameMap.set(n.id, n.name));
+
                 let matchedText = `### Matched Employees in Organization Chart:\n`;
                 for (const node of matchedNodes) {
                     const managerName = node.parentId ? (idToNameMap.get(node.parentId) || 'Unknown') : 'None (Top of hierarchy)';
@@ -436,20 +541,25 @@ export class AiService {
         // 6. Objectives/KPIs check
         if (queryLower.includes('objective') || queryLower.includes('kpi') || queryLower.includes('target') || queryLower.includes('goal')) {
             try {
-                const objectives = await this.objRepo.find();
-                
-                let objText = `### Objectives & Targets Summary:\n` +
-                    `- Total Objectives: ${objectives.length}\n` +
-                    `- Active Objectives: ${objectives.filter(o => o.status as string === 'Active' || o.status as string === 'In Progress').length}\n` +
-                    `- Achieved Objectives: ${objectives.filter(o => o.status as string === 'Achieved').length}\n\n`;
+                const totalObj = await this.objRepo.count();
+                const activeObj = await this.objRepo.count({ where: { status: In(['Active', 'In Progress'] as any[]) } });
+                const achievedObj = await this.objRepo.count({ where: { status: 'Achieved' as any } });
 
-                // If asking about a specific department's objectives
-                const uniqueDepts = Array.from(new Set(objectives.map(o => o.department).filter((d): d is string => !!d && d.trim() !== '')));
-                const matchedDepts = matchDepartment(uniqueDepts);
-                
-                const targetObjs = matchedDepts.length > 0
-                    ? objectives.filter(o => matchedDepts.some(d => o.department && o.department.toLowerCase().includes(d.toLowerCase())))
-                    : objectives.slice(0, 15);
+                let objText = `### Objectives & Targets Summary:\n` +
+                    `- Total Objectives: ${totalObj}\n` +
+                    `- Active Objectives: ${activeObj}\n` +
+                    `- Achieved Objectives: ${achievedObj}\n\n`;
+
+                // If asking about specific department objectives
+                let targetObjs: Objective[] = [];
+                if (matchedDepts.length > 0) {
+                    targetObjs = await this.objRepo.find({
+                        where: matchedDepts.map(d => ({ department: ILike(`%${d}%`) })),
+                        take: 15
+                    });
+                } else {
+                    targetObjs = await this.objRepo.find({ take: 15 });
+                }
 
                 if (targetObjs.length > 0) {
                     objText += `### Objectives List:\n` +
@@ -465,14 +575,16 @@ export class AiService {
         // 7. SWOT check
         if (queryLower.includes('swot') || queryLower.includes('strength') || queryLower.includes('weakness') || queryLower.includes('opportunity') || queryLower.includes('threat') || queryLower.includes('context')) {
             try {
-                const swots = await this.swotRepo.find();
+                const totalSwots = await this.swotRepo.count();
+                const swots = await this.swotRepo.find({ take: 30 }); // Fetch first 30 SWOT issues
+
                 if (swots.length > 0) {
                     const strengths = swots.filter(s => s.category === 'strength');
                     const weaknesses = swots.filter(s => s.category === 'weakness');
                     const opportunities = swots.filter(s => s.category === 'opportunity');
                     const threats = swots.filter(s => s.category === 'threat');
 
-                    let swotText = `### SWOT Analysis Summary (Total: ${swots.length}):\n` +
+                    let swotText = `### SWOT Analysis Summary (Total: ${totalSwots}):\n` +
                         `- Strengths: ${strengths.length}, Weaknesses: ${weaknesses.length}, Opportunities: ${opportunities.length}, Threats: ${threats.length}\n\n`;
 
                     if (queryLower.includes('threat') || queryLower.includes('impact') || queryLower.includes('context') || queryLower.includes('high')) {
@@ -496,32 +608,35 @@ export class AiService {
             }
         }
 
-        // 8. Interested Parties (Needs & Expectations of Employees, Customers, etc.)
+        // 8. Interested Parties (Needs & Expectations)
         if (
             queryLower.includes('need') || 
             queryLower.includes('expectation') || 
             queryLower.includes('interested') || 
             queryLower.includes('party') || 
             queryLower.includes('parties') || 
-            queryLower.includes('employee') ||
-            queryLower.includes('customer') ||
             queryLower.includes('expect')
         ) {
             try {
-                const ipList = await this.interestedRepo.find();
+                const totalIp = await this.interestedRepo.count();
+                let ipList: InterestedParty[] = [];
+
+                const partyNames = ['employee', 'customer', 'supplier', 'government', 'shareholder'];
+                const matchedParties = partyNames.filter(p => queryLower.includes(p));
+
+                if (matchedParties.length > 0) {
+                    ipList = await this.interestedRepo.find({
+                        where: matchedParties.map(p => ({ name: ILike(`%${p}%`) })),
+                        take: 15
+                    });
+                } else {
+                    ipList = await this.interestedRepo.find({ take: 15 });
+                }
+
                 if (ipList.length > 0) {
-                    // Filter matching specific interested parties in query (e.g. "employees" or "customers")
-                    const matchedIps = ipList.filter(ip => 
-                        queryLower.includes(ip.name.toLowerCase()) || 
-                        (ip.name.toLowerCase().includes('employee') && queryLower.includes('employee')) ||
-                        (ip.name.toLowerCase().includes('customer') && queryLower.includes('customer'))
-                    );
-
-                    const targetIps = matchedIps.length > 0 ? matchedIps : ipList;
-
                     contextParts.push(
-                        `### Interested Parties (Needs & Expectations):\n` +
-                        targetIps.map(ip => `- Party Name: ${ip.name}\n  Needs & Expectations: ${ip.needs}\n  Risk Rating: ${ip.risk}\n  Actions: ${ip.actions && ip.actions.length > 0 ? ip.actions.join(', ') : 'None'}\n  Responsible: ${ip.responsible || 'N/A'}`).join('\n\n')
+                        `### Interested Parties (Needs & Expectations, Total: ${totalIp}):\n` +
+                        ipList.map(ip => `- Party Name: ${ip.name}\n  Needs & Expectations: ${ip.needs}\n  Risk Rating: ${ip.risk}\n  Actions: ${ip.actions && ip.actions.length > 0 ? ip.actions.join(', ') : 'None'}\n  Responsible: ${ip.responsible || 'N/A'}`).join('\n\n')
                     );
                 }
             } catch (e) {
@@ -532,21 +647,26 @@ export class AiService {
         // 9. Deviation check
         if (queryLower.includes('deviation') || queryLower.includes('non-conformance') || queryLower.includes('defect') || queryLower.includes('reject') || queryLower.includes('nonconformance')) {
             try {
-                const prodDevs = await this.prodDevRepo.find();
-                const procDevs = await this.procDevRepo.find();
+                const totalProd = await this.prodDevRepo.count();
+                const totalProc = await this.procDevRepo.count();
 
                 let devText = `### Product & Process Deviations Summary:\n` +
-                    `- Total Product Deviations: ${prodDevs.length}\n` +
-                    `- Total Process Deviations: ${procDevs.length}\n\n`;
+                    `- Total Product Deviations: ${totalProd}\n` +
+                    `- Total Process Deviations: ${totalProc}\n\n`;
 
-                // If asking about a specific department's process deviations
-                const uniqueDepts = Array.from(new Set(procDevs.map(d => d.department).filter((d): d is string => !!d && d.trim() !== '')));
-                const matchedDepts = matchDepartment(uniqueDepts);
+                // Fetch top 15 deviations based on query
+                let targetProd: ProductDeviation[] = [];
+                let targetProc: ProcessDeviation[] = [];
 
-                const targetProd = prodDevs.slice(0, 10);
-                const targetProc = matchedDepts.length > 0
-                    ? procDevs.filter(d => matchedDepts.some(dept => d.department && d.department.toLowerCase().includes(dept.toLowerCase())))
-                    : procDevs.slice(0, 10);
+                if (matchedDepts.length > 0) {
+                    targetProc = await this.procDevRepo.find({
+                        where: matchedDepts.map(d => ({ department: ILike(`%${d}%`) })),
+                        take: 15
+                    });
+                } else {
+                    targetProd = await this.prodDevRepo.find({ take: 15 });
+                    targetProc = await this.procDevRepo.find({ take: 15 });
+                }
 
                 if (targetProd.length > 0 && (queryLower.includes('product') || !queryLower.includes('process'))) {
                     devText += `### Product Deviations:\n` +
@@ -567,19 +687,23 @@ export class AiService {
         // 10. MOC check
         if (queryLower.includes('moc') || queryLower.includes('change') || queryLower.includes('management of change')) {
             try {
-                const mocs = await this.mocRepo.find();
-                
+                const totalMocs = await this.mocRepo.count();
+                const activeMocsCount = await this.mocRepo.count({ where: { status: In(['Approved', 'Finalized'] as any[]) } });
+
                 let mocText = `### Management of Change (MOC) Summary:\n` +
-                    `- Total MOC Records: ${mocs.length}\n` +
-                    `- Active/Under Review MOCs: ${mocs.filter(m => m.status !== 'Approved' && m.status !== 'Finalized').length}\n` +
-                    `- Approved/Finalized MOCs: ${mocs.filter(m => m.status === 'Approved' || m.status === 'Finalized').length}\n\n`;
+                    `- Total MOC Records: ${totalMocs}\n` +
+                    `- Active/Under Review MOCs: ${totalMocs - activeMocsCount}\n` +
+                    `- Approved/Finalized MOCs: ${activeMocsCount}\n\n`;
 
-                const uniqueDepts = Array.from(new Set(mocs.map(m => m.department).filter((d): d is string => !!d && d.trim() !== '')));
-                const matchedDepts = matchDepartment(uniqueDepts);
-
-                const targetMocs = matchedDepts.length > 0
-                    ? mocs.filter(m => matchedDepts.some(d => m.department && m.department.toLowerCase().includes(d.toLowerCase())))
-                    : mocs.slice(0, 15);
+                let targetMocs: MocRecord[] = [];
+                if (matchedDepts.length > 0) {
+                    targetMocs = await this.mocRepo.find({
+                        where: matchedDepts.map(d => ({ department: ILike(`%${d}%`) })),
+                        take: 15
+                    });
+                } else {
+                    targetMocs = await this.mocRepo.find({ take: 15 });
+                }
 
                 if (targetMocs.length > 0) {
                     mocText += `### MOC Records List:\n` +
@@ -619,7 +743,15 @@ export class AiService {
     async chat(message: string, context?: string): Promise<{ response: string; model: string }> {
         const dbContext = await this.getDatabaseContext(message);
         const localRules = this.getLocalRules();
-        const kbMatches = await this.kbService.search(message, 5);
+        
+        // Optimize RAG limit to prevent prompt context bloat on local CPU
+        const queryLower = message.toLowerCase();
+        let kbLimit = 3;
+        if (queryLower.includes('summary') || queryLower.includes('list') || queryLower.includes('how many') || queryLower.includes('count')) {
+            kbLimit = 1;
+        }
+        
+        const kbMatches = await this.kbService.search(message, kbLimit);
         const kbContext = kbMatches.length > 0
             ? `\nRetrieved Local Knowledge Base Documents:\n${kbMatches.map((m, i) => `[Document Snippet ${i + 1}]:\n${m}`).join('\n\n')}\n`
             : '';

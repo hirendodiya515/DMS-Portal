@@ -27,8 +27,10 @@ export class KnowledgeBaseService {
     private readonly logger = new Logger(KnowledgeBaseService.name);
     private readonly ollamaUrl: string;
     private readonly kbDir: string;
+    private readonly okfDir: string;
     private readonly vectorStorePath: string;
     private vectorStore: VectorChunk[] = [];
+    private okfCache: Map<string, any> = new Map();
 
     constructor(
         private readonly httpService: HttpService,
@@ -42,10 +44,12 @@ export class KnowledgeBaseService {
         
         // Base paths relative to the current workspace cwd
         this.kbDir = path.join(process.cwd(), 'knowledge_base');
+        this.okfDir = path.join(this.kbDir, 'okf');
         this.vectorStorePath = path.join(this.kbDir, 'vector_store.json');
         
         this.ensureDirectories();
         this.loadVectorStore();
+        this.loadOkfCache();
     }
 
     private ensureDirectories() {
@@ -54,8 +58,35 @@ export class KnowledgeBaseService {
                 fs.mkdirSync(this.kbDir, { recursive: true });
                 this.logger.log(`Created knowledge_base folder at: ${this.kbDir}`);
             }
+            if (!fs.existsSync(this.okfDir)) {
+                fs.mkdirSync(this.okfDir, { recursive: true });
+                this.logger.log(`Created OKF directory at: ${this.okfDir}`);
+            }
         } catch (e) {
-            this.logger.error('Failed to create knowledge base directory', e.message);
+            this.logger.error('Failed to create knowledge base directories', e.message);
+        }
+    }
+
+    private loadOkfCache() {
+        try {
+            this.okfCache.clear();
+            if (fs.existsSync(this.okfDir)) {
+                const docDirs = fs.readdirSync(this.okfDir);
+                for (const docId of docDirs) {
+                    const docDirPath = path.join(this.okfDir, docId);
+                    if (fs.statSync(docDirPath).isDirectory()) {
+                        const metaPath = path.join(docDirPath, 'metadata.json');
+                        if (fs.existsSync(metaPath)) {
+                            const raw = fs.readFileSync(metaPath, 'utf8');
+                            const meta = JSON.parse(raw);
+                            this.okfCache.set(docId, meta);
+                        }
+                    }
+                }
+                this.logger.log(`Loaded ${this.okfCache.size} OKF metadata items into memory cache.`);
+            }
+        } catch (e) {
+            this.logger.error('Failed to load OKF metadata cache from disk', e.message);
         }
     }
 
@@ -169,8 +200,35 @@ export class KnowledgeBaseService {
     /**
      * Scan approved documents in PostgreSQL, parse raw files, chunk, embed new files, and save index
      */
+    private async generateSummary(text: string): Promise<string> {
+        try {
+            const slicedText = text.slice(0, 4000);
+            const modelName = this.configService.get<string>('OLLAMA_MODEL') || 'gemma2:2b';
+            this.logger.log(`Generating OKF summary using local model '${modelName}'...`);
+            const response = await firstValueFrom(
+                this.httpService.post(`${this.ollamaUrl}/api/generate`, {
+                    model: modelName,
+                    prompt: `Summarize the following document content in 3-4 concise sentences, focusing on its main purpose, scope, and key requirements:\n\n${slicedText}`,
+                    system: "You are a professional document indexing assistant. Provide a direct, concise summary without introducing yourself or saying 'Here is a summary'. Only output the summary.",
+                    stream: false,
+                }, {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 180000,
+                })
+            );
+            return response.data?.response?.trim() || 'No summary available.';
+        } catch (e) {
+            this.logger.error(`Ollama summary generation failed: ${e.message}`);
+            return 'Summary generation failed.';
+        }
+    }
+
+    /**
+     * Scan approved documents in PostgreSQL, parse raw files, chunk, embed new files, and save index.
+     * Also generates OKF structured directories (metadata.json and content.md) and updates cache.
+     */
     async rebuildIndex(): Promise<{ success: boolean; filesProcessed: number; totalChunks: number }> {
-        this.logger.log('Starting database-integrated RAG reindexing process...');
+        this.logger.log('Starting database-integrated RAG reindexing process with OKF generation...');
         this.ensureDirectories();
 
         // 1. Fetch all APPROVED documents from the database
@@ -209,59 +267,110 @@ export class KnowledgeBaseService {
 
             filesProcessed++;
 
-            // 3. Incremental Indexing Check
-            // If the versionId matches what we already have indexed, copy the existing vectors
-            const existingChunks = this.vectorStore.filter(c => c.versionId === version.id);
-            if (existingChunks.length > 0) {
-                this.logger.log(`Document version '${version.id}' ('${version.fileName}') is already indexed. Reusing ${existingChunks.length} chunks.`);
-                newStore.push(...existingChunks);
-                continue;
+            // Check if OKF metadata already exists for this version
+            const docOkfDir = path.join(this.okfDir, doc.id);
+            const docMetaPath = path.join(docOkfDir, 'metadata.json');
+            const docContentPath = path.join(docOkfDir, 'content.md');
+            
+            let reuseOkf = false;
+            
+            if (fs.existsSync(docMetaPath) && fs.existsSync(docContentPath)) {
+                try {
+                    const rawMeta = fs.readFileSync(docMetaPath, 'utf8');
+                    const metaObj = JSON.parse(rawMeta);
+                    if (metaObj.versionId === version.id && metaObj.summary !== 'Summary generation failed.') {
+                        reuseOkf = true;
+                        this.okfCache.set(doc.id, metaObj);
+                    }
+                } catch (e) {
+                    this.logger.warn(`Failed to read existing OKF metadata for ${doc.title}: ${e.message}`);
+                }
             }
 
-            // 4. If it's a new or updated version, extract its text content
-            this.logger.log(`Indexing new/updated file version '${version.id}' (${version.fileName})...`);
-            let fileText = '';
-            const lowerName = version.fileName.toLowerCase();
+            // 3. Incremental Vector Indexing Check
+            const existingChunks = this.vectorStore.filter(c => c.versionId === version.id);
+            if (existingChunks.length > 0) {
+                this.logger.log(`Document version '${version.id}' ('${version.fileName}') is already vector indexed. Reusing ${existingChunks.length} chunks.`);
+                newStore.push(...existingChunks);
+            }
 
-            try {
-                if (lowerName.endsWith('.pdf')) {
-                    fileText = await this.extractPdfText(fullPath);
-                } else if (lowerName.endsWith('.docx')) {
-                    fileText = await this.extractDocxText(fullPath);
-                } else if (lowerName.endsWith('.txt') || lowerName.endsWith('.md')) {
-                    fileText = fs.readFileSync(fullPath, 'utf8');
-                } else {
-                    this.logger.warn(`Unsupported file format for '${version.fileName}'. Skipping content extraction.`);
-                    continue;
-                }
+            // 4. If new or not fully indexed, read content and process
+            if (existingChunks.length === 0 || !reuseOkf) {
+                this.logger.log(`Processing file version '${version.id}' (${version.fileName}) for indexing...`);
+                let fileText = '';
+                const lowerName = version.fileName.toLowerCase();
 
-                if (!fileText.trim()) {
-                    this.logger.warn(`No text could be extracted from '${version.fileName}'. Skipping.`);
-                    continue;
-                }
-
-                // 5. Chunk the text
-                const chunks = this.chunkText(fileText);
-                this.logger.log(`Extracted text from '${version.fileName}' split into ${chunks.length} chunks.`);
-
-                // 6. Generate embeddings for each chunk
-                for (let i = 0; i < chunks.length; i++) {
-                    const chunkText = chunks[i];
-                    this.logger.log(`Embedding chunk ${i + 1}/${chunks.length} for ${version.fileName}...`);
-                    const embedding = await this.getEmbedding(chunkText);
-                    
-                    if (embedding && embedding.length > 0) {
-                        newStore.push({
-                            documentId: doc.id,
-                            versionId: version.id,
-                            file: version.fileName,
-                            text: chunkText,
-                            embedding,
-                        });
+                try {
+                    if (lowerName.endsWith('.pdf')) {
+                        fileText = await this.extractPdfText(fullPath);
+                    } else if (lowerName.endsWith('.docx')) {
+                        fileText = await this.extractDocxText(fullPath);
+                    } else if (lowerName.endsWith('.txt') || lowerName.endsWith('.md')) {
+                        fileText = fs.readFileSync(fullPath, 'utf8');
+                    } else {
+                        this.logger.warn(`Unsupported file format for '${version.fileName}'. Skipping content extraction.`);
+                        continue;
                     }
+
+                    if (!fileText.trim()) {
+                        this.logger.warn(`No text could be extracted from '${version.fileName}'. Skipping.`);
+                        continue;
+                    }
+
+                    // --- OKF GENERATION ---
+                    if (!reuseOkf) {
+                        this.logger.log(`Generating OKF package for '${doc.title}'...`);
+                        if (!fs.existsSync(docOkfDir)) {
+                            fs.mkdirSync(docOkfDir, { recursive: true });
+                        }
+                        
+                        // Write content.md
+                        fs.writeFileSync(docContentPath, fileText, 'utf8');
+                        
+                        // Generate summary via local LLM
+                        const summary = await this.generateSummary(fileText);
+                        
+                        // Write metadata.json
+                        const okfMetadata = {
+                            id: doc.id,
+                            versionId: version.id,
+                            title: doc.title,
+                            documentNumber: doc.documentNumber || 'N/A',
+                            type: doc.type,
+                            departments: doc.departments || [],
+                            summary,
+                            lastUpdated: new Date().toISOString()
+                        };
+                        
+                        fs.writeFileSync(docMetaPath, JSON.stringify(okfMetadata, null, 2), 'utf8');
+                        this.okfCache.set(doc.id, okfMetadata);
+                        this.logger.log(`Successfully generated OKF metadata & summary for: ${doc.title}`);
+                    }
+
+                    // --- VECTOR CHUNKING & EMBEDDINGS (only if not already vector-indexed) ---
+                    if (existingChunks.length === 0) {
+                        const chunks = this.chunkText(fileText);
+                        this.logger.log(`Extracted text from '${version.fileName}' split into ${chunks.length} chunks.`);
+
+                        for (let i = 0; i < chunks.length; i++) {
+                            const chunkText = chunks[i];
+                            this.logger.log(`Embedding chunk ${i + 1}/${chunks.length} for ${version.fileName}...`);
+                            const embedding = await this.getEmbedding(chunkText);
+                            
+                            if (embedding && embedding.length > 0) {
+                                newStore.push({
+                                    documentId: doc.id,
+                                    versionId: version.id,
+                                    file: version.fileName,
+                                    text: chunkText,
+                                    embedding,
+                                });
+                            }
+                        }
+                    }
+                } catch (error) {
+                    this.logger.error(`Error processing file '${version.fileName}':`, error.message);
                 }
-            } catch (error) {
-                this.logger.error(`Error processing file '${version.fileName}':`, error.message);
             }
         }
 
@@ -270,6 +379,10 @@ export class KnowledgeBaseService {
             fs.writeFileSync(this.vectorStorePath, JSON.stringify(newStore, null, 2), 'utf8');
             this.vectorStore = newStore;
             this.logger.log(`Successfully saved ${newStore.length} chunks to vector store.`);
+            
+            // Re-sync memory cache to reflect disk state
+            this.loadOkfCache();
+
             return {
                 success: true,
                 filesProcessed,
@@ -279,6 +392,20 @@ export class KnowledgeBaseService {
             this.logger.error('Failed to write vector store json file', e.message);
             return { success: false, filesProcessed, totalChunks: 0 };
         }
+    }
+
+    /**
+     * Retrieves the structured OKF metadata for a specific document
+     */
+    getOkfMetadata(docId: string): any {
+        return this.okfCache.get(docId) || null;
+    }
+
+    /**
+     * Returns all cached OKF metadata records
+     */
+    getOkfCachedDocuments(): any[] {
+        return Array.from(this.okfCache.values());
     }
 
     /**

@@ -123,18 +123,18 @@ export default function Dashboard() {
                 {statCards.map((card) => (
                     <div
                         key={card.title}
-                        className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-shadow"
+                        className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-soft hover:shadow-premium hover:-translate-y-0.5 transition-all duration-300 relative overflow-hidden group"
                     >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between relative z-10">
                             <div>
-                                <p className="text-sm font-medium text-slate-600">{card.title}</p>
-                                <p className="text-3xl font-bold text-slate-800 mt-2">{card.value}</p>
+                                <p className="text-xs font-semibold text-slate-450 uppercase tracking-wider">{card.title}</p>
+                                <p className="text-3xl font-black text-slate-800 mt-2">{card.value}</p>
                             </div>
-                            <div className={`${card.bgColor} p-3 rounded-lg`}>
-                                <card.icon className={`w-6 h-6 ${card.textColor}`} />
+                            <div className={`${card.bgColor} p-3 rounded-xl transition-all duration-300 group-hover:scale-110`}>
+                                <card.icon className={`w-5 h-5 ${card.textColor}`} />
                             </div>
                         </div>
-                        <div className={`mt-4 h-1 rounded-full bg-gradient-to-r ${card.color}`}></div>
+                        <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${card.color} opacity-80 group-hover:opacity-100 transition-opacity`}></div>
                     </div>
                 ))}
             </div>
@@ -142,8 +142,8 @@ export default function Dashboard() {
             {/* Trends Charts */}
             <div className="grid grid-cols-1 gap-6">
                 {/* SOP Compliance Chart */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-6">SOP/WI Compliance</h3>
+                <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-soft">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6">SOP/WI Compliance</h3>
                     <div className="h-[300px] w-full">
                         {trendData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -156,20 +156,20 @@ export default function Dashboard() {
                                         dataKey="name" 
                                         axisLine={false} 
                                         tickLine={false} 
-                                        tick={{ fontSize: 11 }} 
+                                        tick={{ fontSize: 11, fill: '#64748b', fontWeight: 500 }} 
                                         angle={-45}
                                         textAnchor="end"
                                         height={70}
                                         interval={0}
                                     />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }} />
                                     <Tooltip 
-                                        cursor={{ fill: '#F1F5F9' }}
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        cursor={{ fill: '#F8FAFC' }}
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                                     />
                                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                    <Bar dataKey="reqSop" name="Required" fill="#94A3B8" radius={[4, 4, 0, 0]} barSize={20} />
-                                    <Bar dataKey="actSop" name="Actual" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={20} />
+                                    <Bar dataKey="reqSop" name="Required" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={20} />
+                                    <Bar dataKey="actSop" name="Actual" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
@@ -181,8 +181,8 @@ export default function Dashboard() {
                 </div>
 
                 {/* Format Compliance Chart */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-6">Format Compliance</h3>
+                <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-soft">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6">Format Compliance</h3>
                     <div className="h-[300px] w-full">
                         {trendData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
@@ -195,20 +195,20 @@ export default function Dashboard() {
                                         dataKey="name" 
                                         axisLine={false} 
                                         tickLine={false} 
-                                        tick={{ fontSize: 11 }} 
+                                        tick={{ fontSize: 11, fill: '#64748b', fontWeight: 500 }} 
                                         angle={-45}
                                         textAnchor="end"
                                         height={70}
                                         interval={0}
                                     />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }} />
                                     <Tooltip 
-                                        cursor={{ fill: '#F1F5F9' }}
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        cursor={{ fill: '#F8FAFC' }}
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                                     />
                                     <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                                    <Bar dataKey="reqFormat" name="Required" fill="#CBD5E1" radius={[4, 4, 0, 0]} barSize={20} />
-                                    <Bar dataKey="actFormat" name="Actual" fill="#10B981" radius={[4, 4, 0, 0]} barSize={20} />
+                                    <Bar dataKey="reqFormat" name="Required" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={20} />
+                                    <Bar dataKey="actFormat" name="Actual" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
@@ -220,11 +220,12 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            <div className="bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl shadow-lg p-8 text-white">
-                <h3 className="text-2xl font-bold mb-2">ISO Compliance Ready</h3>
-                <p className="text-blue-100">
-                    Your document management system is configured for ISO compliance with full audit trails,
-                    version control, and approval workflows.
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 rounded-2xl shadow-premium p-8 text-white relative overflow-hidden group">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent)] pointer-events-none"></div>
+                <h3 className="text-2xl font-black mb-2 relative z-10">ISO Compliance Ready</h3>
+                <p className="text-blue-100 max-w-2xl relative z-10 leading-relaxed text-sm">
+                    Your document management system is fully configured to satisfy standard ISO requirements. 
+                    Keep records updated to maintain active compliance status across all departments.
                 </p>
             </div>
         </div>

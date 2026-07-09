@@ -111,7 +111,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="w-20 hover:w-64 bg-slate-900 text-white flex flex-col fixed left-0 top-0 h-full z-50 transition-all duration-300 ease-in-out group shadow-2xl overflow-hidden pt-4">
+    <div className="w-20 hover:w-64 bg-[#0a0e1a] border-r border-slate-800/40 text-white flex flex-col fixed left-0 top-0 h-full z-50 transition-all duration-305 ease-in-out group shadow-2xl overflow-hidden pt-4">
       {/* Branding moved to Header, kept empty div or removed? Removed as per request to 'adjust' visibility issue. */}
 
       <nav className="flex-1 px-0 py-4 space-y-1 overflow-y-auto custom-scrollbar overflow-x-hidden">
@@ -123,8 +123,8 @@ export default function Sidebar() {
                   onClick={() => toggleExpand(item.name)}
                   className={`w-full flex items-center justify-between pl-7 pr-4 py-3 transition-all duration-200 ${
                     isChildActive(item)
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      ? "bg-slate-800/60 text-white border-l-4 border-blue-500/80"
+                      : "text-slate-350 hover:bg-slate-800/40 hover:text-white"
                   }`}
                 >
                   <div className="flex items-center gap-3 shrink-0">
@@ -140,15 +140,15 @@ export default function Sidebar() {
                   )}
                 </button>
                 {expandedItems.includes(item.name) && (
-                  <div className="ml-4 mt-1 space-y-1 border-l-2 border-slate-700 pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <div className="ml-4 mt-1 space-y-1 border-l border-slate-800 pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     {item.children.map((child) => (
                       <NavLink
                         key={child.name}
                         to={child.href}
                         className={({ isActive }) =>
-                          `flex items-center gap-3 px-4 py-2 text-sm rounded-lg transition-all duration-200 ${
+                          `flex items-center gap-3 px-4 py-2 mx-3 my-0.5 text-sm rounded-xl transition-all duration-200 ${
                             isActive
-                              ? "text-blue-400 font-medium bg-slate-800/50"
+                              ? "text-blue-400 font-semibold bg-slate-800/70"
                               : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
                           }`
                         }
@@ -166,8 +166,8 @@ export default function Sidebar() {
                 className={({ isActive }) =>
                   `flex items-center gap-3 pl-7 pr-4 py-3 transition-all duration-200 ${
                     isActive
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20 border-l-4 border-blue-400"
+                      : "text-slate-350 hover:bg-slate-800/40 hover:text-white"
                   }`
                 }
               >

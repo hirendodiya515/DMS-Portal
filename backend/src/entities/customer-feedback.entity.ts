@@ -74,6 +74,21 @@ export class CustomerFeedback {
   @Column({ name: 'packing_loading_quality_comment', type: 'text', nullable: true })
   packingLoadingQualityComment: string;
 
+  @Column({ name: 'solar_glass_quality_rating', type: 'int', default: 0 })
+  solarGlassQualityRating: number;
+  @Column({ name: 'solar_glass_quality_comment', type: 'text', nullable: true })
+  solarGlassQualityComment: string;
+
+  @Column({ name: 'energy_generation_performance_rating', type: 'int', default: 0 })
+  energyGenerationPerformanceRating: number;
+  @Column({ name: 'energy_generation_performance_comment', type: 'text', nullable: true })
+  energyGenerationPerformanceComment: string;
+
+  @Column({ name: 'technical_standards_compliance_rating', type: 'int', default: 0 })
+  technicalStandardsComplianceRating: number;
+  @Column({ name: 'technical_standards_compliance_comment', type: 'text', nullable: true })
+  technicalStandardsComplianceComment: string;
+
   // Competitiveness Ratings & Comments
   @Column({ name: 'pricing_rating', type: 'int', default: 0 })
   pricingRating: number;
@@ -90,13 +105,33 @@ export class CustomerFeedback {
   @Column({ name: 'after_sales_service_response_comment', type: 'text', nullable: true })
   afterSalesServiceResponseComment: string;
 
+  @Column({ name: 'support_satisfaction_rating', type: 'int', default: 0 })
+  supportSatisfactionRating: number;
+  @Column({ name: 'support_satisfaction_comment', type: 'text', nullable: true })
+  supportSatisfactionComment: string;
+
   @Column({ name: 'sales_team_approach_rating', type: 'int', default: 0 })
   salesTeamApproachRating: number;
   @Column({ name: 'sales_team_approach_comment', type: 'text', nullable: true })
   salesTeamApproachComment: string;
 
+  @Column({ name: 'documentation_accuracy_rating', type: 'int', default: 0 })
+  documentationAccuracyRating: number;
+  @Column({ name: 'documentation_accuracy_comment', type: 'text', nullable: true })
+  documentationAccuracyComment: string;
+
   @Column({ name: 'quality_average', type: 'varchar', length: 10, nullable: true })
   qualityAverage: string;
+
+  @Column({ name: 'solar_glass_expectations_rating', type: 'int', default: 0 })
+  solarGlassExpectationsRating: number;
+  @Column({ name: 'solar_glass_expectations_comment', type: 'text', nullable: true })
+  solarGlassExpectationsComment: string;
+
+  @Column({ name: 'future_use_likelihood_rating', type: 'int', default: 0 })
+  futureUseLikelihoodRating: number;
+  @Column({ name: 'future_use_likelihood_comment', type: 'text', nullable: true })
+  futureUseLikelihoodComment: string;
 
   // Insights & Satisfaction
   @Column({ name: 'procured_other_than_borosil', type: 'varchar', length: 10, nullable: true })

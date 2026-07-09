@@ -209,7 +209,7 @@ export default function IsoCertificatesSection() {
                 return (
                     <div
                         key={card.key}
-                        className={`relative bg-white rounded-xl border ${card.border} shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden group`}
+                        className={`relative bg-white rounded-2xl border ${card.border} shadow-soft hover:shadow-premium hover:-translate-y-0.5 transition-all duration-300 flex flex-col overflow-hidden group`}
                         style={{ minWidth: '150px', flex: '1 1 auto' }}
                     >
                         {/* Top accent bar */}
@@ -238,7 +238,7 @@ export default function IsoCertificatesSection() {
                                             }}
                                             disabled={isUploading}
                                             title="Upload certificate"
-                                            className="p-1.5 rounded-md bg-white/80 hover:bg-slate-100 text-slate-400 hover:text-slate-600 border border-slate-100 shadow-sm transition-colors backdrop-blur-sm"
+                                            className="p-1.5 rounded-lg bg-white/90 hover:bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200 shadow-sm transition-all backdrop-blur-sm hover:scale-105 active:scale-95"
                                         >
                                             {isUploading ? (
                                                 <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
@@ -254,7 +254,7 @@ export default function IsoCertificatesSection() {
                                             openPicker();
                                         }}
                                         title="Select from documents"
-                                        className="p-1.5 rounded-md bg-white/80 hover:bg-slate-100 text-slate-400 hover:text-slate-600 border border-slate-100 shadow-sm transition-colors backdrop-blur-sm"
+                                        className="p-1.5 rounded-lg bg-white/90 hover:bg-slate-50 text-slate-400 hover:text-slate-600 border border-slate-200 shadow-sm transition-all backdrop-blur-sm hover:scale-105 active:scale-95"
                                     >
                                         <ChevronDown className="w-3.5 h-3.5" />
                                     </button>
@@ -264,20 +264,20 @@ export default function IsoCertificatesSection() {
 
                         {/* Clickable Area for Viewing */}
                         <button 
-                            className="p-3 w-full text-left flex items-center justify-between"
+                            className="p-3 w-full text-left flex items-center justify-between cursor-pointer"
                             onClick={() => handleView(card)}
                             disabled={!hasFile}
                             title={hasFile ? 'Click to view document' : 'No document uploaded yet'}
                         >
                             <div className="flex items-center gap-2.5">
-                                <div className={`${card.bg} p-2 rounded-lg`}>
+                                <div className={`${card.bg} p-2 rounded-xl group-hover:scale-110 transition-transform duration-300`}>
                                     <Icon className={`w-4 h-4 ${card.color}`} />
                                 </div>
                                 <div className="min-w-0 pr-6">
-                                    <p className={`text-sm font-semibold ${card.color} whitespace-nowrap truncate leading-tight`}>{card.label}</p>
+                                    <p className={`text-sm font-bold ${card.color} whitespace-nowrap truncate leading-tight`}>{card.label}</p>
                                     <div className="flex items-center gap-1 mt-1">
-                                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${hasFile ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                                        <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">{hasFile ? 'Uploaded' : 'Pending'}</span>
+                                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${hasFile ? 'bg-emerald-500 animate-pulse' : 'bg-slate-350'}`} />
+                                        <span className="text-[10px] text-slate-500 font-semibold whitespace-nowrap">{hasFile ? 'Uploaded' : 'Pending'}</span>
                                     </div>
                                 </div>
                             </div>

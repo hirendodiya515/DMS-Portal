@@ -203,20 +203,20 @@ export default function DeviationFormPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Top Navigation Bar */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/85 sticky top-0 z-40 shadow-soft">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/dashboard')}
-              className="p-2 hover:bg-slate-100 text-slate-500 rounded-xl transition-all border border-slate-100 cursor-pointer mr-1"
+              className="p-2.5 hover:bg-slate-100 text-slate-500 rounded-xl transition-all border border-slate-200 cursor-pointer mr-1 bg-white hover:scale-105 active:scale-95 shadow-sm"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <img src="/logo.png" alt="Borosil Logo" className="h-10 w-auto object-contain" />
             <div className="h-8 w-[1px] bg-slate-200 mx-1"></div>
             <div>
-              <h1 className="text-base font-black text-slate-800 tracking-tight">New Product Deviation</h1>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Product Deviation Portal</p>
+              <h1 className="text-base font-black text-slate-800 tracking-tight">Create Product Deviation</h1>
+              <p className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">Product Deviation Portal</p>
             </div>
           </div>
 
@@ -224,7 +224,7 @@ export default function DeviationFormPage() {
             <button 
               type="button"
               onClick={() => setIsGuideOpen(true)}
-              className="h-11 px-4 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              className="h-11 px-4 bg-slate-100/50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-xl border border-slate-200/80 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0 hover:scale-102 active:scale-98"
               title="User Guide"
             >
               <HelpCircle className="w-4 h-4 text-orange-500" />
@@ -232,7 +232,7 @@ export default function DeviationFormPage() {
             </button>
 
             {user && (
-              <div className="hidden md:flex items-center gap-2 px-3 h-11 bg-slate-50 rounded-xl border border-slate-100 shrink-0">
+              <div className="hidden md:flex items-center gap-2 px-3.5 h-11 bg-slate-100/50 rounded-xl border border-slate-200/80 shrink-0 shadow-sm">
                 <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-bold text-xs">
                   {user.firstName[0]}
                 </div>
@@ -250,7 +250,7 @@ export default function DeviationFormPage() {
             <button 
               type="button"
               onClick={handleLogout}
-              className="h-11 px-4 bg-slate-50 hover:bg-red-50 text-slate-650 hover:text-red-650 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              className="h-11 px-4 bg-slate-100/50 hover:bg-red-50 text-slate-650 hover:text-red-650 rounded-xl border border-slate-200/80 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0 hover:scale-102 active:scale-98"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4 text-red-500" />
@@ -268,7 +268,7 @@ export default function DeviationFormPage() {
             <p className="text-slate-500 font-medium">Loading form options...</p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-soft overflow-hidden">
             <div className="bg-gradient-to-r from-orange-500 to-amber-600 p-6 text-white flex items-center gap-3">
               <div className="p-2 bg-white/10 rounded-xl">
                 <FileWarning className="w-6 h-6" />
@@ -291,7 +291,7 @@ export default function DeviationFormPage() {
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Production Line *</label>
                   <select
-                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
+                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750"
                     value={formData.line}
                     onChange={(e) => setFormData({ ...formData, line: e.target.value })}
                     required
@@ -307,7 +307,7 @@ export default function DeviationFormPage() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Initiator Name *</label>
                   <input
                     type="text"
-                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
+                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750"
                     placeholder="Enter initiator name..."
                     value={formData.initiatorName}
                     onChange={(e) => setFormData({ ...formData, initiatorName: e.target.value })}
@@ -329,8 +329,8 @@ export default function DeviationFormPage() {
                       }}
                     >
                       {/* Visual overlay displaying the formatted date */}
-                      <div className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl font-medium text-slate-700 flex items-center justify-between min-h-[42px]">
-                        <span className={formData.startDate ? 'text-slate-800 font-bold' : 'text-slate-400'}>
+                      <div className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200/80 rounded-xl font-medium text-slate-755 flex items-center justify-between min-h-[42px] hover:border-slate-300 transition-colors">
+                        <span className={formData.startDate ? 'text-slate-800 font-bold' : 'text-slate-450'}>
                           {formData.startDate ? formatDate(formData.startDate) : 'Select start date...'}
                         </span>
                         <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -361,8 +361,8 @@ export default function DeviationFormPage() {
                       }}
                     >
                       {/* Visual overlay displaying the formatted date */}
-                      <div className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl font-medium text-slate-700 flex items-center justify-between min-h-[42px]">
-                        <span className={formData.endDate ? 'text-slate-800 font-bold' : 'text-slate-400'}>
+                      <div className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200/80 rounded-xl font-medium text-slate-755 flex items-center justify-between min-h-[42px] hover:border-slate-350 transition-colors">
+                        <span className={formData.endDate ? 'text-slate-800 font-bold' : 'text-slate-450'}>
                           {formData.endDate ? formatDate(formData.endDate) : 'Select end date...'}
                         </span>
                         <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -386,7 +386,7 @@ export default function DeviationFormPage() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Total Quantity Produced (pcs) *</label>
                   <input
                     type="number"
-                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
+                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750"
                     placeholder="e.g. 5000"
                     value={formData.totalQuantityProduced || ''}
                     onChange={(e) => setFormData({ ...formData, totalQuantityProduced: Number(e.target.value) })}
@@ -399,7 +399,7 @@ export default function DeviationFormPage() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Quantity Under Deviation (pcs) *</label>
                   <input
                     type="number"
-                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
+                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750"
                     placeholder="e.g. 250"
                     value={formData.quantityUnderDeviation || ''}
                     onChange={(e) => setFormData({ ...formData, quantityUnderDeviation: Number(e.target.value) })}
@@ -412,7 +412,7 @@ export default function DeviationFormPage() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Quantity Under Deviation (sqm)</label>
                   <input
                     type="number"
-                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
+                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750"
                     placeholder="e.g. 100"
                     value={formData.quantityUnderDeviationPcs || ''}
                     onChange={(e) => setFormData({ ...formData, quantityUnderDeviationPcs: e.target.value })}
@@ -424,7 +424,7 @@ export default function DeviationFormPage() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Nature of Deviation *</label>
                   <input
                     type="text"
-                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700"
+                    className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750"
                     placeholder="Short description of physical/technical deviation..."
                     value={formData.natureOfDeviation}
                     onChange={(e) => setFormData({ ...formData, natureOfDeviation: e.target.value })}
@@ -436,7 +436,7 @@ export default function DeviationFormPage() {
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Detailed description *</label>
                   <textarea
                     rows={4}
-                    className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none"
+                    className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750 resize-none"
                     placeholder="Provide detailed breakdown and justification for the product deviation..."
                     value={formData.detailsOfDeviation}
                     onChange={(e) => setFormData({ ...formData, detailsOfDeviation: e.target.value })}
@@ -452,7 +452,7 @@ export default function DeviationFormPage() {
                     Upload relevant documents, screenshots, or specifications (Optional).
                   </p>
                   
-                  <div className="border-2 border-dashed border-slate-200 hover:border-orange-500/50 rounded-2xl p-6 text-center bg-slate-50/50 hover:bg-orange-50/10 transition-all group relative">
+                  <div className="border-2 border-dashed border-slate-250 hover:border-orange-500/60 rounded-2xl p-6 text-center bg-slate-50 hover:bg-orange-50/20 transition-all group relative cursor-pointer">
                     <input
                       type="file"
                       multiple
@@ -473,7 +473,7 @@ export default function DeviationFormPage() {
                       {formData.attachments.map((file: any, index: number) => (
                         <div
                           key={index}
-                          className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-100 shadow-sm"
+                          className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200/80 shadow-soft hover:shadow-sm transition-all"
                         >
                           <FileText className="w-5 h-5 text-orange-500 shrink-0" />
                           <div className="min-w-0 flex-1">
@@ -518,7 +518,7 @@ export default function DeviationFormPage() {
                         const targetUser = users.find(u => u.id === id);
                         if (!targetUser) return null;
                         return (
-                          <span key={id} className="inline-flex items-center gap-1.5 bg-orange-50 text-orange-700 border border-orange-200 px-2.5 py-1 rounded-xl text-xs font-bold shadow-sm">
+                          <span key={id} className="inline-flex items-center gap-1.5 bg-orange-50 text-orange-700 border border-orange-200 px-2.5 py-1 rounded-xl text-xs font-bold shadow-sm animate-fade-in">
                             {targetUser.firstName} {targetUser.lastName}
                             <button
                               type="button"
@@ -534,17 +534,17 @@ export default function DeviationFormPage() {
                   )}
 
                   <div className="relative mb-3">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-450" />
                     <input
                       type="text"
                       placeholder="Type to search users by name or email..."
-                      className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-100 focus:border-orange-500 rounded-xl outline-none font-medium"
+                      className="w-full pl-9 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200/80 focus:border-orange-500 focus:bg-white rounded-xl outline-none font-medium text-slate-700 transition-all"
                       value={userSearchTerm}
                       onChange={(e) => setUserSearchTerm(e.target.value)}
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-56 overflow-y-auto custom-scrollbar p-1 border border-slate-100 rounded-xl bg-slate-50/50">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-56 overflow-y-auto custom-scrollbar p-2 border border-slate-200/80 rounded-xl bg-slate-50/50">
                     {users.filter((u) => {
                       const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
                       const email = (u.email || '').toLowerCase();
@@ -557,13 +557,13 @@ export default function DeviationFormPage() {
                           onClick={() => handleCheckboxChange(u.id)}
                           className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
                             isSelected
-                              ? 'bg-white border-orange-500 shadow-sm ring-1 ring-orange-400'
-                              : 'bg-white border-slate-100 hover:border-slate-300'
+                              ? 'bg-white border-orange-500 shadow-soft ring-1 ring-orange-500'
+                              : 'bg-white border-slate-200/80 hover:border-slate-350 hover:shadow-sm'
                           }`}
                         >
                           <input
                             type="checkbox"
-                            className="w-4 h-4 rounded accent-orange-600 focus:ring-orange-500"
+                            className="w-4 h-4 rounded accent-orange-600 focus:ring-orange-500 pointer-events-none"
                             checked={isSelected}
                             readOnly
                           />
@@ -583,7 +583,7 @@ export default function DeviationFormPage() {
                       const email = (u.email || '').toLowerCase();
                       return fullName.includes(userSearchTerm.toLowerCase()) || email.includes(userSearchTerm.toLowerCase());
                     }).length === 0 && (
-                      <div className="col-span-1 sm:col-span-2 md:col-span-3 text-center py-6 text-slate-400 font-semibold text-xs">
+                      <div className="col-span-1 sm:col-span-2 md:col-span-3 text-center py-6 text-slate-450 font-semibold text-xs">
                         No matching users found.
                       </div>
                     )}
@@ -591,7 +591,7 @@ export default function DeviationFormPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+              <div className="pt-4 border-t border-slate-200 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => navigate('/dashboard')}

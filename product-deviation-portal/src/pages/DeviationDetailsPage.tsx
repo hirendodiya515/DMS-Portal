@@ -320,12 +320,12 @@ export default function DeviationDetailsPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Navigation Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200/85 sticky top-0 z-40 shadow-soft">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/dashboard')}
-              className="p-2 hover:bg-slate-100 text-slate-500 rounded-xl transition-all border border-slate-100 cursor-pointer mr-1"
+              className="p-2.5 hover:bg-slate-150 text-slate-605 rounded-xl transition-all border border-slate-250 cursor-pointer mr-1 bg-white hover:scale-105 active:scale-95 shadow-sm"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -333,7 +333,7 @@ export default function DeviationDetailsPage() {
             <div className="h-8 w-[1px] bg-slate-200 mx-1"></div>
             <div>
               <h1 className="text-base font-black text-slate-800 tracking-tight">Deviation: {deviation.serialNumber}</h1>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Line: {deviation.line}</p>
+              <p className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">Line: {deviation.line}</p>
             </div>
           </div>
 
@@ -360,7 +360,7 @@ export default function DeviationDetailsPage() {
 
             <button 
               onClick={() => setIsGuideOpen(true)}
-              className="h-11 px-4 bg-slate-50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              className="h-11 px-4 bg-slate-100/50 hover:bg-orange-50 text-slate-600 hover:text-orange-600 rounded-xl border border-slate-200/80 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0 hover:scale-102 active:scale-98"
               title="User Guide"
             >
               <HelpCircle className="w-4 h-4 text-orange-500" />
@@ -368,7 +368,7 @@ export default function DeviationDetailsPage() {
             </button>
             
             {user && (
-              <div className="hidden md:flex items-center gap-2 px-3 h-11 bg-slate-50 rounded-xl border border-slate-100 shrink-0">
+              <div className="hidden md:flex items-center gap-2 px-3.5 h-11 bg-slate-100/50 rounded-xl border border-slate-200/80 shrink-0 shadow-sm">
                 <div className="w-7 h-7 bg-slate-200 rounded-full flex items-center justify-center text-slate-605 font-bold text-xs">
                   {user.firstName[0]}
                 </div>
@@ -385,7 +385,7 @@ export default function DeviationDetailsPage() {
             
             <button 
               onClick={handleLogout}
-              className="h-11 px-4 bg-slate-50 hover:bg-red-50 text-slate-650 hover:text-red-650 rounded-xl border border-slate-100 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0"
+              className="h-11 px-4 bg-slate-100/50 hover:bg-red-50 text-slate-655 hover:text-red-655 rounded-xl border border-slate-200/80 transition-all cursor-pointer flex items-center justify-center gap-2 text-xs font-bold shrink-0 hover:scale-102 active:scale-98"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4 text-red-500" />
@@ -399,8 +399,8 @@ export default function DeviationDetailsPage() {
       <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full space-y-6">
         
         {/* Basic Information card */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+        <section className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100/60 pb-3">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Basic Specification</h3>
             <span className={`inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
               deviation.status === 'CLOSED' ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/10' :
@@ -448,7 +448,7 @@ export default function DeviationDetailsPage() {
             </div>
             <div className="col-span-1 md:col-span-2">
               <span className="text-slate-400 font-medium block text-xs">Detailed Breakdown</span>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-slate-600 font-medium mt-1 leading-relaxed">
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 text-slate-650 font-medium mt-1 leading-relaxed">
                 {deviation.detailsOfDeviation}
               </div>
             </div>
@@ -459,7 +459,7 @@ export default function DeviationDetailsPage() {
                   {deviation.attachments.map((file: any, index: number) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-100 rounded-xl transition-all shadow-sm group"
+                      className="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-200/80 rounded-xl transition-all shadow-soft group"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <FileText className="w-5 h-5 text-orange-500 shrink-0" />
@@ -492,12 +492,12 @@ export default function DeviationDetailsPage() {
         </section>
 
         {/* Assigned Responsible Persons Checklist */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-50 pb-3">Assigned Responsible Persons</h3>
+        <section className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft space-y-4">
+          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100/60 pb-3">Assigned Responsible Persons</h3>
           <div className="space-y-3">
             {deviation.responsiblePersons?.map((rp: any) => (
-              <div key={rp.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <CheckCircle className={`w-5 h-5 shrink-0 ${rp.signedAt ? 'text-green-500' : 'text-slate-300'}`} />
+              <div key={rp.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                <CheckCircle className={`w-5 h-5 shrink-0 ${rp.signedAt ? 'text-green-500 animate-pulse' : 'text-slate-300'}`} />
                 <div>
                   <div className="text-sm font-bold text-slate-700">{rp.user?.firstName} {rp.user?.lastName}</div>
                   <div className="text-[10px] text-slate-400 font-semibold">{rp.user?.email}</div>
@@ -514,7 +514,7 @@ export default function DeviationDetailsPage() {
 
         {/* Action Plan Sign-off for Responsible Person */}
         {deviation.status === 'OPEN' && isResponsiblePerson && !hasSignedAsResponsible && (
-          <section className="bg-white p-6 rounded-2xl border border-orange-100 shadow-md ring-1 ring-orange-200/50 space-y-4">
+          <section className="bg-white p-6 rounded-2xl border border-orange-200 shadow-soft space-y-4 ring-1 ring-orange-200/40">
             <div className="flex items-center gap-2 text-orange-600">
               <ShieldAlert className="w-5 h-5" />
               <h3 className="text-sm font-black uppercase tracking-wider">Action Plan (Your Signature Required)</h3>
@@ -525,7 +525,7 @@ export default function DeviationDetailsPage() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Root Cause Analysis *</label>
                 <textarea 
                   rows={2} 
-                  className="w-full px-4 py-3 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+                  className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750 resize-none" 
                   placeholder="Identify root cause..."
                   value={actionData.rootCauseAnalysis} 
                   onChange={(e) => setActionData({ ...actionData, rootCauseAnalysis: e.target.value })} 
@@ -535,7 +535,7 @@ export default function DeviationDetailsPage() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Containment Action *</label>
                 <textarea 
                   rows={2} 
-                  className="w-full px-4 py-3 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+                  className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750 resize-none" 
                   placeholder="Containment measures..."
                   value={actionData.containmentAction} 
                   onChange={(e) => setActionData({ ...actionData, containmentAction: e.target.value })} 
@@ -545,7 +545,7 @@ export default function DeviationDetailsPage() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Corrective Action *</label>
                 <textarea 
                   rows={2} 
-                  className="w-full px-4 py-3 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+                  className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750 resize-none" 
                   placeholder="Corrective actions..."
                   value={actionData.correctiveAction} 
                   onChange={(e) => setActionData({ ...actionData, correctiveAction: e.target.value })} 
@@ -555,7 +555,7 @@ export default function DeviationDetailsPage() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Disposal Action *</label>
                 <textarea 
                   rows={2} 
-                  className="w-full px-4 py-3 text-sm bg-slate-55 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+                  className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750 resize-none" 
                   placeholder="Disposal actions..."
                   value={actionData.disposalAction} 
                   onChange={(e) => setActionData({ ...actionData, disposalAction: e.target.value })} 
@@ -592,8 +592,8 @@ export default function DeviationDetailsPage() {
         )}
 
         {/* Display Submitted Action Plans */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4 text-slate-700">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-50 pb-3">Action Plans Details</h3>
+        <section className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft space-y-4 text-slate-700">
+          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100/60 pb-3">Action Plans Details</h3>
           {deviation.status !== 'OPEN' ? (
             <div className="grid grid-cols-1 gap-4 text-sm">
               <div>
@@ -617,7 +617,7 @@ export default function DeviationDetailsPage() {
                   <span className="text-slate-400 font-bold text-[10px] uppercase block tracking-wider">Action Plan Attachments</span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {deviation.actionPlanAttachments.map((file: any, index: number) => (
-                      <div key={index} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs">
+                      <div key={index} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs shadow-soft">
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText className="w-4 h-4 text-orange-500 shrink-0" />
                           <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
@@ -641,11 +641,11 @@ export default function DeviationDetailsPage() {
 
         {/* Marketing Review and Sign-off */}
         {deviation.status === 'PENDING_MARKETING' && isMarketingPerson && (
-          <section className="bg-white p-6 rounded-2xl border border-orange-100 shadow-md ring-1 ring-orange-200/50 space-y-4">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-50 pb-3">Marketing Remarks</h3>
+          <section className="bg-white p-6 rounded-2xl border border-orange-255 shadow-soft space-y-4 ring-1 ring-orange-200/30">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100/60 pb-3">Marketing Remarks</h3>
             <textarea 
               rows={3} 
-              className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+              className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-200/80 rounded-xl focus:border-orange-500 focus:bg-white focus:ring-2 focus:ring-orange-500/10 outline-none transition-all font-medium text-slate-750 resize-none" 
               placeholder="Provide marketing feedback..." 
               value={marketingRemark} 
               onChange={(e) => setMarketingRemark(e.target.value)} 
@@ -679,9 +679,9 @@ export default function DeviationDetailsPage() {
 
         {/* Display Marketing remarks if signed */}
         {deviation.status !== 'OPEN' && deviation.status !== 'PENDING_MARKETING' && deviation.marketingPersonId && (
-          <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-50 pb-3">Marketing Remarks</h3>
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-slate-600 font-medium text-sm leading-relaxed">
+          <section className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft space-y-3">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100/60 pb-3">Marketing Remarks</h3>
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 italic text-slate-650 font-medium text-sm leading-relaxed">
               {deviation.marketingRemarks || 'No remarks provided.'}
             </div>
             {deviation.marketingAttachments && deviation.marketingAttachments.length > 0 && (
@@ -689,7 +689,7 @@ export default function DeviationDetailsPage() {
                 <span className="text-slate-400 font-bold text-[10px] uppercase block tracking-wider">Marketing Attachments</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {deviation.marketingAttachments.map((file: any, index: number) => (
-                    <div key={index} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs">
+                    <div key={index} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs shadow-soft">
                       <div className="flex items-center gap-2 min-w-0">
                         <FileText className="w-4 h-4 text-orange-500 shrink-0" />
                         <span className="font-bold text-slate-700 truncate max-w-[200px]">{file.name}</span>
@@ -702,7 +702,7 @@ export default function DeviationDetailsPage() {
                 </div>
               </div>
             )}
-            <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-50">
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-100/60">
               <CheckCircle className="w-4 h-4 text-green-500" />
               <span>Signed by: {deviation.marketingPerson?.firstName} {deviation.marketingPerson?.lastName}</span>
               <span className="ml-auto">Signed On: {deviation.marketingSignedAt && formatDateTime(deviation.marketingSignedAt)}</span>
@@ -712,12 +712,12 @@ export default function DeviationDetailsPage() {
 
         {/* Plant Head Approval Screen */}
         {deviation.status === 'PENDING_PLANT_HEAD' && isPlantHead && (
-          <section className="bg-amber-50/50 p-6 rounded-2xl border border-amber-100 shadow-sm space-y-4">
-            <h3 className="text-sm font-black text-amber-900 uppercase tracking-wider border-b border-amber-100 pb-3">Plant Head Approval Required</h3>
-            <p className="text-xs text-amber-700 leading-relaxed font-semibold">Please audit root cause analysis, action items, and marketing remarks. Add optional remarks and approve to route this deviation to the Quality Head.</p>
+          <section className="bg-amber-50/40 p-6 rounded-2xl border border-amber-200/80 shadow-soft space-y-4">
+            <h3 className="text-sm font-black text-amber-900 uppercase tracking-wider border-b border-amber-200/60 pb-3">Plant Head Approval Required</h3>
+            <p className="text-xs text-amber-750 leading-relaxed font-semibold">Please audit root cause analysis, action items, and marketing remarks. Add optional remarks and approve to route this deviation to the Quality Head.</p>
             <textarea 
               rows={3} 
-              className="w-full px-4 py-3 text-sm bg-white border border-amber-100 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+              className="w-full px-4 py-3 text-sm bg-white border border-amber-200/80 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-medium text-slate-750 resize-none shadow-sm" 
               placeholder="Plant Head Remarks (optional)..." 
               value={plantHeadRemark} 
               onChange={(e) => setPlantHeadRemark(e.target.value)} 
@@ -751,12 +751,12 @@ export default function DeviationDetailsPage() {
 
         {/* CEO Approval Screen */}
         {deviation.status === 'PENDING_PLANT_HEAD' && isCeo && (
-          <section className="bg-amber-50/50 p-6 rounded-2xl border border-amber-100 shadow-sm space-y-4">
-            <h3 className="text-sm font-black text-amber-900 uppercase tracking-wider border-b border-amber-100 pb-3">CEO Approval Required</h3>
-            <p className="text-xs text-amber-700 leading-relaxed font-semibold">Please audit root cause analysis, action items, and marketing remarks. Add optional remarks and approve to route this deviation to the Quality Head.</p>
+          <section className="bg-amber-50/40 p-6 rounded-2xl border border-amber-200/80 shadow-soft space-y-4">
+            <h3 className="text-sm font-black text-amber-900 uppercase tracking-wider border-b border-amber-200/60 pb-3">CEO Approval Required</h3>
+            <p className="text-xs text-amber-750 leading-relaxed font-semibold">Please audit root cause analysis, action items, and marketing remarks. Add optional remarks and approve to route this deviation to the Quality Head.</p>
             <textarea 
               rows={3} 
-              className="w-full px-4 py-3 text-sm bg-white border border-amber-100 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+              className="w-full px-4 py-3 text-sm bg-white border border-amber-200/80 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none transition-all font-medium text-slate-750 resize-none shadow-sm" 
               placeholder="CEO Remarks (optional)..." 
               value={ceoRemark} 
               onChange={(e) => setCeoRemark(e.target.value)} 
@@ -790,9 +790,9 @@ export default function DeviationDetailsPage() {
 
         {/* Display Plant Head remarks if signed */}
         {deviation.plantHeadId && (
-          <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-50 pb-3">Plant Head Remarks</h3>
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-slate-600 font-medium text-sm leading-relaxed">
+          <section className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft space-y-3">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100/60 pb-3">Plant Head Remarks</h3>
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 italic text-slate-650 font-medium text-sm leading-relaxed">
               {deviation.plantHeadRemarks || 'No remarks provided.'}
             </div>
             {deviation.plantHeadAttachments && deviation.plantHeadAttachments.length > 0 && (
@@ -823,9 +823,9 @@ export default function DeviationDetailsPage() {
 
         {/* Display CEO remarks if signed */}
         {deviation.ceoId && (
-          <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-50 pb-3">CEO Remarks</h3>
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 italic text-slate-600 font-medium text-sm leading-relaxed">
+          <section className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft space-y-3">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100/60 pb-3">CEO Remarks</h3>
+            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 italic text-slate-650 font-medium text-sm leading-relaxed">
               {deviation.ceoRemarks || 'No remarks provided.'}
             </div>
             {deviation.ceoAttachments && deviation.ceoAttachments.length > 0 && (
@@ -856,12 +856,12 @@ export default function DeviationDetailsPage() {
 
         {/* Quality Head Final Approval Screen */}
         {deviation.status === 'PENDING_QUALITY_HEAD' && isQualityHead && (
-          <section className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100 shadow-sm space-y-4">
-            <h3 className="text-sm font-black text-emerald-900 uppercase tracking-wider border-b border-emerald-100 pb-3">Quality Head Final Closeout</h3>
-            <p className="text-xs text-emerald-700 leading-relaxed font-semibold">You are the final authority in this deviation workflow. Please write final quality assessment comments below and finalize this request to mark it as CLOSED.</p>
+          <section className="bg-emerald-50/40 p-6 rounded-2xl border border-emerald-200/80 shadow-soft space-y-4">
+            <h3 className="text-sm font-black text-emerald-900 uppercase tracking-wider border-b border-emerald-200/60 pb-3">Quality Head Final Closeout</h3>
+            <p className="text-xs text-emerald-755 leading-relaxed font-semibold">You are the final authority in this deviation workflow. Please write final quality assessment comments below and finalize this request to mark it as CLOSED.</p>
             <textarea 
               rows={3} 
-              className="w-full px-4 py-3 text-sm bg-white border border-emerald-100 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-medium text-slate-700 resize-none" 
+              className="w-full px-4 py-3 text-sm bg-white border border-emerald-200/80 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all font-medium text-slate-750 resize-none shadow-sm" 
               placeholder="Quality Head remarks (optional)..." 
               value={qualityHeadRemark} 
               onChange={(e) => setQualityHeadRemark(e.target.value)} 
@@ -895,13 +895,13 @@ export default function DeviationDetailsPage() {
 
         {/* Closed / Quality Head Approval display */}
         {deviation.status === 'CLOSED' && (
-          <section className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100 shadow-sm space-y-3">
-            <h3 className="text-sm font-black text-emerald-800 uppercase tracking-wider border-b border-emerald-100 pb-3 flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
+          <section className="bg-emerald-50/40 p-6 rounded-2xl border border-emerald-250 shadow-soft space-y-3">
+            <h3 className="text-sm font-black text-emerald-800 uppercase tracking-wider border-b border-emerald-200/60 pb-3 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-emerald-650 animate-pulse" />
               Final Closeout Details (Quality Head)
             </h3>
             {deviation.qualityHeadRemarks && (
-              <div className="p-3 bg-white rounded-xl border border-emerald-100 italic text-emerald-800 font-medium text-sm leading-relaxed">
+              <div className="p-3.5 bg-white rounded-xl border border-emerald-200/80 italic text-emerald-800 font-medium text-sm leading-relaxed">
                 {deviation.qualityHeadRemarks}
               </div>
             )}
@@ -930,8 +930,8 @@ export default function DeviationDetailsPage() {
         )}
 
         {/* Audit Trail Section */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-50 pb-3 flex items-center gap-2">
+        <section className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-soft space-y-6">
+          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider border-b border-slate-100/60 pb-3 flex items-center gap-2">
             <Clock className="w-4 h-4 text-slate-400" />
             Audit Trail History
           </h3>

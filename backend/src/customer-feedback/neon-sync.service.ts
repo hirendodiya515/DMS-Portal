@@ -73,7 +73,6 @@ export class NeonSyncService {
               product: row.product,
               
               // Quality (Updated field names)
-              qualityRating: row.quality_rating,
               thicknessDimensionQualityRating: row.thickness_dimension_quality_rating,
               thicknessDimensionQualityComment: row.thickness_dimension_quality_comment,
               surfaceVisualQualityRating: row.surface_visual_quality_rating,
@@ -86,17 +85,33 @@ export class NeonSyncService {
               arCoatingQualityComment: row.ar_coating_quality_comment,
               packingLoadingQualityRating: row.packing_loading_quality_rating,
               packingLoadingQualityComment: row.packing_loading_quality_comment,
+              solarGlassQualityRating: row.solar_glass_quality_rating,
+              solarGlassQualityComment: row.solar_glass_quality_comment,
+              energyGenerationPerformanceRating: row.energy_generation_performance_rating,
+              energyGenerationPerformanceComment: row.energy_generation_performance_comment,
+              technicalStandardsComplianceRating: row.technical_standards_compliance_rating,
+              technicalStandardsComplianceComment: row.technical_standards_compliance_comment,
               qualityAverage: row.quality_average,
 
-              // Competitiveness (Updated field name)
+              // Competitiveness & Support (Updated field names)
               pricingRating: row.pricing_rating,
               pricingComment: row.pricing_comment,
               deliveryLeadTimeRating: row.delivery_lead_time_rating,
               deliveryLeadTimeComment: row.delivery_lead_time_comment,
               afterSalesServiceResponseRating: row.after_sales_service_response_rating,
               afterSalesServiceResponseComment: row.after_sales_service_response_comment,
+              supportSatisfactionRating: row.support_satisfaction_rating,
+              supportSatisfactionComment: row.support_satisfaction_comment,
               salesTeamApproachRating: row.sales_team_approach_rating,
               salesTeamApproachComment: row.sales_team_approach_comment,
+              documentationAccuracyRating: row.documentation_accuracy_rating,
+              documentationAccuracyComment: row.documentation_accuracy_comment,
+
+              // Expectations
+              solarGlassExpectationsRating: row.solar_glass_expectations_rating,
+              solarGlassExpectationsComment: row.solar_glass_expectations_comment,
+              futureUseLikelihoodRating: row.future_use_likelihood_rating,
+              futureUseLikelihoodComment: row.future_use_likelihood_comment,
 
               // Insights
               procuredOtherThanBorosil: row.procured_other_than_borosil,

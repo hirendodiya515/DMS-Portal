@@ -21,7 +21,7 @@ export class CustomerFeedbackService {
   }
 
   async createFeedback(payload: any) {
-    const { basicInfo, quality, competitiveness, others, overallSatisfaction, suggestion, qualityAverage } = payload;
+    const { basicInfo, quality, competitiveness, expectations, others, overallSatisfaction, suggestion, qualityAverage } = payload;
 
     // Map nested UI structure to flat Entity structure (Updated)
     const feedbackData: Partial<CustomerFeedback> = {
@@ -50,6 +50,12 @@ export class CustomerFeedbackService {
       arCoatingQualityComment: quality.arCoatingQuality.comment,
       packingLoadingQualityRating: quality.packingLoadingQuality.rating,
       packingLoadingQualityComment: quality.packingLoadingQuality.comment,
+      solarGlassQualityRating: quality.solarGlassQuality?.rating || 0,
+      solarGlassQualityComment: quality.solarGlassQuality?.comment || '',
+      energyGenerationPerformanceRating: quality.energyGenerationPerformance?.rating || 0,
+      energyGenerationPerformanceComment: quality.energyGenerationPerformance?.comment || '',
+      technicalStandardsComplianceRating: quality.technicalStandardsCompliance?.rating || 0,
+      technicalStandardsComplianceComment: quality.technicalStandardsCompliance?.comment || '',
       qualityAverage: qualityAverage,
 
       // Competitiveness Section (Updated field name)
@@ -57,10 +63,20 @@ export class CustomerFeedbackService {
       pricingComment: competitiveness.pricing.comment,
       deliveryLeadTimeRating: competitiveness.deliveryLeadTime.rating,
       deliveryLeadTimeComment: competitiveness.deliveryLeadTime.comment,
-      afterSalesServiceResponseRating: competitiveness.afterSalesServiceResponse.rating,
-      afterSalesServiceResponseComment: competitiveness.afterSalesServiceResponse.comment,
+      afterSalesServiceResponseRating: competitiveness.afterSalesServiceResponse?.rating || 0,
+      afterSalesServiceResponseComment: competitiveness.afterSalesServiceResponse?.comment || '',
+      supportSatisfactionRating: competitiveness.supportSatisfaction?.rating || 0,
+      supportSatisfactionComment: competitiveness.supportSatisfaction?.comment || '',
       salesTeamApproachRating: competitiveness.salesTeamApproach.rating,
       salesTeamApproachComment: competitiveness.salesTeamApproach.comment,
+      documentationAccuracyRating: competitiveness.documentationAccuracy?.rating || 0,
+      documentationAccuracyComment: competitiveness.documentationAccuracy?.comment || '',
+
+      // Expectations Section
+      solarGlassExpectationsRating: expectations?.solarGlassExpectations?.rating || 0,
+      solarGlassExpectationsComment: expectations?.solarGlassExpectations?.comment || '',
+      futureUseLikelihoodRating: expectations?.futureUseLikelihood?.rating || 0,
+      futureUseLikelihoodComment: expectations?.futureUseLikelihood?.comment || '',
 
       // Others & Satisfaction
       procuredOtherThanBorosil: others.procuredOtherThanBorosil,
@@ -83,10 +99,19 @@ export class CustomerFeedbackService {
       { label: 'Edge Grinding', score: quality.edgeGrindingQuality.rating },
       { label: 'Coating', score: quality.arCoatingQuality.rating },
       { label: 'Packing & Loading', score: quality.packingLoadingQuality.rating },
+      { label: 'Solar Glass Quality', score: quality.solarGlassQuality?.rating || 0 },
+      { label: 'Energy Generation Performance', score: quality.energyGenerationPerformance?.rating || 0 },
+      { label: 'Technical Standards Compliance', score: quality.technicalStandardsCompliance?.rating || 0 },
+      
       { label: 'Pricing', score: competitiveness.pricing.rating },
       { label: 'Delivery & Lead Time', score: competitiveness.deliveryLeadTime.rating },
-      { label: 'After Sales Service', score: competitiveness.afterSalesServiceResponse.rating },
+      { label: 'After Sales Service', score: competitiveness.afterSalesServiceResponse?.rating || 0 },
+      { label: 'Support Satisfaction', score: competitiveness.supportSatisfaction?.rating || 0 },
       { label: 'Sales Team Approach', score: competitiveness.salesTeamApproach.rating },
+      { label: 'Documentation Accuracy', score: competitiveness.documentationAccuracy?.rating || 0 },
+
+      { label: 'Solar Glass Expectations', score: expectations?.solarGlassExpectations?.rating || 0 },
+      { label: 'Future Use Likelihood', score: expectations?.futureUseLikelihood?.rating || 0 },
     ];
 
     for (const item of allRatings) {

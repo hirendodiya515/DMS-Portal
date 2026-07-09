@@ -139,7 +139,7 @@ export default function Header() {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-20">
+    <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200/80 flex items-center justify-between px-6 sticky top-0 z-20 shadow-soft">
       <div className="flex items-center gap-4 flex-1">
         <div className="mr-4">
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
@@ -154,12 +154,12 @@ export default function Header() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => searchQuery.length >= 2 && setShowSearchSuggestions(true)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
+            className="w-full pl-10 pr-4 py-2 bg-slate-100/50 hover:bg-slate-100 focus:bg-white border border-slate-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm transition-all"
           />
 
           {showSearchSuggestions && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="max-h-[min(80vh,400px)] overflow-y-auto">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-premium border border-slate-100 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="max-h-[min(80vh,400px)] overflow-y-auto custom-scrollbar">
                 {searchResults.map((result, index) => (
                   <button
                     key={`${result.id}-${index}`}
@@ -199,7 +199,7 @@ export default function Header() {
         <div className="relative">
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition"
+            className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition hover:scale-105 active:scale-95"
           >
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
@@ -213,9 +213,9 @@ export default function Header() {
                 className="fixed inset-0 z-10" 
                 onClick={() => setShowNotifications(false)}
               ></div>
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-100 z-20 overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                  <h3 className="font-semibold text-sm text-slate-800">Notifications</h3>
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-premium border border-slate-100 z-20 overflow-hidden animate-in fade-in zoom-in duration-200">
+                <div className="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                  <h3 className="font-bold text-sm text-slate-800">Notifications</h3>
                   {unreadCount > 0 && (
                     <button 
                       onClick={markAllAsRead}
@@ -277,7 +277,7 @@ export default function Header() {
           </button>
           <button 
             onClick={handleLogout}
-            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition ml-2"
+            className="p-2 text-slate-450 hover:text-red-650 hover:bg-red-50 rounded-xl transition ml-2 hover:scale-105 active:scale-95"
             title="Logout"
           >
             <LogOut className="w-5 h-5" />
