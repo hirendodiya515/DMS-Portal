@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, FileText, Plus, AlertTriangle, ArrowRight, CheckCircle2, Target, X, Trash2 } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Plus, AlertTriangle, ArrowRight, CheckCircle2, Target, X, Trash2, History, Clock, FileCheck, MessageSquare, Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -24,12 +24,33 @@ interface Party {
   risk: 'Low' | 'Medium' | 'High';
   actions: string[];
   responsible?: string;
+  category: 'Internal' | 'External';
+  complianceObligations?: string;
+  associatedRisks?: string;
+  associatedOpportunities?: string;
 }
 
 export default function ContextOfOrgPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('swot');
   
+  interface HistoryLog {
+    id: string;
+    tab: 'swot' | 'party' | 'scope' | 'general';
+    action: 'add' | 'edit' | 'delete' | 'review';
+    itemName?: string;
+    details: string;
+    timestamp: string;
+    user?: {
+      firstName: string;
+      lastName: string;
+    };
+  }
+
+  const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [reviewComment, setReviewComment] = useState("");
+
   // Convert to Risk Modal State
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
@@ -63,17 +84,41 @@ export default function ContextOfOrgPage() {
     fetchData();
   }, []);
 
+  const fetchHistory = async () => {
+    try {
+      const res = await api.get('/org-context/history');
+      setHistoryLogs(res.data);
+    } catch (error) {
+      console.error('Failed to fetch org context history:', error);
+    }
+  };
+
+  const handleLogReview = async () => {
+    if (!reviewComment.trim()) return;
+    try {
+      await api.post('/org-context/review', { details: reviewComment.trim() });
+      setReviewComment("");
+      setIsReviewModalOpen(false);
+      fetchHistory();
+    } catch (error) {
+      console.error('Failed to log review:', error);
+      alert('Failed to log review. Please try again.');
+    }
+  };
+
   const fetchData = async () => {
     try {
-      const [issuesRes, partiesRes, scopeRes, deptsRes] = await Promise.all([
+      const [issuesRes, partiesRes, scopeRes, deptsRes, historyRes] = await Promise.all([
         api.get('/org-context/issues'),
         api.get('/org-context/parties'),
         api.get('/org-context/scope'),
-        api.get('/settings/departments').catch(() => ({ data: [] }))
+        api.get('/settings/departments').catch(() => ({ data: [] })),
+        api.get('/org-context/history').catch(() => ({ data: [] }))
       ]);
       setIssues(issuesRes.data);
       setParties(partiesRes.data);
       setDepartments(deptsRes.data || []);
+      setHistoryLogs(historyRes.data || []);
       
       const scopeData = scopeRes.data;
       if (scopeData && typeof scopeData === 'string') {
@@ -93,7 +138,7 @@ export default function ContextOfOrgPage() {
 
   // New Issue / Party Form State
   const [newIssue, setNewIssue] = useState<Partial<Issue>>({ category: 'strength', impact: 'low', standards: ['ISO 9001'] });
-  const [newParty, setNewParty] = useState<Partial<Party>>({ risk: 'Medium', standards: ['ISO 9001'], actions: [] });
+  const [newParty, setNewParty] = useState<Partial<Party>>({ risk: 'Medium', standards: ['ISO 9001'], actions: [], category: 'Internal' });
   const [tempAction, setTempAction] = useState("");
   const [tempScopeText, setTempScopeText] = useState(scopeText);
 
@@ -115,6 +160,7 @@ export default function ContextOfOrgPage() {
       await api.put(`/org-context/issues/${selectedIssue.id}`, { isConverted: true });
       const updatedIssues = issues.map(i => i.id === selectedIssue.id ? { ...i, isConverted: true } : i);
       setIssues(updatedIssues);
+      fetchHistory();
 
       // Route to the new Strategic Risks page, passing the issue data
       navigate('/risks/strategic', { 
@@ -143,6 +189,7 @@ export default function ContextOfOrgPage() {
       setIsAddIssueOpen(false);
       setNewIssue({ category: 'strength', impact: 'low', standards: ['ISO 9001'] });
       setEditingIssueId(null);
+      fetchHistory();
     } catch (error) {
       console.error('Failed to save issue:', error);
       alert('Failed to save issue. Please try again.');
@@ -160,6 +207,7 @@ export default function ContextOfOrgPage() {
     try {
       await api.delete(`/org-context/issues/${id}`);
       setIssues(issues.filter(i => i.id !== id));
+      fetchHistory();
     } catch (error) {
        console.error('Failed to delete issue:', error);
        alert('Failed to delete issue.');
@@ -183,9 +231,10 @@ export default function ContextOfOrgPage() {
         setParties([res.data, ...parties]);
       }
       setIsAddPartyOpen(false);
-      setNewParty({ risk: 'Medium', standards: ['ISO 9001'], actions: [] });
+      setNewParty({ risk: 'Medium', standards: ['ISO 9001'], actions: [], category: 'Internal' });
       setTempAction("");
       setEditingPartyId(null);
+      fetchHistory();
     } catch (error) {
       console.error('Failed to save party:', error);
       alert('Failed to save Interested Party. Please try again.');
@@ -193,7 +242,7 @@ export default function ContextOfOrgPage() {
   };
 
   const openEditPartyModal = (party: Party) => {
-    setNewParty({ ...party });
+    setNewParty({ ...party, category: party.category || 'Internal' });
     setEditingPartyId(party.id);
     setIsAddPartyOpen(true);
   };
@@ -214,21 +263,52 @@ export default function ContextOfOrgPage() {
     try {
       await api.delete(`/org-context/parties/${id}`);
       setParties(parties.filter(p => p.id !== id));
+      fetchHistory();
     } catch (error) {
       console.error('Failed to delete interested party:', error);
       alert('Failed to delete interested party. Please try again.');
     }
   };
 
-  const handleSaveScope = () => {
-    setScopeText(tempScopeText);
-    setIsEditScopeOpen(false);
+  const handleExportExcel = async () => {
+    try {
+      const response = await api.get('/org-context/parties/export', {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `interested-parties-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export to Excel:', error);
+      alert('Failed to export to Excel. Please try again.');
+    }
+  };
+
+  const handleSaveScope = async () => {
+    try {
+      await api.post('/org-context/scope', { content: tempScopeText });
+      setScopeText(tempScopeText);
+      setIsEditScopeOpen(false);
+      fetchHistory();
+    } catch (error) {
+      console.error('Failed to save scope:', error);
+      alert('Failed to save IMS scope. Please try again.');
+    }
   };
 
   const tabs = [
     { id: 'swot', label: 'Internal & External Issues', icon: LayoutDashboard },
     { id: 'stakeholders', label: 'Interested Parties', icon: Users },
     { id: 'scope', label: 'IMS Scope', icon: FileText },
+    { id: 'history', label: 'Revision History', icon: History },
   ];
 
   return (
@@ -704,31 +784,45 @@ export default function ContextOfOrgPage() {
                           </button>
                         )}
                       </div>
-                      {isAdmin && (
-                        <button onClick={() => { setEditingPartyId(null); setNewParty({ risk: 'Medium', standards: ['ISO 9001'], actions: [] }); setIsAddPartyOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm shrink-0">
-                          <Plus className="w-4 h-4" />
-                          Add Party
+                      <div className="flex gap-3">
+                        <button 
+                          onClick={handleExportExcel} 
+                          className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium shadow-sm shrink-0 border border-slate-200"
+                        >
+                          <Download className="w-4 h-4 text-slate-500" />
+                          Export to Excel
                         </button>
-                      )}
+                        {isAdmin && (
+                          <button onClick={() => { setEditingPartyId(null); setNewParty({ risk: 'Medium', standards: ['ISO 9001'], actions: [], category: 'Internal' }); setIsAddPartyOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm shrink-0">
+                            <Plus className="w-4 h-4" />
+                            Add Party
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
                   <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse min-w-[1150px]">
+                      <table className="w-full text-left border-collapse min-w-[1800px]">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
                             <th className="px-6 py-4 font-medium">Interested Party</th>
+                            <th className="px-6 py-4 font-medium">Category</th>
                             <th className="px-6 py-4 font-medium">Standards</th>
                             <th className="px-6 py-4 font-medium">Needs & Expectations</th>
-                            <th className="px-6 py-4 font-medium">Risk</th>
+                            <th className="px-6 py-4 font-medium">Statutory/Compliance Obligations</th>
+                            <th className="px-6 py-4 font-medium">Associated Risks</th>
+                            <th className="px-6 py-4 font-medium">Associated Opportunities</th>
+                            <th className="px-6 py-4 font-medium">Risk if Unmet</th>
                             <th className="px-6 py-4 font-medium">Mitigations / Actions</th>
                             <th className="px-6 py-4 font-medium">Responsible</th>
                             {isAdmin && <th className="px-6 py-4 font-medium text-right">Actions</th>}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {groupedPartiesList.map(group => {
+                          {groupedPartiesList.map((group, groupIdx) => {
+                            const isEvenGroup = groupIdx % 2 === 0;
                             return group.items.map((party, index) => (
                               <PartyRow 
                                 key={party.id}
@@ -736,6 +830,7 @@ export default function ContextOfOrgPage() {
                                 isFirst={index === 0}
                                 rowSpan={group.items.length}
                                 isLastOfGroup={index === group.items.length - 1}
+                                isEvenGroup={isEvenGroup}
                                 onDelete={isAdmin ? () => handleDeleteParty(party.id) : undefined}
                                 onEdit={isAdmin ? () => openEditPartyModal(party) : undefined}
                                 isAdmin={isAdmin}
@@ -744,7 +839,7 @@ export default function ContextOfOrgPage() {
                           })}
                           {groupedPartiesList.length === 0 && (
                              <tr>
-                               <td colSpan={isAdmin ? 7 : 6} className="px-6 py-8 text-center text-slate-500 text-sm">
+                               <td colSpan={isAdmin ? 11 : 10} className="px-6 py-8 text-center text-slate-500 text-sm">
                                  {searchTerm ? "No matching interested parties found." : "No interested parties added yet."}
                                </td>
                              </tr>
@@ -819,11 +914,195 @@ export default function ContextOfOrgPage() {
 
               </motion.div>
             )}
+
+            {activeTab === 'history' && (() => {
+              const lastReview = historyLogs.find(log => log.action === 'review');
+              const lastUpdate = historyLogs[0];
+
+              return (
+                <motion.div
+                  key="history"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6"
+                >
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-800 font-sans">Revision & Review History<p className="text-xs text-slate-500 mt-1 font-sans">Audit log of all changes and management reviews</p></h2>
+                    </div>
+                    {isAdmin && (
+                      <button 
+                        onClick={() => { setReviewComment(""); setIsReviewModalOpen(true); }} 
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm shrink-0"
+                      >
+                        <FileCheck className="w-4 h-4" />
+                        Log Manual Review
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 flex items-center gap-4">
+                      <div className="p-3 bg-emerald-50 border border-emerald-100 text-emerald-600 rounded-lg">
+                        <FileCheck className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-slate-500 uppercase block font-sans">Last Management Review</span>
+                        <span className="text-sm font-bold text-slate-800 block mt-1 font-sans">
+                          {lastReview ? new Date(lastReview.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No reviews logged yet'}
+                        </span>
+                        {lastReview && (
+                          <span className="text-xs text-slate-500 mt-0.5 block truncate max-w-[200px]" title={lastReview.user ? `${lastReview.user.firstName} ${lastReview.user.lastName}` : 'System'}>
+                            by {lastReview.user ? `${lastReview.user.firstName} ${lastReview.user.lastName}` : 'System'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 flex items-center gap-4">
+                      <div className="p-3 bg-blue-50 border border-blue-100 text-blue-600 rounded-lg">
+                        <Clock className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-slate-500 uppercase block font-sans">Last Updated Date</span>
+                        <span className="text-sm font-bold text-slate-800 block mt-1 font-sans">
+                          {lastUpdate ? new Date(lastUpdate.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No updates logged yet'}
+                        </span>
+                        {lastUpdate && (
+                          <span className="text-xs text-slate-500 mt-0.5 block">
+                            by {lastUpdate.user ? `${lastUpdate.user.firstName} ${lastUpdate.user.lastName}` : 'System'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 flex items-center gap-4">
+                      <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-lg">
+                        <History className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-slate-500 uppercase block font-sans">Total Operations Logged</span>
+                        <span className="text-2xl font-bold text-indigo-700 block mt-0.5 font-sans">
+                          {historyLogs.length}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Timeline */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                    {historyLogs.length === 0 ? (
+                      <p className="text-slate-400 text-center py-8">No change history logs available.</p>
+                    ) : (
+                      <div className="relative border-l border-slate-200 pl-8 ml-4 space-y-8">
+                        {historyLogs.map(log => {
+                          const isReview = log.action === 'review';
+                          const isAdd = log.action === 'add';
+                          const isDelete = log.action === 'delete';
+
+                          const getActionBadge = () => {
+                            if (isReview) return <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full font-sans">Reviewed</span>;
+                            if (isAdd) return <span className="bg-green-50 text-green-700 border border-green-100 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full font-sans">Added</span>;
+                            if (isDelete) return <span className="bg-red-50 text-red-700 border border-red-100 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full font-sans">Deleted</span>;
+                            return <span className="bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full font-sans">Updated</span>;
+                          };
+
+                          const getTabBadge = () => {
+                            if (log.tab === 'swot') return <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-sans">SWOT</span>;
+                            if (log.tab === 'party') return <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-sans">Interested Parties</span>;
+                            if (log.tab === 'scope') return <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-sans">IMS Scope</span>;
+                            return null;
+                          };
+
+                          const getIcon = () => {
+                            if (isReview) return <FileCheck className="w-4 h-4 text-emerald-600" />;
+                            if (log.tab === 'swot') return <LayoutDashboard className="w-4 h-4 text-slate-600" />;
+                            if (log.tab === 'party') return <Users className="w-4 h-4 text-slate-600" />;
+                            if (log.tab === 'scope') return <FileText className="w-4 h-4 text-slate-600" />;
+                            return <Clock className="w-4 h-4 text-slate-600" />;
+                          };
+
+                          const getIconBg = () => {
+                            if (isReview) return 'bg-emerald-50 border-emerald-200';
+                            if (isAdd) return 'bg-green-50 border-green-200';
+                            if (isDelete) return 'bg-red-50 border-red-200';
+                            return 'bg-slate-50 border-slate-200';
+                          };
+
+                          return (
+                            <div key={log.id} className="relative">
+                              {/* Timeline dot/icon */}
+                              <div className={`absolute -left-[49px] top-0.5 w-8 h-8 rounded-full border flex items-center justify-center bg-white shadow-sm ${getIconBg()}`}>
+                                {getIcon()}
+                              </div>
+
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2.5 flex-wrap">
+                                    <span className="font-semibold text-slate-800 text-sm font-sans">
+                                      {log.user ? `${log.user.firstName} ${log.user.lastName}` : 'System'}
+                                    </span>
+                                    {getActionBadge()}
+                                    {getTabBadge()}
+                                  </div>
+                                  <p className="text-sm text-slate-600 font-medium font-sans leading-relaxed">{log.details}</p>
+                                  {isReview && log.itemName && (
+                                    <div className="flex items-start gap-1.5 bg-slate-50 border border-slate-100 p-2.5 rounded-lg text-xs text-slate-600 mt-2 max-w-xl font-sans leading-relaxed">
+                                      <MessageSquare className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                                      <span>{log.itemName}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-xs text-slate-400 shrink-0 font-medium font-sans">
+                                  {new Date(log.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })()}
           </AnimatePresence>
         </div>
       </div>
 
       {/* MODALS */}
+      {/* Log Review Modal */}
+      <AnimatePresence>
+        {isReviewModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200">
+              <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                <h3 className="text-lg font-semibold text-slate-800 font-sans">Log Management Review</h3>
+                <button onClick={() => setIsReviewModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1 font-sans">Review Comments / Details</label>
+                  <textarea 
+                    rows={4} 
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-700 leading-relaxed text-sm font-sans" 
+                    value={reviewComment} 
+                    onChange={e => setReviewComment(e.target.value)} 
+                    placeholder="Enter details of review, e.g., 'Top Management reviewed the internal/external issues and interested parties expectations...'"
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
+                <button onClick={() => setIsReviewModalOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors font-sans">Cancel</button>
+                <button onClick={handleLogReview} disabled={!reviewComment.trim()} className="px-4 py-2 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-sans disabled:opacity-50 disabled:cursor-not-allowed">Log Review</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* 1. Add Issue Modal */}
       <AnimatePresence>
         {isAddIssueOpen && (
@@ -895,21 +1174,34 @@ export default function ContextOfOrgPage() {
                  <button onClick={() => setIsAddPartyOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><X className="w-5 h-5" /></button>
                </div>
                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                 <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Party Name</label>
-                   <input 
-                     type="text" 
-                     list="existing-party-names"
-                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
-                     value={newParty.name || ''} 
-                     onChange={e => setNewParty({...newParty, name: e.target.value})} 
-                     placeholder="e.g. Employees, Customer, Suppliers" 
-                   />
-                   <datalist id="existing-party-names">
-                     {Array.from(new Set(parties.map(p => p.name.trim()))).map(name => (
-                       <option key={name} value={name} />
-                     ))}
-                   </datalist>
+                 <div className="grid grid-cols-2 gap-4">
+                   <div>
+                     <label className="block text-sm font-medium text-slate-700 mb-1">Party Name</label>
+                     <input 
+                       type="text" 
+                       list="existing-party-names"
+                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                       value={newParty.name || ''} 
+                       onChange={e => setNewParty({...newParty, name: e.target.value})} 
+                       placeholder="e.g. Employees, Customer, Suppliers" 
+                     />
+                     <datalist id="existing-party-names">
+                       {Array.from(new Set(parties.map(p => p.name.trim()))).map(name => (
+                         <option key={name} value={name} />
+                       ))}
+                     </datalist>
+                   </div>
+                   <div>
+                     <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                     <select 
+                       className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-700" 
+                       value={newParty.category || 'Internal'} 
+                       onChange={e => setNewParty({...newParty, category: e.target.value as any})}
+                     >
+                       <option value="Internal">Internal</option>
+                       <option value="External">External</option>
+                     </select>
+                   </div>
                  </div>
                  <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Applicable Standards</label>
@@ -933,6 +1225,18 @@ export default function ContextOfOrgPage() {
                    <label className="block text-sm font-medium text-slate-700 mb-1">Needs & Expectations</label>
                    <textarea rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none" value={newParty.needs || ''} onChange={e => setNewParty({...newParty, needs: e.target.value})} placeholder="What do they expect from the IMS?"></textarea>
                  </div>
+                 <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Relevant Statutory or Compliance Obligations <span className="text-slate-400 text-xs font-normal">(Optional)</span></label>
+                    <textarea rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-sm text-slate-700 font-sans" value={newParty.complianceObligations || ''} onChange={e => setNewParty({...newParty, complianceObligations: e.target.value})} placeholder="Any statutory/regulatory/compliance mandates..."></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Associated Risks <span className="text-slate-400 text-xs font-normal">(Optional)</span></label>
+                    <textarea rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-sm text-slate-700 font-sans" value={newParty.associatedRisks || ''} onChange={e => setNewParty({...newParty, associatedRisks: e.target.value})} placeholder="Associated risks if expectations are unmet..."></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Associated Opportunities <span className="text-slate-400 text-xs font-normal">(Optional)</span></label>
+                    <textarea rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-sm text-slate-700 font-sans" value={newParty.associatedOpportunities || ''} onChange={e => setNewParty({...newParty, associatedOpportunities: e.target.value})} placeholder="Associated opportunities if expectations are exceeded or met..."></textarea>
+                  </div>
                  <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
                     <div>
                        <label className="block text-sm font-medium text-slate-700 mb-1">Risk if Unmet</label>
@@ -1163,7 +1467,8 @@ const PartyRow = ({
   isAdmin,
   isFirst,
   rowSpan,
-  isLastOfGroup
+  isLastOfGroup,
+  isEvenGroup
 }: { 
   party: Party, 
   onDelete?: () => void, 
@@ -1171,31 +1476,49 @@ const PartyRow = ({
   isAdmin?: boolean,
   isFirst: boolean,
   rowSpan: number,
-  isLastOfGroup: boolean
+  isLastOfGroup: boolean,
+  isEvenGroup: boolean
 }) => {
+  const rowBgClass = isEvenGroup ? 'bg-slate-50/50' : 'bg-white';
+  const borderClass = isLastOfGroup ? 'border-b-2 border-slate-350 shadow-[inset_0_-1px_0_0_rgb(226,232,240)]' : 'border-b border-slate-100';
+
   return (
-    <tr className={`hover:bg-slate-50/30 transition-colors group align-top ${
-      isLastOfGroup ? 'border-b-2 border-slate-200/60' : ''
-    }`}>
+    <tr className={`hover:bg-slate-100/50 transition-colors group align-top ${rowBgClass}`}>
       {isFirst && (
         <td 
-          className="px-6 py-5 font-semibold text-slate-900 break-words border-r border-slate-100 bg-slate-50/20 align-middle text-center whitespace-nowrap" 
+          className={`px-6 py-5 font-semibold text-slate-900 break-words border-r border-slate-200 align-middle text-center bg-slate-100/30 ${borderClass}`} 
           rowSpan={rowSpan}
         >
-          <span className="inline-block px-3 py-1 bg-blue-50/50 text-blue-900 border border-blue-100/50 rounded-lg text-sm font-bold shadow-sm">
+          <span className="inline-block px-3 py-1 bg-blue-100/60 text-blue-900 border border-blue-200/80 rounded-lg text-sm font-bold shadow-sm whitespace-nowrap">
             {party.name}
           </span>
         </td>
       )}
-      <td className="px-6 py-4 whitespace-nowrap">
+      <td className={`px-6 py-4 whitespace-nowrap ${borderClass}`}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+          party.category === 'External' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
+        }`}>
+          {party.category || 'Internal'}
+        </span>
+      </td>
+      <td className={`px-6 py-4 whitespace-nowrap ${borderClass}`}>
         <div className="flex gap-1 flex-wrap">
           {party.standards?.map((s: string) => <StandardBadge key={s} standard={s} />)}
         </div>
       </td>
-      <td className="px-6 py-4 text-sm text-slate-600 break-words leading-relaxed font-medium min-w-[250px] max-w-[400px] whitespace-normal">
+      <td className={`px-6 py-4 text-sm text-slate-600 break-words leading-relaxed font-medium min-w-[250px] max-w-[400px] whitespace-normal ${borderClass}`}>
         {party.needs}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
+      <td className={`px-6 py-4 text-sm text-slate-600 break-words leading-relaxed font-medium min-w-[250px] max-w-[400px] whitespace-normal ${borderClass}`}>
+        {party.complianceObligations || <span className="text-slate-400 italic">None specified</span>}
+      </td>
+      <td className={`px-6 py-4 text-sm text-slate-600 break-words leading-relaxed font-medium min-w-[250px] max-w-[400px] whitespace-normal ${borderClass}`}>
+        {party.associatedRisks?.trim() || <span className="text-slate-400 font-sans italic">N/A</span>}
+      </td>
+      <td className={`px-6 py-4 text-sm text-slate-600 break-words leading-relaxed font-medium min-w-[250px] max-w-[400px] whitespace-normal ${borderClass}`}>
+        {party.associatedOpportunities?.trim() || <span className="text-slate-400 font-sans italic">N/A</span>}
+      </td>
+      <td className={`px-6 py-4 whitespace-nowrap ${borderClass}`}>
         <span className={`text-xs font-bold uppercase px-2 py-1 rounded-full shadow-sm border ${
           party.risk === 'High' ? 'bg-red-50 text-red-700 border-red-100' : 
           party.risk === 'Medium' ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-green-50 text-green-700 border-green-100'
@@ -1203,7 +1526,7 @@ const PartyRow = ({
           {party.risk}
         </span>
       </td>
-      <td className="px-6 py-4 text-sm text-slate-600 min-w-[250px] max-w-[400px] whitespace-normal">
+      <td className={`px-6 py-4 text-sm text-slate-600 min-w-[250px] max-w-[400px] whitespace-normal ${borderClass}`}>
          {party.actions && party.actions.length > 0 ? (
             <ul className="list-disc list-inside space-y-1.5 marker:text-slate-400">
                {party.actions.map((act, i) => (
@@ -1214,7 +1537,7 @@ const PartyRow = ({
            <span className="text-slate-400 italic">No mitigations specified</span>
          )}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
+      <td className={`px-6 py-4 whitespace-nowrap ${borderClass}`}>
         {party.responsible ? (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-800 border border-slate-200">
             {party.responsible}
@@ -1224,7 +1547,7 @@ const PartyRow = ({
         )}
       </td>
       {isAdmin && (
-        <td className="px-6 py-4 text-right whitespace-nowrap">
+        <td className={`px-6 py-4 text-right whitespace-nowrap ${borderClass}`}>
           <div className="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
             {onEdit && (
               <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100 shadow-sm hover:shadow" title="Edit Party">

@@ -64,6 +64,7 @@ import { OrgContextModule } from './org-context/org-context.module';
 import { StrategicRisksModule } from './strategic-risks/strategic-risks.module';
 import { SwotIssue } from './entities/swot-issue.entity';
 import { InterestedParty } from './entities/interested-party.entity';
+import { OrgContextLog } from './entities/org-context-log.entity';
 import { StrategicRisk } from './entities/strategic-risk.entity';
 import { Pfmea } from './entities/pfmea.entity';
 import { PfmeaWorksheetRow } from './entities/pfmea-worksheet-row.entity';
@@ -101,7 +102,7 @@ import { AiModule } from './ai/ai.module';
           Competency, JobRole, CompetencyRequirement, EmployeeSkill, TrainingProgram, TrainingPlan,
           Equipment, CalibrationHistory,
           TrainingCalendar, TrainingAttendance, AnnualTrainingPlan,
-          SwotIssue, InterestedParty, StrategicRisk,
+          SwotIssue, InterestedParty, OrgContextLog, StrategicRisk,
           Pfmea, PfmeaWorksheetRow, CustomerFeedback, CorrectiveActionRequest,
           ProductDeviation, ProductDeviationResponsible,
           ProcessDeviation, ProcessDeviationResponsible,

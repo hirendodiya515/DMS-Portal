@@ -23,6 +23,18 @@ export class InterestedParty {
   @Column({ nullable: true })
   responsible: string;
 
+  @Column({ default: 'Internal' })
+  category: 'Internal' | 'External';
+
+  @Column('text', { nullable: true })
+  complianceObligations: string;
+
+  @Column('text', { nullable: true })
+  associatedRisks: string;
+
+  @Column('text', { nullable: true })
+  associatedOpportunities: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
