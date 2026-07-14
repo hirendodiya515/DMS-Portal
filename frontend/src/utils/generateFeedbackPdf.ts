@@ -92,6 +92,7 @@ export const generateFeedbackPdf = (feedback: any) => {
     feedback.thicknessDimensionQualityRating, feedback.surfaceVisualQualityRating,
     feedback.breakagesRating, feedback.edgeGrindingQualityRating,
     feedback.arCoatingQualityRating, feedback.packingLoadingQualityRating,
+    feedback.powerOutputOfModulesRating || feedback.power_output_of_modules_rating,
     feedback.pricingRating, feedback.deliveryLeadTimeRating,
     feedback.afterSalesServiceResponseRating, feedback.salesTeamApproachRating,
   ].map(v => (typeof v === 'number' ? v : 0));
@@ -131,6 +132,7 @@ export const generateFeedbackPdf = (feedback: any) => {
     { label: 'Edge Grinding Quality', rating: feedback.edgeGrindingQualityRating, comment: feedback.edgeGrindingQualityComment },
     { label: 'AR Coating Quality', rating: feedback.arCoatingQualityRating, comment: feedback.arCoatingQualityComment },
     { label: 'Packing & Loading Quality', rating: feedback.packingLoadingQualityRating, comment: feedback.packingLoadingQualityComment },
+    { label: 'Power Output of Modules', rating: feedback.powerOutputOfModulesRating || feedback.power_output_of_modules_rating, comment: feedback.powerOutputOfModulesComment || feedback.power_output_of_modules_comment },
     { label: 'Competitive Pricing', rating: feedback.pricingRating, comment: feedback.pricingComment },
     { label: 'Delivery Lead Time', rating: feedback.deliveryLeadTimeRating, comment: feedback.deliveryLeadTimeComment },
     { label: 'After-Sales Service & Response', rating: feedback.afterSalesServiceResponseRating, comment: feedback.afterSalesServiceResponseComment },

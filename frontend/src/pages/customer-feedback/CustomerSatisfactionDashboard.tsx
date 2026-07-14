@@ -21,6 +21,7 @@ const QUESTION_FIELDS = [
   { key: 'edgeGrindingQualityRating', label: 'Edge Grinding Quality', displayLabel: 'Edge Grinding' },
   { key: 'arCoatingQualityRating', label: 'Coating Quality', displayLabel: 'AR Coating Quality' },
   { key: 'packingLoadingQualityRating', label: 'Packing and Loading Quality', displayLabel: 'Packing & Loading' },
+  { key: 'powerOutputOfModulesRating', label: 'Power output of the modules using this product', displayLabel: 'Module Power Output' },
   { key: 'pricingRating', label: 'Pricing Compared to Competitors', displayLabel: 'Competitive Pricing' },
   { key: 'deliveryLeadTimeRating', label: 'Delivery Lead Time', displayLabel: 'Delivery Lead Time' },
   { key: 'afterSalesServiceResponseRating', label: 'After Sales Service & Response Time', displayLabel: 'After-Sales Service' },
@@ -128,6 +129,7 @@ export default function CustomerSatisfactionDashboard() {
         item.thicknessDimensionQualityRating, item.surfaceVisualQualityRating,
         item.breakagesRating, item.edgeGrindingQualityRating,
         item.arCoatingQualityRating, item.packingLoadingQualityRating,
+        item.powerOutputOfModulesRating,
         item.pricingRating, item.deliveryLeadTimeRating,
         item.afterSalesServiceResponseRating, item.salesTeamApproachRating
       ].map(v => typeof v === 'number' ? v : 0);
@@ -511,6 +513,7 @@ export default function CustomerSatisfactionDashboard() {
                     item.edgeGrindingQualityRating,
                     item.arCoatingQualityRating,
                     item.packingLoadingQualityRating,
+                    item.powerOutputOfModulesRating,
                     item.pricingRating,
                     item.afterSalesServiceResponseRating,
                     item.salesTeamApproachRating,

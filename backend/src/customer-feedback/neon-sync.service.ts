@@ -85,6 +85,8 @@ export class NeonSyncService {
               arCoatingQualityComment: row.ar_coating_quality_comment,
               packingLoadingQualityRating: row.packing_loading_quality_rating,
               packingLoadingQualityComment: row.packing_loading_quality_comment,
+              powerOutputOfModulesRating: row.power_output_of_modules_rating,
+              powerOutputOfModulesComment: row.power_output_of_modules_comment,
               solarGlassQualityRating: row.solar_glass_quality_rating,
               solarGlassQualityComment: row.solar_glass_quality_comment,
               energyGenerationPerformanceRating: row.energy_generation_performance_rating,

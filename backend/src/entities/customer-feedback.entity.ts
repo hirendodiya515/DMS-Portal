@@ -74,6 +74,11 @@ export class CustomerFeedback {
   @Column({ name: 'packing_loading_quality_comment', type: 'text', nullable: true })
   packingLoadingQualityComment: string;
 
+  @Column({ name: 'power_output_of_modules_rating', type: 'int', default: 0 })
+  powerOutputOfModulesRating: number;
+  @Column({ name: 'power_output_of_modules_comment', type: 'text', nullable: true })
+  powerOutputOfModulesComment: string;
+
   @Column({ name: 'solar_glass_quality_rating', type: 'int', default: 0 })
   solarGlassQualityRating: number;
   @Column({ name: 'solar_glass_quality_comment', type: 'text', nullable: true })
