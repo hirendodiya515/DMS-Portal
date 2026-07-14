@@ -53,4 +53,16 @@ export class AiController {
     async getModel() {
         return { model: this.aiService.getModelName() };
     }
+
+    @Post('recommend-swot-pestle')
+    @HttpCode(HttpStatus.OK)
+    async recommendSwotPestle(@Body('text') text: string) {
+        return this.aiService.recommendSwotPestle(text);
+    }
+
+    @Post('draft-risk-mitigation')
+    @HttpCode(HttpStatus.OK)
+    async draftRiskMitigation(@Body('title') title: string, @Body('standards') standards: string[]) {
+        return this.aiService.draftRiskMitigation(title, standards || []);
+    }
 }

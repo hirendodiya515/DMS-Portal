@@ -48,15 +48,23 @@ export class OrgContextService {
     return this.issueRepository.find({ order: { createdAt: 'DESC' } });
   }
 
-  async createIssue(data: Partial<SwotIssue>, userId: string) {
-    const issue = this.issueRepository.create(data);
+  async createIssue(data: any, userId: string) {
+    const { displayId, ...createData } = data;
+    if (createData.lastReviewDate === '') {
+      createData.lastReviewDate = null;
+    }
+    const issue = this.issueRepository.create(createData as Partial<SwotIssue>);
     const saved = await this.issueRepository.save(issue);
     await this.logChange('swot', 'add', saved.text, `Added SWOT Issue: "${saved.text}" (${saved.category})`, userId);
     return saved;
   }
 
-  async updateIssue(id: string, data: Partial<SwotIssue>, userId: string) {
-    await this.issueRepository.update(id, data);
+  async updateIssue(id: string, data: any, userId: string) {
+    const { displayId, ...updateData } = data;
+    if (updateData.lastReviewDate === '') {
+      updateData.lastReviewDate = null;
+    }
+    await this.issueRepository.update(id, updateData);
     const updated = await this.issueRepository.findOne({ where: { id } });
     if (updated) {
       await this.logChange('swot', 'edit', updated.text, `Updated SWOT Issue: "${updated.text}" (${updated.category})`, userId);
@@ -183,6 +191,84 @@ export class OrgContextService {
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber > 1) {
         row.getCell('actions').alignment = { wrapText: true };
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  async exportIssues(): Promise<Buffer> {
+    const issues = await this.findAllIssues();
+    
+    // Reverse to map Display ID consistently oldest-to-newest
+    const issuesWithDisplayIds = [...issues].reverse().map((issue, idx) => ({
+      ...issue,
+      displayId: `ISS-${String(idx + 1).padStart(2, '0')}`
+    })).reverse();
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('SWOT Issues');
+
+    worksheet.columns = [
+      { header: 'Display ID', key: 'displayId', width: 15 },
+      { header: 'SWOT Category', key: 'category', width: 15 },
+      { header: 'PESTLE Tag', key: 'pestleCategory', width: 15 },
+      { header: 'Issue Description', key: 'text', width: 45 },
+      { header: 'Applicable Standards', key: 'standards', width: 25 },
+      { header: 'Impact Level', key: 'impact', width: 15 },
+      { header: 'Review Status', key: 'imsStatus', width: 15 },
+      { header: 'Trend', key: 'trend', width: 15 },
+      { header: 'Evaluation Decision', key: 'evaluation', width: 25 },
+      { header: 'Is Escalate/Linked?', key: 'isConverted', width: 15 },
+      { header: 'Linked Risk ID', key: 'linkedRiskId', width: 35 },
+      { header: 'Linked MOC Type', key: 'linkedMocType', width: 15 },
+      { header: 'Linked MOC Number/Title', key: 'linkedMocInfo', width: 30 },
+      { header: 'Last Review Date', key: 'lastReviewDate', width: 20 },
+      { header: 'Review Frequency', key: 'frequency', width: 20 },
+      { header: 'Created At', key: 'createdAt', width: 20 },
+    ];
+
+    issuesWithDisplayIds.forEach((issue) => {
+      let linkedMocInfo = 'N/A';
+      if (issue.linkedMocType === 'workflow') {
+        linkedMocInfo = issue.linkedMocNumber || 'MOC Workflow';
+      } else if (issue.linkedMocType === 'document') {
+        linkedMocInfo = issue.linkedMocTitle || 'MOC Document';
+      }
+
+      worksheet.addRow({
+        displayId: issue.displayId,
+        category: issue.category ? issue.category.toUpperCase() : '',
+        pestleCategory: issue.pestleCategory || 'NA',
+        text: issue.text || '',
+        standards: issue.standards ? issue.standards.join(', ') : '',
+        impact: issue.impact ? issue.impact.toUpperCase() : '',
+        imsStatus: issue.imsStatus || 'Identified',
+        trend: issue.trend || 'Stable',
+        evaluation: issue.evaluation || 'Monitor Only',
+        isConverted: issue.isConverted ? 'Yes' : 'No',
+        linkedRiskId: issue.linkedRiskId || 'N/A',
+        linkedMocType: issue.linkedMocType || 'none',
+        linkedMocInfo: linkedMocInfo,
+        lastReviewDate: issue.lastReviewDate ? new Date(issue.lastReviewDate).toLocaleDateString('en-IN') : 'N/A',
+        frequency: issue.frequency || 'when required',
+        createdAt: issue.createdAt ? new Date(issue.createdAt).toLocaleString('en-IN') : '',
+      });
+    });
+
+    // Style header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    };
+
+    // Style text cell wrapping
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) {
+        row.getCell('text').alignment = { wrapText: true };
       }
     });
 

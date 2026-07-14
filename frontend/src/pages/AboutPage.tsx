@@ -15,6 +15,21 @@ import {
 
 const changeLog = [
   {
+    version: '3.6.0',
+    date: '14 July 2026',
+    title: 'Internal & External Issues (SWOT/PESTLE) Upgrades & Excel Export',
+    changes: [
+      'Upgraded Internal & External Issues (SWOT) with collapsible PESTLE Profile Recharts visualizing category and PESTLE distributions',
+      'Implemented standard-aware local AI (Ollama gemma4:e4b) suggestions auto-populating SWOT category, PESTLE category, impact, and standard ISO mappings (e.g. mapping GHG emissions to ISO 14001)',
+      'Added interactive SWOT 2x2 Matrix Board View representing classical quadrants layout with center SWOT axis intersections',
+      'Integrated Management of Change (MOC) linking to associate SWOT issues with active MOC workflows or document files, with direct navigation and unlinking capabilities',
+      'Engineered robust Risk and Opportunity synchronization ensuring deletions in the Strategic Risk Register automatically revert SWOT issue statuses to "No Further Action"',
+      'Fixed database query failures by stripping custom displayId properties and converting empty date strings to null to eliminate DateTimeParseError on PostgreSQL',
+      'Defaulted the SWOT module layout to Tabular View and removed Grid View for a clean, simplified navigation experience',
+      'Added a stylized Excel export button downloading comprehensive SWOT details (including linked risks, MOCs, PESTLE tags, and review logs)'
+    ]
+  },
+  {
     version: '3.5.0',
     date: '30 June 2026',
     title: 'Product Deviation Portal Upgrades & Interactive User Guidelines',
@@ -319,7 +334,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v3.5.0
+                    v3.6.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

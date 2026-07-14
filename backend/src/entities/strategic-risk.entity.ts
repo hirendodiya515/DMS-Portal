@@ -47,6 +47,9 @@ export class StrategicRisk {
   @Column({ default: 'Open' })
   status: 'Open' | 'Mitigated' | 'Closed';
 
+  @Column({ nullable: true })
+  swotIssueId: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

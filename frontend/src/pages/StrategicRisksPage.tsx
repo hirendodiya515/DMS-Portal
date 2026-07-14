@@ -17,6 +17,7 @@ interface StrategicRisk {
   consequence: number; // 1-5
   status: 'Open' | 'Mitigated' | 'Closed';
   actionPlan: string;
+  swotIssueId?: string;
 }
 
 export default function StrategicRisksPage() {
@@ -91,12 +92,14 @@ export default function StrategicRisksPage() {
   // Automatically open modal and prepopulate if coming from Context Page
   useEffect(() => {
     if (prefillData?.text) {
+      const pData = prefillData as any;
       setNewRisk(prev => ({
         ...prev,
         title: prefillData.text,
         standards: prefillData.standards || [],
         type: prefillData.type || 'Risk',
-        contextSource: 'Context of Organization (SWOT)'
+        contextSource: 'Context of Organization (SWOT)',
+        swotIssueId: pData.swotIssueId
       }));
       setIsAddModalOpen(true);
       // Clear history state so refresh doesn't pop it open again
@@ -122,6 +125,33 @@ export default function StrategicRisksPage() {
     } catch (error) {
        console.error('Error saving risk:', error);
        alert('Failed to save assessment.');
+    }
+  };
+
+  const [isDrafting, setIsDrafting] = useState(false);
+
+  const handleAiSuggestMitigation = async () => {
+    if (!newRisk.title?.trim()) return;
+    setIsDrafting(true);
+    try {
+      const response = await api.post('/ai/draft-risk-mitigation', { 
+        title: newRisk.title,
+        type: newRisk.type 
+      });
+      const draft = response.data;
+      if (draft) {
+        setNewRisk(prev => ({
+          ...prev,
+          actionPlan: draft.actionPlan || prev.actionPlan,
+          likelihood: draft.likelihood !== undefined ? draft.likelihood : prev.likelihood,
+          consequence: draft.consequence !== undefined ? draft.consequence : prev.consequence
+        }));
+      }
+    } catch (error) {
+      console.error('AI Draft Mitigation failed:', error);
+      alert('Failed to draft mitigation plan. Make sure Ollama is running locally.');
+    } finally {
+      setIsDrafting(false);
     }
   };
 
@@ -465,11 +495,35 @@ export default function StrategicRisksPage() {
                     </div>
                  </div>
 
-                 {/* Action Plan */}
-                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Action / Mitigation Plan</label>
-                    <textarea rows={3} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30" value={newRisk.actionPlan || ''} onChange={e => setNewRisk({...newRisk, actionPlan: e.target.value})} placeholder="Steps to mitigate the risk or leverage the opportunity..."></textarea>
-                 </div>
+                  {/* Action Plan */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-sm font-medium text-slate-700">Action / Mitigation Plan</label>
+                      <button
+                        type="button"
+                        onClick={handleAiSuggestMitigation}
+                        disabled={isDrafting || !newRisk.title?.trim()}
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 border border-indigo-150 rounded px-2 py-0.5 shadow-sm transition-all hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Let AI suggest a mitigation plan and score estimation"
+                      >
+                        {isDrafting ? (
+                          <>
+                            <svg className="animate-spin h-3 w-3 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Drafting...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            AI Suggest Plan
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <textarea rows={3} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-blue-50/30 text-sm font-medium" value={newRisk.actionPlan || ''} onChange={e => setNewRisk({...newRisk, actionPlan: e.target.value})} placeholder="Steps to mitigate the risk or leverage the opportunity..."></textarea>
+                  </div>
 
                </div>
                

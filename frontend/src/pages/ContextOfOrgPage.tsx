@@ -1,19 +1,32 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, FileText, Plus, AlertTriangle, ArrowRight, CheckCircle2, Target, X, Trash2, History, Clock, FileCheck, MessageSquare, Download } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Plus, AlertTriangle, CheckCircle2, X, Trash2, History, Clock, FileCheck, MessageSquare, Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 
 /* --- Data Interfaces --- */
 interface Issue {
   id: string;
   category: 'strength' | 'weakness' | 'opportunity' | 'threat';
   text: string;
-  impact: 'low' | 'medium' | 'high';
+  impact: 'low' | 'medium' | 'high' | 'critical';
   standards: string[];
   isConverted?: boolean;
   createdAt?: string;
+  pestleCategory?: 'Political' | 'Economic' | 'Social' | 'Technological' | 'Legal' | 'Environmental' | 'NA';
+  imsStatus?: 'Identified' | 'Under Review' | 'Monitoring' | 'Reviewed';
+  evaluation?: 'Monitor Only' | 'Escalate to Risk Register' | 'Escalate to Opportunity Register' | 'Management Review Input' | 'Strategic Objective' | 'Management of Change' | 'No Further Action';
+  trend?: 'Increasing' | 'Stable' | 'Reducing' | 'Resolved';
+  lastReviewDate?: string;
+  frequency?: 'quarterly' | 'half yearly' | 'yearly' | 'when required';
+  linkedRiskId?: string | null;
+  linkedMocRecordId?: string | null;
+  linkedMocDocumentId?: string | null;
+  linkedMocType?: 'workflow' | 'document' | 'none';
+  linkedMocNumber?: string | null;
+  linkedMocTitle?: string | null;
 }
 
 interface Party {
@@ -51,9 +64,14 @@ export default function ContextOfOrgPage() {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [reviewComment, setReviewComment] = useState("");
 
-  // Convert to Risk Modal State
-  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [mocRecords, setMocRecords] = useState<any[]>([]);
+  const [mocDocuments, setMocDocuments] = useState<any[]>([]);
+  const [isMocModalOpen, setIsMocModalOpen] = useState(false);
+  const [selectedIssueForMoc, setSelectedIssueForMoc] = useState<Issue | null>(null);
+  const [mocModalTab, setMocModalTab] = useState<'workflow' | 'document'>('workflow');
+  const [mocSearchQuery, setMocSearchQuery] = useState('');
+
+
 
   // --- Dynamic State ---
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -62,11 +80,50 @@ export default function ContextOfOrgPage() {
   const [departments, setDepartments] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [issuesSearchTerm, setIssuesSearchTerm] = useState("");
-  const [swotViewMode, setSwotViewMode] = useState<'grid' | 'table'>('grid');
+  const [swotViewMode, setSwotViewMode] = useState<'table' | 'matrix'>('table');
   const [selectedStandard, setSelectedStandard] = useState<string>('all');
   const [selectedState, setSelectedState] = useState<string>('all');
+  const [selectedSwotCategory, setSelectedSwotCategory] = useState<string>('all');
+  const [selectedPestleCategory, setSelectedPestleCategory] = useState<string>('all');
   const [swotSortField, setSwotSortField] = useState<string>('displayId');
   const [swotSortDirection, setSwotSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const [showAnalytics, setShowAnalytics] = useState(false);
+
+  const swotCategoryData = React.useMemo(() => {
+    const counts = { strength: 0, weakness: 0, opportunity: 0, threat: 0 };
+    issues.forEach(i => {
+      if (counts[i.category] !== undefined) {
+        counts[i.category]++;
+      }
+    });
+    return [
+      { name: 'Strengths', count: counts.strength, color: '#10b981' },
+      { name: 'Weaknesses', count: counts.weakness, color: '#f43f5e' },
+      { name: 'Opportunities', count: counts.opportunity, color: '#3b82f6' },
+      { name: 'Threats', count: counts.threat, color: '#f59e0b' }
+    ];
+  }, [issues]);
+
+  const pestleCategoryData = React.useMemo(() => {
+    const counts: Record<string, number> = {
+      Political: 0,
+      Economic: 0,
+      Social: 0,
+      Technological: 0,
+      Legal: 0,
+      Environmental: 0
+    };
+    issues.forEach(i => {
+      if (i.pestleCategory && counts[i.pestleCategory] !== undefined) {
+        counts[i.pestleCategory]++;
+      }
+    });
+    return Object.keys(counts).map(key => ({
+      name: key,
+      count: counts[key]
+    }));
+  }, [issues]);
 
   const handleSwotSort = (field: string) => {
     if (swotSortField === field) {
@@ -136,8 +193,17 @@ export default function ContextOfOrgPage() {
   const [isAddPartyOpen, setIsAddPartyOpen] = useState(false);
   const [isEditScopeOpen, setIsEditScopeOpen] = useState(false);
 
-  // New Issue / Party Form State
-  const [newIssue, setNewIssue] = useState<Partial<Issue>>({ category: 'strength', impact: 'low', standards: ['ISO 9001'] });
+  const [newIssue, setNewIssue] = useState<Partial<Issue>>({
+    category: 'strength',
+    impact: 'low',
+    standards: ['ISO 9001'],
+    pestleCategory: 'NA',
+    imsStatus: 'Identified',
+    evaluation: 'Monitor Only',
+    trend: 'Stable',
+    lastReviewDate: '',
+    frequency: 'when required'
+  });
   const [newParty, setNewParty] = useState<Partial<Party>>({ risk: 'Medium', standards: ['ISO 9001'], actions: [], category: 'Internal' });
   const [tempAction, setTempAction] = useState("");
   const [tempScopeText, setTempScopeText] = useState(scopeText);
@@ -147,34 +213,6 @@ export default function ContextOfOrgPage() {
   const [editingPartyId, setEditingPartyId] = useState<string | null>(null);
 
   // Handlers
-  const handleConvertToRisk = (issue: Issue) => {
-    setSelectedIssue(issue);
-    setIsConvertModalOpen(true);
-  };
-
-  const handleRiskSelection = async () => {
-    setIsConvertModalOpen(false);
-    if (!selectedIssue) return;
-    
-    try {
-      await api.put(`/org-context/issues/${selectedIssue.id}`, { isConverted: true });
-      const updatedIssues = issues.map(i => i.id === selectedIssue.id ? { ...i, isConverted: true } : i);
-      setIssues(updatedIssues);
-      fetchHistory();
-
-      // Route to the new Strategic Risks page, passing the issue data
-      navigate('/risks/strategic', { 
-        state: { 
-          text: selectedIssue.text,
-          standards: selectedIssue.standards,
-          type: selectedIssue.category === 'opportunity' || selectedIssue.category === 'strength' ? 'Opportunity' : 'Risk'
-        } 
-      });
-    } catch (error) {
-      console.error('Failed to convert issue to risk', error);
-      alert('Failed to mark issue as converted.');
-    }
-  };
 
   const handleAddIssue = async () => {
     if (!newIssue.text) return;
@@ -187,7 +225,17 @@ export default function ContextOfOrgPage() {
         setIssues([res.data, ...issues]);
       }
       setIsAddIssueOpen(false);
-      setNewIssue({ category: 'strength', impact: 'low', standards: ['ISO 9001'] });
+      setNewIssue({
+        category: 'strength',
+        impact: 'low',
+        standards: ['ISO 9001'],
+        pestleCategory: 'NA',
+        imsStatus: 'Identified',
+        evaluation: 'Monitor Only',
+        trend: 'Stable',
+        lastReviewDate: '',
+        frequency: 'when required'
+      });
       setEditingIssueId(null);
       fetchHistory();
     } catch (error) {
@@ -196,8 +244,136 @@ export default function ContextOfOrgPage() {
     }
   };
 
+  const handleUpdateIssueField = async (issueId: string, field: keyof Issue, value: any) => {
+    try {
+      const issue = issues.find(i => i.id === issueId);
+      if (!issue) return;
+      const updatedIssue = { ...issue, [field]: value };
+      
+      if (field === 'evaluation' && (value === 'Escalate to Risk Register' || value === 'Escalate to Opportunity Register')) {
+        updatedIssue.isConverted = true;
+        await api.put(`/org-context/issues/${issueId}`, updatedIssue);
+        setIssues(issues.map(i => i.id === issueId ? updatedIssue : i));
+        fetchHistory();
+        
+        navigate('/risks/strategic', {
+          state: {
+            swotIssueId: issueId,
+            text: updatedIssue.text,
+            standards: updatedIssue.standards,
+            type: value === 'Escalate to Risk Register' ? 'Risk' : 'Opportunity'
+          }
+        });
+        return;
+      }
+
+      await api.put(`/org-context/issues/${issueId}`, updatedIssue);
+      setIssues(issues.map(i => i.id === issueId ? updatedIssue : i));
+      fetchHistory();
+    } catch (error) {
+      console.error('Failed to update issue field:', error);
+      alert('Failed to update. Please try again.');
+    }
+  };
+
+  const fetchMocsAndDocs = async () => {
+    try {
+      const [mocRes, docRes] = await Promise.all([
+        api.get('/moc').catch(() => ({ data: [] })),
+        api.get('/documents').catch(() => ({ data: [] }))
+      ]);
+      setMocRecords(mocRes.data || []);
+      const allDocs = docRes.data || [];
+      const filteredDocs = allDocs.filter((d: any) => 
+        d.type?.toLowerCase() === 'moc' || 
+        d.title?.toLowerCase().includes('moc') || 
+        d.documentNumber?.toLowerCase().includes('moc')
+      );
+      setMocDocuments(filteredDocs);
+    } catch (e) {
+      console.error('Failed to fetch MOC data:', e);
+    }
+  };
+
+  const openMocLinkModal = (issue: Issue) => {
+    setSelectedIssueForMoc(issue);
+    setMocSearchQuery('');
+    setMocModalTab('workflow');
+    setIsMocModalOpen(true);
+    fetchMocsAndDocs();
+  };
+
+  const handleLinkMocItem = async (mocItem: any, type: 'workflow' | 'document') => {
+    if (!selectedIssueForMoc) return;
+    
+    try {
+      const updatedFields: any = {
+        linkedMocType: type,
+        linkedMocRecordId: type === 'workflow' ? mocItem.id : null,
+        linkedMocDocumentId: type === 'document' ? mocItem.id : null,
+        linkedMocNumber: type === 'workflow' ? mocItem.mocNo : null,
+        linkedMocTitle: type === 'document' ? mocItem.title : null
+      };
+
+      await api.put(`/org-context/issues/${selectedIssueForMoc.id}`, updatedFields);
+      setIssues(issues.map(i => i.id === selectedIssueForMoc.id ? { ...i, ...updatedFields } : i));
+      setIsMocModalOpen(false);
+      setSelectedIssueForMoc(null);
+      fetchHistory();
+    } catch (error) {
+      console.error('Failed to link MOC item:', error);
+      alert('Failed to link. Please try again.');
+    }
+  };
+
+  const handleUnlinkMoc = async (issueId: string) => {
+    try {
+      const updatedFields: Partial<Issue> = {
+        linkedMocType: 'none',
+        linkedMocRecordId: null,
+        linkedMocDocumentId: null,
+        linkedMocNumber: null,
+        linkedMocTitle: null
+      };
+      await api.put(`/org-context/issues/${issueId}`, updatedFields);
+      setIssues(issues.map(i => i.id === issueId ? { ...i, ...updatedFields } : i));
+      fetchHistory();
+    } catch (error) {
+      console.error('Failed to unlink MOC:', error);
+      alert('Failed to unlink. Please try again.');
+    }
+  };
+
+  const [isRecommending, setIsRecommending] = useState(false);
+
+  const handleAiRecommendSwotPestle = async () => {
+    if (!newIssue.text?.trim()) return;
+    setIsRecommending(true);
+    try {
+      const response = await api.post('/ai/recommend-swot-pestle', { text: newIssue.text });
+      const recommendation = response.data;
+      if (recommendation) {
+        setNewIssue(prev => ({
+          ...prev,
+          category: recommendation.category || prev.category,
+          pestleCategory: recommendation.pestleCategory || prev.pestleCategory,
+          impact: recommendation.impact || prev.impact,
+          standards: recommendation.standards || prev.standards
+        }));
+      }
+    } catch (error) {
+      console.error('AI Recommendation failed:', error);
+      alert('Failed to get recommendation from AI. Make sure Ollama is running locally.');
+    } finally {
+      setIsRecommending(false);
+    }
+  };
+
   const openEditIssueModal = (issue: Issue) => {
-    setNewIssue(issue);
+    setNewIssue({
+      ...issue,
+      lastReviewDate: issue.lastReviewDate ? issue.lastReviewDate.split('T')[0] : ''
+    });
     setEditingIssueId(issue.id);
     setIsAddIssueOpen(true);
   };
@@ -292,6 +468,28 @@ export default function ContextOfOrgPage() {
     }
   };
 
+  const handleExportIssuesExcel = async () => {
+    try {
+      const response = await api.get('/org-context/issues/export', {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `swot-issues-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export SWOT issues to Excel:', error);
+      alert('Failed to export to Excel. Please try again.');
+    }
+  };
+
   const handleSaveScope = async () => {
     try {
       await api.post('/org-context/scope', { content: tempScopeText });
@@ -380,7 +578,17 @@ export default function ContextOfOrgPage() {
                   (selectedState === "evaluated" && i.isConverted) ||
                   (selectedState === "draft" && !i.isConverted);
 
-                return matchesText && matchesStandard && matchesState;
+                // SWOT Category Filter
+                const matchesSwot =
+                  selectedSwotCategory === "all" ||
+                  i.category === selectedSwotCategory;
+
+                // PESTLE Category Filter
+                const matchesPestle =
+                  selectedPestleCategory === "all" ||
+                  i.pestleCategory === selectedPestleCategory;
+
+                return matchesText && matchesStandard && matchesState && matchesSwot && matchesPestle;
               });
 
               // 3. Sort issues for Tabular View
@@ -406,9 +614,25 @@ export default function ContextOfOrgPage() {
                     valB = b.standards.join(', ');
                     break;
                   case 'impact':
-                    const impactWeight = { low: 1, medium: 2, high: 3 };
+                    const impactWeight = { low: 1, medium: 2, high: 3, critical: 4 };
                     valA = impactWeight[a.impact] || 0;
                     valB = impactWeight[b.impact] || 0;
+                    break;
+                  case 'pestleCategory':
+                    valA = a.pestleCategory || 'NA';
+                    valB = b.pestleCategory || 'NA';
+                    break;
+                  case 'imsStatus':
+                    valA = a.imsStatus || 'Identified';
+                    valB = b.imsStatus || 'Identified';
+                    break;
+                  case 'evaluation':
+                    valA = a.evaluation || 'Monitor Only';
+                    valB = b.evaluation || 'Monitor Only';
+                    break;
+                  case 'trend':
+                    valA = a.trend || 'Stable';
+                    valB = b.trend || 'Stable';
                     break;
                   case 'isConverted':
                     valA = a.isConverted ? 1 : 0;
@@ -444,19 +668,29 @@ export default function ContextOfOrgPage() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <h2 className="text-xl font-semibold text-slate-800">Internal & External Issues <p className="text-xs text-slate-500 mt-1">Document no.: L1/4.1</p></h2>
                     <div className="flex items-center gap-3">
+                      {/* Show/Hide Analytics Toggle */}
+                      <button
+                        onClick={() => setShowAnalytics(!showAnalytics)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm ${
+                          showAnalytics 
+                            ? 'bg-blue-50 text-blue-600 border-blue-200' 
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.003 9.003 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
+                        {showAnalytics ? 'Hide Analytics' : 'Show Analytics'}
+                      </button>
+
+                      <button
+                        onClick={handleExportIssuesExcel}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm bg-white text-slate-600 border-slate-200 hover:bg-slate-50 shrink-0"
+                      >
+                        <Download className="w-3.5 h-3.5 text-slate-500" />
+                        Export to Excel
+                      </button>
+
                       {/* View Selector Switch */}
                       <div className="flex items-center bg-slate-200/60 p-1 rounded-lg border border-slate-300 shadow-sm shrink-0">
-                        <button 
-                          onClick={() => setSwotViewMode('grid')}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                            swotViewMode === 'grid' 
-                              ? 'bg-white text-blue-600 shadow-sm' 
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          <LayoutDashboard className="w-3.5 h-3.5" />
-                          Grid View
-                        </button>
                         <button 
                           onClick={() => setSwotViewMode('table')}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
@@ -468,16 +702,91 @@ export default function ContextOfOrgPage() {
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                           Tabular View
                         </button>
+                        <button 
+                          onClick={() => setSwotViewMode('matrix')}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            swotViewMode === 'matrix' 
+                              ? 'bg-white text-blue-600 shadow-sm' 
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                          Matrix View
+                        </button>
                       </div>
 
                       {isAdmin && (
-                        <button onClick={() => { setEditingIssueId(null); setNewIssue({ category: 'strength', impact: 'low', standards: ['ISO 9001'] }); setIsAddIssueOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm shrink-0">
+                        <button onClick={() => {
+                          setEditingIssueId(null);
+                          setNewIssue({
+                            category: 'strength',
+                            impact: 'low',
+                            standards: ['ISO 9001'],
+                            pestleCategory: 'NA',
+                            imsStatus: 'Identified',
+                            evaluation: 'Monitor Only',
+                            trend: 'Stable',
+                            lastReviewDate: '',
+                            frequency: 'when required'
+                          });
+                          setIsAddIssueOpen(true);
+                        }} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm shrink-0">
                           <Plus className="w-4 h-4" />
                           Add Issue
                         </button>
                       )}
                     </div>
                   </div>
+
+                  {/* Collapsible Analytics Section */}
+                  <AnimatePresence>
+                    {showAnalytics && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden bg-white border border-slate-200 rounded-xl shadow-sm"
+                      >
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Chart 1: SWOT Distribution */}
+                          <div className="bg-slate-50/50 p-4 border border-slate-100 rounded-lg flex flex-col h-[280px]">
+                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 text-left">SWOT Category Distribution</h4>
+                            <div className="flex-1 min-h-0">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={swotCategoryData} margin={{ left: -20, right: 10, top: 0, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                  <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 500, fill: '#64748b' }} />
+                                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+                                  <RechartsTooltip cursor={{ fill: 'rgba(0, 0, 0, 0.02)' }} />
+                                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                                    {swotCategoryData.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                  </Bar>
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+
+                          {/* Chart 2: PESTLE Profile */}
+                          <div className="bg-slate-50/50 p-4 border border-slate-100 rounded-lg flex flex-col h-[280px]">
+                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 text-left">PESTLE Distribution (External Issues)</h4>
+                            <div className="flex-1 min-h-0">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={pestleCategoryData} margin={{ left: -20, right: 10, top: 0, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                  <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 500, fill: '#64748b' }} />
+                                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748b' }} />
+                                  <RechartsTooltip cursor={{ fill: 'rgba(0, 0, 0, 0.02)' }} />
+                                  <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Search and Filters Bar */}
                   <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-sm flex flex-col md:flex-row items-center gap-3">
@@ -499,7 +808,7 @@ export default function ContextOfOrgPage() {
                       )}
                     </div>
 
-                    <div className="flex gap-2 w-full md:w-auto shrink-0">
+                    <div className="flex gap-2 w-full md:w-auto shrink-0 flex-wrap">
                       <select 
                         value={selectedStandard}
                         onChange={e => setSelectedStandard(e.target.value)}
@@ -520,13 +829,40 @@ export default function ContextOfOrgPage() {
                         <option value="evaluated">Evaluated (Escalated)</option>
                         <option value="draft">Draft (Pending Action)</option>
                       </select>
+
+                      <select 
+                        value={selectedSwotCategory}
+                        onChange={e => setSelectedSwotCategory(e.target.value)}
+                        className="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 w-full md:w-auto"
+                      >
+                        <option value="all">All SWOT Categories</option>
+                        <option value="strength">Strength (Internal)</option>
+                        <option value="weakness">Weakness (Internal)</option>
+                        <option value="opportunity">Opportunity (External)</option>
+                        <option value="threat">Threat (External)</option>
+                      </select>
+
+                      <select 
+                        value={selectedPestleCategory}
+                        onChange={e => setSelectedPestleCategory(e.target.value)}
+                        className="px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 w-full md:w-auto"
+                      >
+                        <option value="all">All PESTLE Categories</option>
+                        <option value="Political">Political</option>
+                        <option value="Economic">Economic</option>
+                        <option value="Social">Social</option>
+                        <option value="Technological">Technological</option>
+                        <option value="Legal">Legal</option>
+                        <option value="Environmental">Environmental</option>
+                        <option value="NA">NA</option>
+                      </select>
                     </div>
                   </div>
 
                   {swotViewMode === 'table' ? (
                     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                       <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse min-w-[1100px]">
+                        <table className="w-full text-left border-collapse min-w-[1900px]">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs tracking-wider uppercase font-bold select-none">
                               <th onClick={() => handleSwotSort('displayId')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
@@ -537,6 +873,11 @@ export default function ContextOfOrgPage() {
                               <th onClick={() => handleSwotSort('category')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
                                 <div className="flex items-center gap-1">
                                   CATEGORY / MATRIX {renderSortIndicator('category')}
+                                </div>
+                              </th>
+                              <th onClick={() => handleSwotSort('pestleCategory')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                                <div className="flex items-center gap-1">
+                                  PESTLE CATEGORY {renderSortIndicator('pestleCategory')}
                                 </div>
                               </th>
                               <th onClick={() => handleSwotSort('text')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
@@ -554,11 +895,24 @@ export default function ContextOfOrgPage() {
                                   GENERAL IMPACT {renderSortIndicator('impact')}
                                 </div>
                               </th>
-                              <th onClick={() => handleSwotSort('isConverted')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                              <th onClick={() => handleSwotSort('imsStatus')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
                                 <div className="flex items-center gap-1">
-                                  IMS STATUS {renderSortIndicator('isConverted')}
+                                  REVIEW STATUS {renderSortIndicator('imsStatus')}
                                 </div>
                               </th>
+                              <th onClick={() => handleSwotSort('trend')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                                <div className="flex items-center gap-1">
+                                  TREND {renderSortIndicator('trend')}
+                                </div>
+                              </th>
+                              <th onClick={() => handleSwotSort('evaluation')} className="px-6 py-4 cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors group/th">
+                                <div className="flex items-center gap-1">
+                                  EVALUATION DECISION {renderSortIndicator('evaluation')}
+                                </div>
+                              </th>
+                              <th className="px-6 py-4">LAST REVIEW DATE</th>
+                              <th className="px-6 py-4">FREQUENCY</th>
+                              <th className="px-6 py-4 text-left">NEXT REVIEW DATE</th>
                               <th className="px-6 py-4 text-right">ACTIONS</th>
                             </tr>
                           </thead>
@@ -570,6 +924,31 @@ export default function ContextOfOrgPage() {
                                 </td>
                                 <td className="px-6 py-4 text-sm font-bold text-slate-800 uppercase whitespace-nowrap">
                                   {issue.category}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {(issue.category === 'strength' || issue.category === 'weakness') ? (
+                                    <span className="text-slate-400 text-xs font-semibold italic">NA</span>
+                                  ) : (
+                                    isAdmin ? (
+                                      <select
+                                        className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        value={issue.pestleCategory || 'NA'}
+                                        onChange={e => handleUpdateIssueField(issue.id, 'pestleCategory', e.target.value as any)}
+                                      >
+                                        <option value="NA">NA</option>
+                                        <option value="Political">Political</option>
+                                        <option value="Economic">Economic</option>
+                                        <option value="Social">Social</option>
+                                        <option value="Technological">Technological</option>
+                                        <option value="Legal">Legal</option>
+                                        <option value="Environmental">Environmental</option>
+                                      </select>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                        {issue.pestleCategory || 'NA'}
+                                      </span>
+                                    )
+                                  )}
                                 </td>
                                 <td className="px-6 py-4 text-sm text-slate-700 leading-relaxed font-medium min-w-[320px] max-w-[500px] break-words whitespace-normal">
                                   {issue.text}
@@ -583,37 +962,135 @@ export default function ContextOfOrgPage() {
                                   {issue.impact}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  {issue.isConverted ? (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                      Evaluated (Escalated)
-                                    </span>
+                                  {isAdmin ? (
+                                    <select
+                                      className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      value={issue.imsStatus || 'Identified'}
+                                      onChange={e => handleUpdateIssueField(issue.id, 'imsStatus', e.target.value as any)}
+                                    >
+                                      <option value="Identified">Identified</option>
+                                      <option value="Under Review">Under Review</option>
+                                      <option value="Monitoring">Monitoring</option>
+                                      <option value="Reviewed">Reviewed</option>
+                                    </select>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
-                                      Draft (Pending Action)
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                      {issue.imsStatus || 'Identified'}
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 text-right whitespace-nowrap">
-                                  <div className="flex items-center justify-end gap-2">
-                                    {issue.isConverted ? (
-                                      <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1 bg-emerald-50 border border-emerald-100 px-2.5 py-1.5 rounded-lg shrink-0">
-                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                                        Linked to Risks
-                                      </span>
-                                    ) : (
-                                      <button 
-                                        onClick={() => handleConvertToRisk(issue)}
-                                        className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg hover:bg-indigo-100 hover:text-indigo-800 transition-colors flex items-center gap-1 shadow-sm shrink-0"
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {isAdmin ? (
+                                    <select
+                                      className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      value={issue.trend || 'Stable'}
+                                      onChange={e => handleUpdateIssueField(issue.id, 'trend', e.target.value as any)}
+                                    >
+                                      <option value="Increasing">Increasing</option>
+                                      <option value="Stable">Stable</option>
+                                      <option value="Reducing">Reducing</option>
+                                      <option value="Resolved">Resolved</option>
+                                    </select>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                      {issue.trend || 'Stable'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex flex-col gap-1">
+                                    {isAdmin && !(issue.isConverted && issue.linkedRiskId) ? (
+                                      <select
+                                        className="bg-indigo-50 border border-indigo-200 rounded px-2 py-1 text-xs font-semibold text-indigo-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                        value={issue.evaluation || 'Monitor Only'}
+                                        onChange={e => handleUpdateIssueField(issue.id, 'evaluation', e.target.value as any)}
                                       >
-                                        <svg className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500" viewBox="0 0 24 24" fill="currentColor">
-                                          <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                        </svg>
-                                        Escalate to Risks
-                                      </button>
+                                        <option value="Monitor Only">Monitor Only</option>
+                                        <option value="Escalate to Risk Register">Escalate to Risk Register</option>
+                                        <option value="Escalate to Opportunity Register">Escalate to Opportunity Register</option>
+                                        <option value="Management Review Input">Management Review Input</option>
+                                        <option value="Strategic Objective">Strategic Objective</option>
+                                        <option value="Management of Change">Management of Change</option>
+                                        <option value="No Further Action">No Further Action</option>
+                                      </select>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        {(issue.isConverted && issue.linkedRiskId) ? `Linked (${issue.evaluation === 'Escalate to Risk Register' ? 'Risk' : 'Opportunity'})` : (issue.evaluation || 'Monitor Only')}
+                                      </span>
                                     )}
 
+                                    {issue.evaluation === 'Management of Change' && (
+                                      <div className="flex items-center gap-1 mt-1">
+                                        {issue.linkedMocType && issue.linkedMocType !== 'none' ? (
+                                          <>
+                                            <button
+                                              onClick={() => navigate(issue.linkedMocType === 'workflow' ? '/moc' : `/documents/${issue.linkedMocDocumentId}`)}
+                                              className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded flex items-center gap-1 hover:bg-indigo-100 transition-colors"
+                                            >
+                                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                              {issue.linkedMocType === 'workflow' ? `${issue.linkedMocNumber || 'Workflow'}` : `Doc: ${issue.linkedMocTitle || 'File'}`}
+                                            </button>
+                                            {isAdmin && (
+                                              <button
+                                                onClick={() => handleUnlinkMoc(issue.id)}
+                                                className="p-0.5 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded transition-colors"
+                                                title="Remove Link"
+                                              >
+                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                              </button>
+                                            )}
+                                          </>
+                                        ) : (
+                                          isAdmin && (
+                                            <button
+                                              onClick={() => openMocLinkModal(issue)}
+                                              className="text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-2 py-0.5 rounded flex items-center gap-1 transition-colors"
+                                            >
+                                              <Plus className="w-3 h-3" /> Link MOC
+                                            </button>
+                                          )
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {isAdmin ? (
+                                    <input
+                                      type="date"
+                                      className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      value={issue.lastReviewDate ? issue.lastReviewDate.split('T')[0] : ''}
+                                      onChange={e => handleUpdateIssueField(issue.id, 'lastReviewDate', e.target.value)}
+                                    />
+                                  ) : (
+                                    <span className="text-sm font-medium text-slate-700">
+                                      {issue.lastReviewDate ? new Date(issue.lastReviewDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  {isAdmin ? (
+                                    <select
+                                      className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      value={issue.frequency || 'when required'}
+                                      onChange={e => handleUpdateIssueField(issue.id, 'frequency', e.target.value as any)}
+                                    >
+                                      <option value="quarterly">Quarterly</option>
+                                      <option value="half yearly">Half Yearly</option>
+                                      <option value="yearly">Yearly</option>
+                                      <option value="when required">When Required</option>
+                                    </select>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 capitalize">
+                                      {issue.frequency || 'when required'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-700">
+                                  {calculateNextReviewDate(issue.lastReviewDate, issue.frequency)}
+                                </td>
+                                <td className="px-6 py-4 text-right whitespace-nowrap">
+                                  <div className="flex items-center justify-end gap-2">
                                     {isAdmin && (
                                       <div className="flex gap-1 border-l border-slate-200 pl-2">
                                         <button 
@@ -638,7 +1115,7 @@ export default function ContextOfOrgPage() {
                             ))}
                             {sortedIssues.length === 0 && (
                               <tr>
-                                <td colSpan={7} className="px-6 py-8 text-center text-slate-500 text-sm">
+                                <td colSpan={13} className="px-6 py-8 text-center text-slate-500 text-sm">
                                   No internal & external issues found.
                                 </td>
                               </tr>
@@ -648,79 +1125,84 @@ export default function ContextOfOrgPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Strengths */}
-                      <div className="bg-white rounded-xl border border-emerald-100 shadow-sm overflow-hidden flex flex-col h-full">
-                        <div className="bg-emerald-50 px-4 py-3 border-b border-emerald-100 flex items-center justify-between">
-                          <h3 className="font-semibold text-emerald-800 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                            Strengths (Internal)
-                          </h3>
-                          <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
+                    <div className="relative bg-slate-100/50 p-6 rounded-2xl border border-slate-200/80 shadow-inner grid grid-cols-1 md:grid-cols-2 gap-6 min-h-[700px]">
+                      {/* Center SWOT Axis intersection badge */}
+                      <div className="hidden md:flex absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-14 h-14 bg-white border-4 border-slate-200 rounded-full shadow-md items-center justify-center z-10 select-none">
+                        <span className="text-xs font-black bg-gradient-to-tr from-blue-600 via-indigo-600 to-emerald-600 bg-clip-text text-transparent">SWOT</span>
+                      </div>
+
+                      {/* Strengths Quadrant */}
+                      <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
+                        <div className="bg-emerald-50/70 px-4 py-3 border-b border-emerald-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shadow-sm">S</span>
+                            <span className="font-bold text-emerald-800 text-sm">Strengths (Helpful / Internal)</span>
+                          </div>
+                          <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full font-bold">{filteredIssues.filter(i => i.category === 'strength').length} items</span>
                         </div>
-                        <div className="p-4 space-y-3 flex-1">
+                        <div className="p-4 space-y-3 flex-1 overflow-y-auto max-h-[350px] custom-scrollbar bg-emerald-50/10 text-left">
                           {filteredIssues.filter(i => i.category === 'strength').map(issue => (
-                            <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} />
+                            <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} onUpdateField={(field, val) => handleUpdateIssueField(issue.id, field, val)} onLinkMoc={() => openMocLinkModal(issue)} onUnlinkMoc={() => handleUnlinkMoc(issue.id)} />
                           ))}
                           {filteredIssues.filter(i => i.category === 'strength').length === 0 && (
-                            <p className="text-sm text-slate-400 text-center py-4">No strengths recorded.</p>
+                            <p className="text-sm text-slate-400 text-center py-8">No internal strengths recorded.</p>
                           )}
                         </div>
                       </div>
 
-                      {/* Weaknesses */}
-                      <div className="bg-white rounded-xl border border-rose-100 shadow-sm overflow-hidden flex flex-col h-full">
-                        <div className="bg-rose-50 px-4 py-3 border-b border-rose-100 flex items-center justify-between">
-                          <h3 className="font-semibold text-rose-800 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                            Weaknesses (Internal)
-                          </h3>
-                          <span className="bg-rose-100 text-rose-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
+                      {/* Weaknesses Quadrant */}
+                      <div className="bg-white rounded-2xl border border-rose-100 shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
+                        <div className="bg-rose-50/70 px-4 py-3 border-b border-rose-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-rose-500 text-white flex items-center justify-center font-bold text-xs shadow-sm">W</span>
+                            <span className="font-bold text-rose-800 text-sm">Weaknesses (Harmful / Internal)</span>
+                          </div>
+                          <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded-full font-bold">{filteredIssues.filter(i => i.category === 'weakness').length} items</span>
                         </div>
-                        <div className="p-4 space-y-3 flex-1">
+                        <div className="p-4 space-y-3 flex-1 overflow-y-auto max-h-[350px] custom-scrollbar bg-rose-50/10 text-left">
                           {filteredIssues.filter(i => i.category === 'weakness').map(issue => (
-                             <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
+                             <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} onUpdateField={(field, val) => handleUpdateIssueField(issue.id, field, val)} onLinkMoc={() => openMocLinkModal(issue)} onUnlinkMoc={() => handleUnlinkMoc(issue.id)} />
                           ))}
                           {filteredIssues.filter(i => i.category === 'weakness').length === 0 && (
-                            <p className="text-sm text-slate-400 text-center py-4">No weaknesses recorded.</p>
+                            <p className="text-sm text-slate-400 text-center py-8">No internal weaknesses recorded.</p>
                           )}
                         </div>
                       </div>
 
-                      {/* Opportunities */}
-                      <div className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden flex flex-col h-full">
-                        <div className="bg-blue-50 px-4 py-3 border-b border-blue-100 flex items-center justify-between">
-                          <h3 className="font-semibold text-blue-800 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                            Opportunities (External)
-                          </h3>
-                          <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-md font-medium">Helpful</span>
+                      {/* Opportunities Quadrant */}
+                      <div className="bg-white rounded-2xl border border-blue-100 shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
+                        <div className="bg-blue-50/70 px-4 py-3 border-b border-blue-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-blue-500 text-white flex items-center justify-center font-bold text-xs shadow-sm">O</span>
+                            <span className="font-bold text-blue-800 text-sm">Opportunities (Helpful / External)</span>
+                          </div>
+                          <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-bold">{filteredIssues.filter(i => i.category === 'opportunity').length} items</span>
                         </div>
-                        <div className="p-4 space-y-3 flex-1">
+                        <div className="p-4 space-y-3 flex-1 overflow-y-auto max-h-[350px] custom-scrollbar bg-blue-50/10 text-left">
                            {filteredIssues.filter(i => i.category === 'opportunity').map(issue => (
-                             <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
+                             <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} onUpdateField={(field, val) => handleUpdateIssueField(issue.id, field, val)} onLinkMoc={() => openMocLinkModal(issue)} onUnlinkMoc={() => handleUnlinkMoc(issue.id)} />
                           ))}
                            {filteredIssues.filter(i => i.category === 'opportunity').length === 0 && (
-                            <p className="text-sm text-slate-400 text-center py-4">No opportunities recorded.</p>
+                            <p className="text-sm text-slate-400 text-center py-8">No external opportunities recorded.</p>
                           )}
                         </div>
                       </div>
 
-                      {/* Threats */}
-                      <div className="bg-white rounded-xl border border-amber-100 shadow-sm overflow-hidden flex flex-col h-full">
-                        <div className="bg-amber-50 px-4 py-3 border-b border-amber-100 flex items-center justify-between">
-                          <h3 className="font-semibold text-amber-800 flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                            Threats (External)
-                          </h3>
-                          <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-md font-medium">Harmful</span>
+                      {/* Threats Quadrant */}
+                      <div className="bg-white rounded-2xl border border-amber-100 shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
+                        <div className="bg-amber-50/70 px-4 py-3 border-b border-amber-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-sm">T</span>
+                            <span className="font-bold text-amber-800 text-sm">Threats (Harmful / External)</span>
+                          </div>
+                          <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-bold">{filteredIssues.filter(i => i.category === 'threat').length} items</span>
                         </div>
-                        <div className="p-4 space-y-3 flex-1">
+                        <div className="p-4 space-y-3 flex-1 overflow-y-auto max-h-[350px] custom-scrollbar bg-amber-50/10 text-left">
                           {filteredIssues.filter(i => i.category === 'threat').map(issue => (
-                             <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} convertible onConvert={() => handleConvertToRisk(issue)} />
+                             <IssueCard key={issue.id} issue={issue} onDelete={isAdmin ? () => handleDeleteIssue(issue.id) : undefined} onEdit={isAdmin ? () => openEditIssueModal(issue) : undefined} onUpdateField={(field, val) => handleUpdateIssueField(issue.id, field, val)} onLinkMoc={() => openMocLinkModal(issue)} onUnlinkMoc={() => handleUnlinkMoc(issue.id)} />
                           ))}
                           {filteredIssues.filter(i => i.category === 'threat').length === 0 && (
-                            <p className="text-sm text-slate-400 text-center py-4">No threats recorded.</p>
+                            <p className="text-sm text-slate-400 text-center py-8">No external threats recorded.</p>
                           )}
                         </div>
                       </div>
@@ -1107,35 +1589,146 @@ export default function ContextOfOrgPage() {
       <AnimatePresence>
         {isAddIssueOpen && (
            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200">
+             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
                <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                  <h3 className="text-lg font-semibold text-slate-800">{editingIssueId ? 'Edit Issue' : 'Add New Issue'}</h3>
                  <button onClick={() => setIsAddIssueOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><X className="w-5 h-5" /></button>
                </div>
-               <div className="p-6 space-y-4">
+               <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                  <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Issue Description</label>
-                   <textarea rows={3} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" value={newIssue.text || ''} onChange={e => setNewIssue({...newIssue, text: e.target.value})} placeholder="Describe the issue..."></textarea>
-                 </div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-sm font-medium text-slate-700">Issue Description</label>
+                      <button
+                        type="button"
+                        onClick={handleAiRecommendSwotPestle}
+                        disabled={isRecommending || !newIssue.text?.trim()}
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-indigo-50 border border-indigo-150 rounded px-2 py-0.5 shadow-sm transition-all hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Let AI suggest Category, PESTLE, and Impact level"
+                      >
+                        {isRecommending ? (
+                          <>
+                            <svg className="animate-spin h-3 w-3 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            AI Suggest
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <textarea rows={3} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-700 text-sm font-medium" value={newIssue.text || ''} onChange={e => setNewIssue({...newIssue, text: e.target.value})} placeholder="Describe the issue..."></textarea>
+                  </div>
                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                      <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={newIssue.category} onChange={e => setNewIssue({...newIssue, category: e.target.value as any})}>
-                        <option value="strength">Strength (Internal)</option>
-                        <option value="weakness">Weakness (Internal)</option>
-                        <option value="opportunity">Opportunity (External)</option>
-                        <option value="threat">Threat (External)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Impact Level</label>
-                      <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={newIssue.impact} onChange={e => setNewIssue({...newIssue, impact: e.target.value as any})}>
-                        <option value="low">Low Impact</option>
-                        <option value="medium">Medium Impact</option>
-                        <option value="high">High Impact</option>
-                      </select>
-                    </div>
-                 </div>
+                     <div>
+                       <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+                       <select 
+                         className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-700" 
+                         value={newIssue.category} 
+                         onChange={e => {
+                           const cat = e.target.value as any;
+                           const isInternal = cat === 'strength' || cat === 'weakness';
+                           setNewIssue({
+                             ...newIssue,
+                             category: cat,
+                             pestleCategory: isInternal ? 'NA' : (newIssue.pestleCategory === 'NA' ? 'Political' : newIssue.pestleCategory)
+                           });
+                         }}
+                       >
+                         <option value="strength">Strength (Internal)</option>
+                         <option value="weakness">Weakness (Internal)</option>
+                         <option value="opportunity">Opportunity (External)</option>
+                         <option value="threat">Threat (External)</option>
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-slate-700 mb-1">PESTLE Category</label>
+                       <select 
+                         className={`w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
+                           (newIssue.category === 'strength' || newIssue.category === 'weakness') ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200' : 'text-slate-700'
+                         }`}
+                         value={(newIssue.category === 'strength' || newIssue.category === 'weakness') ? 'NA' : (newIssue.pestleCategory || 'NA')} 
+                         disabled={newIssue.category === 'strength' || newIssue.category === 'weakness'}
+                         onChange={e => setNewIssue({...newIssue, pestleCategory: e.target.value as any})}
+                       >
+                         <option value="NA">NA (Not Applicable)</option>
+                         <option value="Political">Political</option>
+                         <option value="Economic">Economic</option>
+                         <option value="Social">Social</option>
+                         <option value="Technological">Technological</option>
+                         <option value="Legal">Legal</option>
+                         <option value="Environmental">Environmental</option>
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-slate-700 mb-1">Impact Level</label>
+                       <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-700" value={newIssue.impact} onChange={e => setNewIssue({...newIssue, impact: e.target.value as any})}>
+                         <option value="low">Low Impact</option>
+                         <option value="medium">Medium Impact</option>
+                         <option value="high">High Impact</option>
+                         <option value="critical">Critical</option>
+                       </select>
+                     </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Review Status</label>
+                        <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-700" value={newIssue.imsStatus || 'Identified'} onChange={e => setNewIssue({...newIssue, imsStatus: e.target.value as any})}>
+                          <option value="Identified">Identified</option>
+                          <option value="Under Review">Under Review</option>
+                          <option value="Monitoring">Monitoring</option>
+                          <option value="Reviewed">Reviewed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Trend</label>
+                        <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-700" value={newIssue.trend || 'Stable'} onChange={e => setNewIssue({...newIssue, trend: e.target.value as any})}>
+                          <option value="Increasing">Increasing</option>
+                          <option value="Stable">Stable</option>
+                          <option value="Reducing">Reducing</option>
+                          <option value="Resolved">Resolved</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Evaluation Decision</label>
+                        <select 
+                          className={`w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 ${
+                            newIssue.isConverted ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200' : 'text-slate-700'
+                          }`}
+                          value={newIssue.evaluation || 'Monitor Only'} 
+                          disabled={newIssue.isConverted}
+                          onChange={e => setNewIssue({...newIssue, evaluation: e.target.value as any})}
+                        >
+                          <option value="Monitor Only">Monitor Only</option>
+                          <option value="Escalate to Risk Register">Escalate to Risk Register</option>
+                          <option value="Escalate to Opportunity Register">Escalate to Opportunity Register</option>
+                          <option value="Management Review Input">Management Review Input</option>
+                          <option value="Strategic Objective">Strategic Objective</option>
+                          <option value="Management of Change">Management of Change</option>
+                          <option value="No Further Action">No Further Action</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Last Review Date</label>
+                        <input 
+                          type="date" 
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-700" 
+                          value={newIssue.lastReviewDate || ''} 
+                          onChange={e => setNewIssue({...newIssue, lastReviewDate: e.target.value})} 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Frequency</label>
+                        <select className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-slate-700" value={newIssue.frequency || 'when required'} onChange={e => setNewIssue({...newIssue, frequency: e.target.value as any})}>
+                          <option value="quarterly">Quarterly</option>
+                          <option value="half yearly">Half Yearly</option>
+                          <option value="yearly">Yearly</option>
+                          <option value="when required">When Required</option>
+                        </select>
+                      </div>
+                  </div>
                  <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Applicable Standards</label>
                     <div className="flex flex-col gap-2">
@@ -1312,77 +1905,139 @@ export default function ContextOfOrgPage() {
         )}
       </AnimatePresence>
 
-      {/* Convert to Risk Modal */}
+      {/* MOC Link Modal */}
       <AnimatePresence>
-        {isConvertModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200"
-            >
+        {isMocModalOpen && selectedIssueForMoc && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200 flex flex-col max-h-[85vh]">
               <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                <h3 className="text-lg font-semibold text-slate-800">Send to Risk Register</h3>
-                <button 
-                  onClick={() => setIsConvertModalOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Link Management of Change (MOC)</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Link SWOT issue to an active MOC workflow or a document library MOC file</p>
+                </div>
+                <button onClick={() => setIsMocModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><X className="w-5 h-5" /></button>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex border-b border-slate-200 bg-slate-50/50 px-6">
+                <button
+                  onClick={() => { setMocModalTab('workflow'); setMocSearchQuery(''); }}
+                  className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
+                    mocModalTab === 'workflow' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
                 >
-                  <X className="w-5 h-5" />
+                  System MOC Workflows ({mocRecords.length})
+                </button>
+                <button
+                  onClick={() => { setMocModalTab('document'); setMocSearchQuery(''); }}
+                  className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
+                    mocModalTab === 'document' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Document Library Files ({mocDocuments.length})
                 </button>
               </div>
-              
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-slate-500">Selected Issue:</label>
-                  <p className="mt-1 text-slate-800 p-3 bg-slate-50 rounded-lg border border-slate-100 font-medium">
-                    "{selectedIssue?.text}"
-                  </p>
-                </div>
-                
-                <p className="text-sm text-slate-600">This strategic item will be escalated to the Corporate Strategic Risks & Opportunities Register.</p>
-                
-                <div className="grid grid-cols-1 mt-4">
-                  <RiskRouteButton 
-                    title="Strategic Register" 
-                    desc="Corporate Risks & Opportunities" 
-                    icon={Target} 
-                    color="blue" 
-                    onClick={handleRiskSelection} 
-                  />
-                </div>
+
+              {/* Search bar */}
+              <div className="p-4 border-b border-slate-105">
+                <input
+                  type="text"
+                  placeholder={`Search ${mocModalTab === 'workflow' ? 'MOC Number, Dept, or Description...' : 'Document Title or Number...'}`}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 font-medium"
+                  value={mocSearchQuery}
+                  onChange={e => setMocSearchQuery(e.target.value)}
+                />
+              </div>
+
+              {/* List */}
+              <div className="p-4 overflow-y-auto flex-1 space-y-2 max-h-[40vh] custom-scrollbar bg-slate-50/50">
+                {mocModalTab === 'workflow' ? (() => {
+                  const filtered = mocRecords.filter(m => 
+                    m.mocNo?.toLowerCase().includes(mocSearchQuery.toLowerCase()) ||
+                    m.department?.toLowerCase().includes(mocSearchQuery.toLowerCase()) ||
+                    m.description?.toLowerCase().includes(mocSearchQuery.toLowerCase())
+                  );
+
+                  if (filtered.length === 0) return <p className="text-center text-sm text-slate-400 py-6">No matching MOC workflows found.</p>;
+
+                  return filtered.map(m => (
+                    <div key={m.id} className="p-3 bg-white border border-slate-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all flex items-center justify-between gap-4 group">
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded uppercase">{m.mocNo}</span>
+                          <span className="text-xs font-semibold text-slate-500">{m.department}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border capitalize ${
+                            m.status === 'Closed' ? 'bg-slate-50 text-slate-600 border-slate-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>{m.status}</span>
+                        </div>
+                        <p className="text-sm font-medium text-slate-700 mt-1.5 line-clamp-2 leading-relaxed">{m.description}</p>
+                      </div>
+                      <button
+                        onClick={() => handleLinkMocItem(m, 'workflow')}
+                        className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all shrink-0"
+                      >
+                        Link MOC
+                      </button>
+                    </div>
+                  ));
+                })() : (() => {
+                  const filtered = mocDocuments.filter(d => 
+                    d.title?.toLowerCase().includes(mocSearchQuery.toLowerCase()) ||
+                    d.documentNumber?.toLowerCase().includes(mocSearchQuery.toLowerCase())
+                  );
+
+                  if (filtered.length === 0) return <p className="text-center text-sm text-slate-400 py-6">No matching documents found.</p>;
+
+                  return filtered.map(d => (
+                    <div key={d.id} className="p-3 bg-white border border-slate-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all flex items-center justify-between gap-4 group">
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded uppercase">{d.documentNumber || 'NO CODE'}</span>
+                          <span className="text-xs font-semibold text-slate-500 uppercase">{d.type}</span>
+                        </div>
+                        <p className="text-sm font-medium text-slate-700 mt-1.5 truncate leading-relaxed">{d.title}</p>
+                      </div>
+                      <button
+                        onClick={() => handleLinkMocItem(d, 'document')}
+                        className="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold transition-all shrink-0"
+                      >
+                        Link Doc
+                      </button>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+                <button onClick={() => setIsMocModalOpen(false)} className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">Close</button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }
 
-// Helper Components
-const RiskRouteButton = ({ title, desc, icon: Icon, color, onClick }: any) => {
-  const colorMap: Record<string, string> = {
-    blue: "hover:border-blue-300 hover:bg-blue-50 text-blue-600",
-    green: "hover:border-green-300 hover:bg-green-50 text-green-600",
-    purple: "hover:border-purple-300 hover:bg-purple-50 text-purple-600",
-  };
 
-  return (
-    <button 
-      onClick={onClick}
-      className={`flex items-center gap-4 p-4 rounded-xl border border-slate-200 text-left transition-all duration-200 group ${colorMap[color]}`}
-    >
-      <div className={`p-3 rounded-lg bg-white border border-slate-100 shadow-sm group-hover:scale-110 transition-transform`}>
-        <Icon className="w-5 h-5" />
-      </div>
-      <div>
-        <h4 className="font-semibold text-slate-800">{title}</h4>
-        <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
-      </div>
-      <ArrowRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-    </button>
-  );
+
+const calculateNextReviewDate = (lastReviewDate: string | Date | undefined, frequency: string | undefined): string => {
+  if (!lastReviewDate || !frequency || frequency === 'when required') {
+    return 'When required';
+  }
+  const date = new Date(lastReviewDate);
+  if (isNaN(date.getTime())) {
+    return 'Invalid Date';
+  }
+  if (frequency === 'quarterly') {
+    date.setMonth(date.getMonth() + 3);
+  } else if (frequency === 'half yearly') {
+    date.setMonth(date.getMonth() + 6);
+  } else if (frequency === 'yearly') {
+    date.setMonth(date.getMonth() + 12);
+  }
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const StandardBadge = ({ standard }: { standard: string }) => {
@@ -1392,11 +2047,33 @@ const StandardBadge = ({ standard }: { standard: string }) => {
   return null;
 };
 
-const IssueCard = ({ issue, convertible = false, onConvert, onDelete, onEdit }: { issue: Issue, convertible?: boolean, onConvert?: () => void, onDelete?: () => void, onEdit?: () => void }) => {
+const IssueCard = ({ 
+  issue, 
+  onDelete, 
+  onEdit,
+  onUpdateField,
+  onLinkMoc,
+  onUnlinkMoc
+}: { 
+  issue: Issue, 
+  onDelete?: () => void, 
+  onEdit?: () => void,
+  onUpdateField?: (field: keyof Issue, value: any) => void,
+  onLinkMoc?: () => void,
+  onUnlinkMoc?: () => void
+}) => {
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
+
   const getImpactColor = () => {
     const isPositive = issue.category === 'strength' || issue.category === 'opportunity';
     
     switch(issue.impact) {
+      case 'critical': 
+        return isPositive 
+          ? 'bg-rose-100 text-rose-800 border-rose-200 shadow-sm animate-pulse' 
+          : 'bg-red-200 text-red-950 border-red-300 font-extrabold shadow-sm animate-pulse';
       case 'high': 
         return isPositive 
           ? 'bg-emerald-100 text-emerald-700 border-emerald-200' 
@@ -1432,28 +2109,100 @@ const IssueCard = ({ issue, convertible = false, onConvert, onDelete, onEdit }: 
       <div className="flex justify-between items-start gap-4 pr-6">
         <p className="text-sm text-slate-700 font-medium leading-relaxed">{issue.text}</p>
       </div>
+
+      <div className="flex gap-1.5 flex-wrap mt-2">
+        {issue.pestleCategory && issue.pestleCategory !== 'NA' && (
+          <span className="text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-100 px-1.5 py-0.5 rounded shadow-sm">
+            PESTLE: {issue.pestleCategory}
+          </span>
+        )}
+        {issue.imsStatus && (
+          <span className="text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 px-1.5 py-0.5 rounded shadow-sm">
+            Review Status: {issue.imsStatus}
+          </span>
+        )}
+        {issue.trend && (
+          <span className="text-[10px] font-semibold bg-slate-50 text-slate-600 border border-slate-100 px-1.5 py-0.5 rounded shadow-sm">
+            Trend: {issue.trend}
+          </span>
+        )}
+        {issue.lastReviewDate && (
+          <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded shadow-sm">
+            Last Rev: {new Date(issue.lastReviewDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+          </span>
+        )}
+        {issue.frequency && (
+          <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 px-1.5 py-0.5 rounded shadow-sm capitalize">
+            Freq: {issue.frequency}
+          </span>
+        )}
+        {issue.lastReviewDate && issue.frequency && (
+          <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded shadow-sm">
+            Next Rev: {calculateNextReviewDate(issue.lastReviewDate, issue.frequency)}
+          </span>
+        )}
+      </div>
+
+      {issue.evaluation === 'Management of Change' && (
+        <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+          {issue.linkedMocType && issue.linkedMocType !== 'none' ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => navigate(issue.linkedMocType === 'workflow' ? '/moc' : `/documents/${issue.linkedMocDocumentId}`)}
+                className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded shadow-sm flex items-center gap-1 hover:bg-indigo-100 transition-colors"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                {issue.linkedMocType === 'workflow' ? `MOC: ${issue.linkedMocNumber || 'Workflow'}` : `Doc: ${issue.linkedMocTitle || 'File'}`}
+              </button>
+              {isAdmin && onUnlinkMoc && (
+                <button
+                  onClick={onUnlinkMoc}
+                  className="p-0.5 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded transition-colors"
+                  title="Remove Link"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
+            </div>
+          ) : (
+            isAdmin && onLinkMoc && (
+              <button
+                onClick={onLinkMoc}
+                className="text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-2 py-0.5 rounded shadow-sm flex items-center gap-1 transition-colors"
+              >
+                <Plus className="w-3 h-3" /> Link MOC
+              </button>
+            )
+          )}
+        </div>
+      )}
       
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
-        <div className="flex gap-1 flex-wrap">
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+        <div className="flex gap-1 flex-wrap items-center">
           {issue.standards?.map(s => <StandardBadge key={s} standard={s} />)}
           <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ml-1 ${getImpactColor()}`}>
             {issue.impact}
           </span>
         </div>
         
-        {convertible && (
-          issue.isConverted ? (
-            <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-md ml-2 shrink-0">
-              <CheckCircle2 className="w-3 h-3" /> Evaluated
-            </span>
-          ) : (
-            <button 
-              onClick={onConvert}
-              className="text-xs font-semibold text-blue-600 flex items-center gap-1 hover:text-blue-800 transition-colors bg-blue-50 px-2 py-1 rounded-md ml-2 shrink-0"
-            >
-              Convert <ArrowRight className="w-3 h-3" />
-            </button>
-          )
+        {isAdmin && !(issue.isConverted && issue.linkedRiskId) && onUpdateField ? (
+          <select
+            className="bg-indigo-50 border border-indigo-100 rounded px-2 py-1 text-[11px] font-semibold text-indigo-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 max-w-[130px] truncate"
+            value={issue.evaluation || 'Monitor Only'}
+            onChange={e => onUpdateField('evaluation', e.target.value as any)}
+          >
+            <option value="Monitor Only">Monitor Only</option>
+            <option value="Escalate to Risk Register">Escalate Risk</option>
+            <option value="Escalate to Opportunity Register">Escalate Opp</option>
+            <option value="Management Review Input">Mgmt Review</option>
+            <option value="Strategic Objective">Strategic Obj</option>
+            <option value="Management of Change">MoC</option>
+            <option value="No Further Action">NFA</option>
+          </select>
+        ) : (
+          <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded shadow-sm">
+            {(issue.isConverted && issue.linkedRiskId) ? `Linked (${issue.evaluation === 'Escalate to Risk Register' ? 'Risk' : 'Opp'})` : (issue.evaluation || 'Monitor Only')}
+          </span>
         )}
       </div>
     </div>

@@ -1044,6 +1044,104 @@ Please respond to the user's message accordingly.`;
         }
     }
 
+    async recommendSwotPestle(text: string): Promise<any> {
+        const prompt = `Analyze the following organizational issue description and recommend the SWOT Category, PESTLE Category, general Impact level, and applicable ISO standard(s) (choose from: "ISO 9001" for quality/operations/customers, "ISO 14001" for environmental/resource/waste/emission issues, "ISO 45001" for occupational health/safety/hazard issues).
+
+Issue: "${text}"
+
+Respond ONLY with a valid raw JSON object matching this structure (no markdown code blocks, no other text):
+{
+  "category": "strength" | "weakness" | "opportunity" | "threat",
+  "pestleCategory": "Political" | "Economic" | "Social" | "Technological" | "Legal" | "Environmental" | "NA",
+  "impact": "low" | "medium" | "high" | "critical",
+  "standards": ["ISO 9001" | "ISO 14001" | "ISO 45001"],
+  "explanation": "A very brief 1-sentence explanation of why you made these choices."
+}`;
+
+        const systemPrompt = `You are an Integrated Management System (IMS) compliance expert (ISO 9001, ISO 14001, ISO 45001). Your task is to analyze issues and return a raw JSON recommendation. Do not include markdown code block formatting (such as \`\`\`json) in your response, just return the raw JSON object. Ensure the values fit the exact lists specified.`;
+
+        try {
+            const resp = await firstValueFrom(
+                this.httpService.post(`${this.ollamaUrl}/api/generate`, {
+                    model: this.modelName,
+                    prompt: prompt,
+                    system: systemPrompt,
+                    stream: false,
+                    keep_alive: '20m',
+                    options: {
+                        temperature: 0.1,
+                        num_ctx: 2048,
+                    }
+                }, {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 60000,
+                })
+            );
+
+            let textResponse = resp.data.response || '';
+            textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(textResponse);
+            return parsed;
+        } catch (error) {
+            this.logger.error('Failed to recommend SWOT/PESTLE via AI:', error);
+            return {
+                category: 'strength',
+                pestleCategory: 'NA',
+                impact: 'low',
+                explanation: `Fallback recommendation due to error: ${error.message}`
+            };
+        }
+    }
+
+    async draftRiskMitigation(title: string, standards: string[]): Promise<any> {
+        const prompt = `Draft ISO mitigation control, action plan steps, and assess likelihood (1 to 5) and consequence (1 to 5) for the following risk.
+
+Risk description/title: "${title}"
+Standards: ${standards.join(', ') || 'ISO 9001'}
+
+Respond ONLY with a valid raw JSON object matching this structure (no markdown code blocks, no other text):
+{
+  "mitigationControl": "Brief description of the main control/mitigation strategy",
+  "actionPlan": "Action steps to implement the control, formatted as a clear bulleted list or paragraph",
+  "likelihood": number,
+  "consequence": number
+}`;
+
+        const systemPrompt = `You are an expert in ISO Risk Assessment. Assess the risk and return a raw JSON object containing mitigation control and action plans. Do not include markdown code block formatting (such as \`\`\`json) in your response, just return the raw JSON object. Likelihood and consequence must be integers from 1 to 5.`;
+
+        try {
+            const resp = await firstValueFrom(
+                this.httpService.post(`${this.ollamaUrl}/api/generate`, {
+                    model: this.modelName,
+                    prompt: prompt,
+                    system: systemPrompt,
+                    stream: false,
+                    keep_alive: '20m',
+                    options: {
+                        temperature: 0.3,
+                        num_ctx: 2048,
+                    }
+                }, {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 60000,
+                })
+            );
+
+            let textResponse = resp.data.response || '';
+            textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(textResponse);
+            return parsed;
+        } catch (error) {
+            this.logger.error('Failed to draft risk mitigation via AI:', error);
+            return {
+                mitigationControl: 'Establish standard operating procedures and monitoring controls.',
+                actionPlan: '1. Review current operations.\n2. Document standard operating procedures.\n3. Conduct staff training.\n4. Perform periodic audits.',
+                likelihood: 3,
+                consequence: 3
+            };
+        }
+    }
+
     getModelName(): string {
         return this.modelName;
     }

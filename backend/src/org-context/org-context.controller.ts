@@ -96,4 +96,18 @@ export class OrgContextController {
     );
     res.send(buffer);
   }
+
+  @Get('issues/export')
+  async exportIssues(@Res() res: Response) {
+    const buffer = await this.orgContextService.exportIssues();
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=swot-issues-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+    res.send(buffer);
+  }
 }
