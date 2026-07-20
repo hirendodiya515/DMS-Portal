@@ -16,7 +16,7 @@ import {
   ConnectionLineType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { RotateCcw, Home, ChevronRight, Plus, ChevronDown, Save } from 'lucide-react';
+import { RotateCcw, Home, ChevronRight, Plus, ChevronDown, Save, Info } from 'lucide-react';
 
 import ProcessNode from './nodes/ProcessNode';
 import DecisionNode from './nodes/DecisionNode';
@@ -25,6 +25,7 @@ import DataNode from './nodes/DataNode';
 import DepartmentNode from './nodes/DepartmentNode';
 import LabeledEdge from './nodes/CustomEdge';
 import NodeModal from './NodeModal';
+import SummaryCard from './SummaryCard';
 import { plantNodes, plantEdges, departmentFlows } from '../../data/sampleFlow';
 import type { FlowNodeData, CriticalParameter, FlowNode } from '../../types/flow.types';
 import { useAuthStore } from '../../stores/authStore';
@@ -89,6 +90,10 @@ export default function FlowChart() {
 
   // Add Node Menu State
   const [showAddMenu, setShowAddMenu] = useState(false);
+
+  // Summary Card state
+  const [summaryNodeId, setSummaryNodeId] = useState<string | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
 
   const { fitView } = useReactFlow();
 
@@ -316,7 +321,7 @@ export default function FlowChart() {
           },
           eds
         )
-      )
+      );
     },
     [setEdges, handleEdgeLabelChange, isAdmin]
   );
@@ -335,6 +340,10 @@ export default function FlowChart() {
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      // Show summary for any clicked node
+      setSummaryNodeId(node.id);
+      setShowSummary(true);
+
       // Only drill down if NOT in edit mode
       if (!editMode && viewLevel === 'plant' && node.type === 'department') {
         const deptId = node.id;
@@ -351,6 +360,9 @@ export default function FlowChart() {
         setNodes(deptFlowData.nodes as FlowNode[]);
         setEdges(deptFlowData.edges as Edge[]);
         setViewLevel('department');
+        // Auto-hide summary when drilling down into department
+        setShowSummary(false);
+        setSummaryNodeId(null);
         setTimeout(() => fitView({ duration: 500, padding: 0.2 }), 50);
       }
     },
@@ -358,7 +370,9 @@ export default function FlowChart() {
   );
 
   const handleReset = useCallback(() => {
-    // Save current department state before leaving? (Already handled by Sync Effect)
+    // Hide summary card when returning to Root Map
+    setShowSummary(false);
+    setSummaryNodeId(null);
     
     // Restore Plant View
     setNodes(globalState.current.nodes as FlowNode[]);
@@ -371,189 +385,220 @@ export default function FlowChart() {
   }, [setNodes, setEdges, fitView]);
 
   return (
-    <div className="w-full h-full bg-slate-900 overflow-hidden relative">
-      <ReactFlow
-        nodes={nodesWithHandlers}
-        edges={edgesWithData}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onNodeClick={handleNodeClick}
-        onEdgeClick={onEdgeClick}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        defaultEdgeOptions={defaultEdgeOptions}
-        connectionLineType={ConnectionLineType.SmoothStep}
-        connectionLineStyle={{ strokeWidth: 3, stroke: '#ffffff' }}
-        snapToGrid={true}
-        snapGrid={[5, 5]}
-        deleteKeyCode={(editMode && isAdmin) ? 'Backspace' : null}
-        fitView
-        minZoom={0.1}
-        maxZoom={2}
-      >
-        <Background color="#1e293b" gap={20} size={1} />
-        <MiniMap
-          nodeColor={(node) => {
-            if (node.type === 'department') return '#6366f1';
-            if (node.type === 'startEnd') {
-              return node.data.nodeType === 'start' ? '#22c55e' : '#ef4444';
-            }
-            if (node.type === 'decision') return '#f97316';
-            if (node.type === 'data') return '#a855f7';
-            return '#3b82f6';
-          }}
-          maskColor="rgba(0, 0, 0, 0.3)"
-          style={{ background: '#0f172a' }}
-        />
-        <RFControls position="bottom-right" />
+    <div className="w-full h-full flex flex-col bg-slate-900 overflow-hidden relative">
+      <div className="flex-1 relative min-h-0">
+        <ReactFlow
+          nodes={nodesWithHandlers}
+          edges={edgesWithData}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeClick={handleNodeClick}
+          onEdgeClick={onEdgeClick}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          defaultEdgeOptions={defaultEdgeOptions}
+          connectionLineType={ConnectionLineType.SmoothStep}
+          connectionLineStyle={{ strokeWidth: 3, stroke: '#ffffff' }}
+          snapToGrid={true}
+          snapGrid={[5, 5]}
+          deleteKeyCode={(editMode && isAdmin) ? 'Backspace' : null}
+          fitView
+          minZoom={0.1}
+          maxZoom={2}
+        >
+          <Background color="#1e293b" gap={20} size={1} />
+          <MiniMap
+            nodeColor={(node) => {
+              if (node.type === 'department') return '#6366f1';
+              if (node.type === 'startEnd') {
+                return node.data.nodeType === 'start' ? '#22c55e' : '#ef4444';
+              }
+              if (node.type === 'decision') return '#f97316';
+              if (node.type === 'data') return '#a855f7';
+              return '#3b82f6';
+            }}
+            maskColor="rgba(0, 0, 0, 0.3)"
+            style={{ background: '#0f172a' }}
+          />
+          <RFControls position="bottom-right" />
 
-        {/* Header Panel */}
-        <Panel position="top-left">
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-4 border border-white/20">
-            <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
-              <Home size={16} className="text-indigo-500" />
-              <span className="font-medium cursor-pointer hover:text-indigo-600" onClick={handleReset}>Plant Overview</span>
-              {viewLevel === 'department' && (
-                <>
-                  <ChevronRight size={16} className="text-slate-400" />
-                  <span className="text-indigo-600 font-semibold">{departmentName}</span>
-                </>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-                <h1 className="text-xl font-bold text-slate-900">
-                {viewLevel === 'plant' ? 'Plant Process Map' : `${departmentName} Processes`}
-                </h1>
-                {isSaving && <span className="text-xs text-slate-400 flex items-center gap-1"><Save size={12}/> Saving...</span>}
-            </div>
-          </div>
-        </Panel>
-
-        {/* Action Buttons - Only shown for Admins */}
-        <Panel position="top-right">
-          <div className="flex gap-2 relative">
-            {isAdmin && (
-              <>
-                <button
-                  onClick={() => setEditMode(!editMode)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-xl font-medium transition-all transform hover:scale-105 active:scale-95 ${
-                    editMode
-                      ? 'bg-indigo-600 text-white border-indigo-500'
-                      : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
-                  } border`}
-                >
-                  {editMode ? 'Stop Editing' : 'Customize Flow'}
-                </button>
-                {editMode && (
-                  <div className="relative">
-                      <button
-                        onClick={() => setShowAddMenu(!showAddMenu)}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg shadow-xl hover:bg-emerald-700 transition-all font-medium border border-emerald-500 transform hover:scale-105"
-                      >
-                        <Plus size={18} />
-                        {viewLevel === 'plant' ? 'Add Dept' : 'Add Step'}
-                        <ChevronDown size={14} />
-                      </button>
-
-                      {/* Dropdown Menu */}
-                      {showAddMenu && (
-                          <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in zoom-in duration-150">
-                              {viewLevel === 'plant' ? (
-                                  <button
-                                    onClick={() => handleAddNode('department')}
-                                    className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
-                                  >
-                                    <div className="w-3 h-3 bg-indigo-500 rounded"></div> Department
-                                  </button>
-                              ) : (
-                                  <>
-                                    <button
-                                        onClick={() => handleAddNode('process')}
-                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
-                                    >
-                                        <div className="w-3 h-3 bg-blue-500 rounded"></div> Process
-                                    </button>
-                                    <button
-                                        onClick={() => handleAddNode('decision')}
-                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
-                                    >
-                                        <div className="w-3 h-3 bg-orange-500 rotate-45"></div> Decision
-                                    </button>
-                                    <button
-                                        onClick={() => handleAddNode('data')}
-                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
-                                    >
-                                        <div className="w-3 h-3 bg-purple-500 skew-x-12"></div> Data
-                                    </button>
-                                    <div className="border-t border-slate-100 my-1"></div>
-                                    <button
-                                        onClick={() => handleAddNode('startEnd', 'start')}
-                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
-                                    >
-                                        <div className="w-3 h-3 bg-emerald-500 rounded-full"></div> Start
-                                    </button>
-                                    <button
-                                        onClick={() => handleAddNode('startEnd', 'end')}
-                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
-                                    >
-                                        <div className="w-3 h-3 bg-red-500 rounded-full"></div> End
-                                    </button>
-                                  </>
-                              )}
-                          </div>
-                      )}
-                  </div>
+          {/* Header Panel */}
+          <Panel position="top-left">
+            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-4 border border-white/20">
+              <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
+                <Home size={16} className="text-indigo-500" />
+                <span className="font-medium cursor-pointer hover:text-indigo-600" onClick={handleReset}>Plant Overview</span>
+                {viewLevel === 'department' && (
+                  <>
+                    <ChevronRight size={16} className="text-slate-400" />
+                    <span className="text-indigo-600 font-semibold">{departmentName}</span>
+                  </>
                 )}
-              </>
-            )}
-            {viewLevel === 'department' && (
-              <button
-                onClick={handleReset}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-lg shadow-xl text-slate-700 hover:bg-slate-50 transition-all font-medium border border-slate-200 transform hover:scale-105"
-              >
-                <RotateCcw size={18} />
-                Root Map
-              </button>
-            )}
-          </div>
-        </Panel>
+              </div>
+              <div className="flex items-center gap-3">
+                  <h1 className="text-xl font-bold text-slate-900">
+                  {viewLevel === 'plant' ? 'Plant Process Map' : `${departmentName} Processes`}
+                  </h1>
+                  {isSaving && <span className="text-xs text-slate-400 flex items-center gap-1"><Save size={12}/> Saving...</span>}
+              </div>
+            </div>
+          </Panel>
 
-        {/* Legend */}
-        <Panel position="bottom-left">
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 border border-white/20">
-            <div className="text-xs font-bold text-slate-900 mb-2 uppercase tracking-wider">Map Legend</div>
-            <div className="space-y-1.5">
-              {viewLevel === 'plant' ? (
-                <div className="flex items-center gap-2 text-xs text-slate-700">
-                  <div className="w-4 h-4 rounded bg-indigo-500 border border-indigo-400"></div>
-                  <span>Department Block</span>
-                </div>
-              ) : (
+          {/* Action Buttons - Only shown for Admins */}
+          <Panel position="top-right">
+            <div className="flex gap-2 relative">
+              {isAdmin && (
                 <>
-                  <div className="flex items-center gap-2 text-xs text-slate-700">
-                    <div className="w-4 h-4 rounded bg-blue-500 border border-blue-400"></div>
-                    <span>Process Step</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-700">
-                    <div className="w-4 h-4 rotate-45 bg-orange-500 border border-orange-400"></div>
-                    <span>Decision Point</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-700">
-                    <div className="w-4 h-4 rounded-full bg-emerald-500 border border-emerald-400"></div>
-                    <span>Start / End</span>
-                  </div>
+                  <button
+                    onClick={() => setEditMode(!editMode)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-xl font-medium transition-all transform hover:scale-105 active:scale-95 ${
+                      editMode
+                        ? 'bg-indigo-600 text-white border-indigo-500'
+                        : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
+                    } border`}
+                  >
+                    {editMode ? 'Stop Editing' : 'Customize Flow'}
+                  </button>
                   {editMode && (
-                    <div className="flex items-center gap-2 text-xs mt-2 text-indigo-600 font-medium">
-                      <span>📐 Grid Snap Active (5px)</span>
+                    <div className="relative">
+                        <button
+                          onClick={() => setShowAddMenu(!showAddMenu)}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg shadow-xl hover:bg-emerald-700 transition-all font-medium border border-emerald-500 transform hover:scale-105"
+                        >
+                          <Plus size={18} />
+                          {viewLevel === 'plant' ? 'Add Dept' : 'Add Step'}
+                          <ChevronDown size={14} />
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {showAddMenu && (
+                            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in zoom-in duration-150">
+                                {viewLevel === 'plant' ? (
+                                    <button
+                                      onClick={() => handleAddNode('department')}
+                                      className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
+                                    >
+                                      <div className="w-3 h-3 bg-indigo-500 rounded"></div> Department
+                                    </button>
+                                ) : (
+                                    <>
+                                      <button
+                                          onClick={() => handleAddNode('process')}
+                                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
+                                      >
+                                          <div className="w-3 h-3 bg-blue-500 rounded"></div> Process
+                                      </button>
+                                      <button
+                                          onClick={() => handleAddNode('decision')}
+                                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
+                                      >
+                                          <div className="w-3 h-3 bg-orange-500 rotate-45"></div> Decision
+                                      </button>
+                                      <button
+                                          onClick={() => handleAddNode('data')}
+                                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
+                                      >
+                                          <div className="w-3 h-3 bg-purple-500 skew-x-12"></div> Data
+                                      </button>
+                                      <div className="border-t border-slate-100 my-1"></div>
+                                      <button
+                                          onClick={() => handleAddNode('startEnd', 'start')}
+                                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
+                                      >
+                                          <div className="w-3 h-3 bg-emerald-500 rounded-full"></div> Start
+                                      </button>
+                                      <button
+                                          onClick={() => handleAddNode('startEnd', 'end')}
+                                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm text-slate-700 flex items-center gap-2"
+                                      >
+                                          <div className="w-3 h-3 bg-red-500 rounded-full"></div> End
+                                      </button>
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </div>
                   )}
                 </>
               )}
+              {viewLevel === 'department' && (
+                <>
+                  <button
+                    onClick={() => {
+                      if (!summaryNodeId) setSummaryNodeId(currentDepartment || 'dept');
+                      setShowSummary(!showSummary);
+                    }}
+                    title="Toggle Department Summary"
+                    className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg shadow-xl font-medium transition-all transform hover:scale-105 ${
+                      showSummary
+                        ? 'bg-indigo-600 text-white border-indigo-500'
+                        : 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200'
+                    } border`}
+                  >
+                    <Info size={18} />
+                    <span>Info</span>
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-lg shadow-xl text-slate-700 hover:bg-slate-50 transition-all font-medium border border-slate-200 transform hover:scale-105"
+                  >
+                    <RotateCcw size={18} />
+                    Root Map
+                  </button>
+                </>
+              )}
             </div>
-          </div>
-        </Panel>
-      </ReactFlow>
+          </Panel>
+
+          {/* Legend */}
+          <Panel position="bottom-left">
+            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-xl p-3 border border-white/20">
+              <div className="text-xs font-bold text-slate-900 mb-2 uppercase tracking-wider">Map Legend</div>
+              <div className="space-y-1.5">
+                {viewLevel === 'plant' ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-700">
+                    <div className="w-4 h-4 rounded bg-indigo-500 border border-indigo-400"></div>
+                    <span>Department Block</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-xs text-slate-700">
+                      <div className="w-4 h-4 rounded bg-blue-500 border border-blue-400"></div>
+                      <span>Process Step</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-700">
+                      <div className="w-4 h-4 rotate-45 bg-orange-500 border border-orange-400"></div>
+                      <span>Decision Point</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-700">
+                      <div className="w-4 h-4 rounded-full bg-emerald-500 border border-emerald-400"></div>
+                      <span>Start / End</span>
+                    </div>
+                    {editMode && (
+                      <div className="flex items-center gap-2 text-xs mt-2 text-indigo-600 font-medium">
+                        <span>📐 Grid Snap Active (5px)</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </Panel>
+
+          {/* Top Glass HUD Bar */}
+          {showSummary && viewLevel === 'department' && (
+            <Panel position="top-center">
+              <SummaryCard 
+                  nodeId={currentDepartment || summaryNodeId || 'dept'} 
+                  nodeLabel={departmentName}
+                  departmentName={departmentName}
+                  onClose={() => setShowSummary(false)} 
+              />
+            </Panel>
+          )}
+        </ReactFlow>
+      </div>
 
       {/* Node Edit Modal */}
       {selectedNodeData && (

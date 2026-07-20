@@ -112,7 +112,7 @@ cd ..
 
 echo.
 echo ---------------------------------------------------
-echo STEP 5: Optional Portals (Customer Feedback ^& Training)
+echo STEP 5: Optional Portals (Customer Feedback, Training, & Formats)
 echo ---------------------------------------------------
 set /p START_OPTIONAL="Do you want to set up and start additional portals? (y/n): "
 if /i "!START_OPTIONAL!"=="y" (
@@ -133,7 +133,17 @@ if /i "!START_OPTIONAL!"=="y" (
         call npm run build
         call pm2 delete dms-training 2>nul
         :: Next.js needs 'next start'
-        call pm2 start "npm run start -- -p 5175" --name dms-training
+        call pm2 start "npm run start -- -p 5177" --name dms-training
+    )
+    cd ..
+
+    echo Setting up Formats Portal (Vite + React)...
+    cd formats-portal
+    if exist "package.json" (
+        call npm install
+        call npm run build
+        call pm2 delete dms-formats 2>nul
+        call pm2 start "serve -s dist -l 5175" --name dms-formats
     )
     cd ..
 )
@@ -146,7 +156,8 @@ echo Main Frontend: http://localhost:5173
 echo Backend API:   http://localhost:3000
 if /i "!START_OPTIONAL!"=="y" (
     echo Feedback UI:   http://localhost:5174
-    echo Training UI:   http://localhost:5175
+    echo Training UI:   http://localhost:5177
+    echo Formats Portal: http://localhost:5175
 )
 echo.
 echo Use 'pm2 status' to check running processes.

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus, Res, Get } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus, Res, Get, Req } from '@nestjs/common';
 import * as express from 'express';
 import { AiService } from './ai.service';
 import { KnowledgeBaseService } from './knowledge-base.service';
@@ -26,17 +26,33 @@ export class AiController {
 
     @Post('chat')
     @HttpCode(HttpStatus.OK)
-    async chat(@Body() chatDto: ChatDto, @Res() res: express.Response) {
+    async chat(
+        @Body() chatDto: ChatDto, 
+        @Req() req: express.Request, 
+        @Res() res: express.Response
+    ) {
         const { message, context } = chatDto;
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Transfer-Encoding', 'chunked');
 
+        const abortController = new AbortController();
+        req.on('close', () => {
+            abortController.abort();
+        });
+
         try {
-            await this.aiService.chatStream(message, context || '', (chunk: string) => {
-                res.write(chunk);
-            });
+            await this.aiService.chatStream(
+                message, 
+                context || '', 
+                (chunk: string) => {
+                    res.write(chunk);
+                },
+                abortController.signal
+            );
         } catch (err) {
-            res.write(`⚠️ Connection Error: ${err.message}`);
+            if (!abortController.signal.aborted) {
+                res.write(`⚠️ Connection Error: ${err.message}`);
+            }
         } finally {
             res.end();
         }
@@ -51,7 +67,23 @@ export class AiController {
     @Get('model')
     @HttpCode(HttpStatus.OK)
     async getModel() {
-        return { model: this.aiService.getModelName() };
+        const activeModel = await this.aiService.getActiveModel();
+        return { model: activeModel.name };
+    }
+
+    @Get('models')
+    @HttpCode(HttpStatus.OK)
+    async getAvailableModels() {
+        return this.aiService.getAvailableModels();
+    }
+
+    @Post('select-model')
+    @HttpCode(HttpStatus.OK)
+    async selectModel(
+        @Body('model') name: string,
+        @Body('provider') provider: 'ollama' | 'gemini' | 'openai'
+    ) {
+        return this.aiService.selectModel(name, provider);
     }
 
     @Post('recommend-swot-pestle')

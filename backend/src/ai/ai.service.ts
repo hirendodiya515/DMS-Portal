@@ -23,6 +23,7 @@ import { HiraRisk } from '../entities/hira-risk.entity';
 import { EaaRisk } from '../entities/eaa-risk.entity';
 import { QraRisk } from '../entities/qra-risk.entity';
 import { InterestedParty } from '../entities/interested-party.entity';
+import { SystemSetting } from '../entities/system-setting.entity';
 
 @Injectable()
 export class AiService {
@@ -66,6 +67,8 @@ export class AiService {
         private readonly qraRepo: Repository<QraRisk>,
         @InjectRepository(InterestedParty)
         private readonly interestedRepo: Repository<InterestedParty>,
+        @InjectRepository(SystemSetting)
+        private readonly settingsRepo: Repository<SystemSetting>,
     ) {
         this.ollamaUrl = this.configService.get<string>('OLLAMA_URL') || 'http://localhost:11434';
         // Default to gemma4:e4b which is the lightweight 4B variant optimized for consumer/edge devices
@@ -733,18 +736,215 @@ export class AiService {
             this.logger.error('Failed to read dms_rules.md', e.message);
         }
         return '';
+    }    /**
+     * Gets the active model name and provider from database system settings, 
+     * falling back to environment configuration.
+     */
+    async getActiveModel(): Promise<{ name: string; provider: 'ollama' | 'gemini' | 'openai' }> {
+        try {
+            const setting = await this.settingsRepo.findOne({ where: { key: 'active_ai_model' } });
+            if (setting && setting.value) {
+                if (setting.value.name && setting.value.provider) {
+                    return setting.value;
+                }
+                const name = String(setting.value);
+                const provider = name.startsWith('gemini') ? 'gemini' : (name.startsWith('gpt') ? 'openai' : 'ollama');
+                return { name, provider };
+            }
+        } catch (e) {
+            this.logger.error('Failed to load active model setting', e.message);
+        }
+        const defaultName = this.configService.get<string>('OLLAMA_MODEL') || 'gemma2:2b';
+        return { name: defaultName, provider: 'ollama' };
     }
 
     /**
-     * Sends a chat prompt to local Gemma 4 model running on Ollama
-     * @param message User query
-     * @param context Optional system/page context to guide the model
+     * Helper to format model names for cleaner UI presentation.
+     */
+    private formatModelName(name: string): string {
+        if (!name) return 'Local AI';
+        const baseName = name.split(':')[0];
+        return baseName
+            .split(/[-_]/)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ')
+            .replace(/([a-zA-Z]+)(\d+)/g, '$1 $2');
+    }
+
+    /**
+     * Retrieves all available local models from Ollama and cloud models
+     * that are set up with backend API keys.
+     */
+    async getAvailableModels(): Promise<any> {
+        const activeModel = await this.getActiveModel();
+        
+        let localModels: { name: string; displayName: string }[] = [];
+        try {
+            const response = await firstValueFrom(
+                this.httpService.get(`${this.ollamaUrl}/api/tags`, { timeout: 5000 })
+            );
+            if (response.data && response.data.models) {
+                localModels = response.data.models.map((m: any) => ({
+                    name: m.name,
+                    displayName: `${this.formatModelName(m.name)} (Local)`
+                }));
+            }
+        } catch (e) {
+            this.logger.warn(`Failed to fetch Ollama local models: ${e.message}`);
+        }
+        
+        const defaultLocalModel = this.configService.get<string>('OLLAMA_MODEL') || 'gemma2:2b';
+        if (!localModels.some(m => m.name === defaultLocalModel)) {
+            localModels.unshift({
+                name: defaultLocalModel,
+                displayName: `${this.formatModelName(defaultLocalModel)} (Default Local)`
+            });
+        }
+        
+        const geminiApiKey = this.configService.get<string>('GEMINI_API_KEY');
+        const openaiApiKey = this.configService.get<string>('OPENAI_API_KEY');
+        
+        const cloudModels = [
+            {
+                name: 'gemini-1.5-flash',
+                displayName: 'Gemini 1.5 Flash (Cloud)',
+                provider: 'gemini' as const,
+                available: !!geminiApiKey
+            },
+            {
+                name: 'gemini-1.5-pro',
+                displayName: 'Gemini 1.5 Pro (Cloud)',
+                provider: 'gemini' as const,
+                available: !!geminiApiKey
+            },
+            {
+                name: 'gemini-2.5-flash',
+                displayName: 'Gemini 2.5 Flash (Cloud)',
+                provider: 'gemini' as const,
+                available: !!geminiApiKey
+            },
+            {
+                name: 'gpt-4o-mini',
+                displayName: 'GPT-4o Mini (Cloud)',
+                provider: 'openai' as const,
+                available: !!openaiApiKey
+            },
+            {
+                name: 'gpt-4o',
+                displayName: 'GPT-4o (Cloud)',
+                provider: 'openai' as const,
+                available: !!openaiApiKey
+            }
+        ];
+        
+        return {
+            activeModel,
+            localModels,
+            cloudModels
+        };
+    }
+
+    /**
+     * Persists the selected active AI model and provider in system settings.
+     */
+    async selectModel(name: string, provider: 'ollama' | 'gemini' | 'openai'): Promise<any> {
+        let setting = await this.settingsRepo.findOne({ where: { key: 'active_ai_model' } });
+        if (!setting) {
+            setting = this.settingsRepo.create({ key: 'active_ai_model', value: { name, provider } });
+        } else {
+            setting.value = { name, provider };
+        }
+        return this.settingsRepo.save(setting);
+    }
+
+    /**
+     * Helper to call AI models directly without streaming, dynamically routing
+     * to Ollama, Gemini, or OpenAI based on the active model configuration.
+     */
+    private async generateChatCompletionDirect(
+        prompt: string,
+        systemPrompt: string,
+        temperature = 0.7,
+        numCtx = 2048
+    ): Promise<string> {
+        const activeModel = await this.getActiveModel();
+        
+        if (activeModel.provider === 'ollama') {
+            const response = await firstValueFrom(
+                this.httpService.post(`${this.ollamaUrl}/api/generate`, {
+                    model: activeModel.name,
+                    prompt: prompt,
+                    system: systemPrompt,
+                    stream: false,
+                    keep_alive: '20m',
+                    options: {
+                        temperature,
+                        num_ctx: numCtx,
+                    }
+                }, {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 240000,
+                })
+            );
+            
+            let data = response.data;
+            if (typeof data === 'string') {
+                data = JSON.parse(data);
+            }
+            if (data && data.response) {
+                return data.response.trim();
+            }
+            throw new Error('Invalid response structure from Ollama');
+        } else {
+            const isGemini = activeModel.provider === 'gemini';
+            const apiKeyEnv = isGemini ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY';
+            const apiKey = this.configService.get<string>(apiKeyEnv);
+            
+            if (!apiKey) {
+                throw new Error(`API Key for ${activeModel.provider} is not configured in backend .env`);
+            }
+            
+            const url = isGemini 
+                ? 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' 
+                : 'https://api.openai.com/v1/chat/completions';
+            
+            const response = await firstValueFrom(
+                this.httpService.post(url, {
+                    model: activeModel.name,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: prompt }
+                    ],
+                    temperature,
+                    stream: false
+                }, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 60000
+                })
+            );
+            
+            let data = response.data;
+            if (typeof data === 'string') {
+                data = JSON.parse(data);
+            }
+            if (data && data.choices?.[0]?.message?.content) {
+                return data.choices[0].message.content.trim();
+            }
+            throw new Error(`Invalid response structure from ${activeModel.provider}`);
+        }
+    }
+
+    /**
+     * Sends a chat prompt to the active AI model (Ollama, Gemini, or OpenAI)
+     * and returns the full response content synchronously.
      */
     async chat(message: string, context?: string): Promise<{ response: string; model: string }> {
         const dbContext = await this.getDatabaseContext(message);
         const localRules = this.getLocalRules();
         
-        // Optimize RAG limit to prevent prompt context bloat on local CPU
         const queryLower = message.toLowerCase();
         let kbLimit = 3;
         if (queryLower.includes('summary') || queryLower.includes('list') || queryLower.includes('how many') || queryLower.includes('count')) {
@@ -769,7 +969,7 @@ Your goal is to assist users with documents, audits, calibration, risk managemen
 - Frame product and process deviations in context of **ISO Clause 8.7 (Control of nonconforming outputs)** and **Clause 10.2 (Nonconformity and corrective action)**.
 - Frame Management of Change (MOC) in context of **ISO Clause 6.3 (Planning of changes)** and **Clause 8.5.6 (Control of changes)**.
 
-Be highly professional, structured, and compliant. Cite specific ISO clauses where relevant to reinforce compliance. Always reassure the user that all data is stored 100% locally and processed securely offline on premises.
+Be highly professional, structured, and compliant. Cite specific ISO clauses where relevant to reinforce compliance. Always reassure the user that all data is stored securely and processed privately.
 
 **Crucial App-Specific Instructions:**
 When users ask how to upload a new document or how to revise an existing document, you MUST guide them using the exact user-interface flow of this DMS application instead of giving generic answers:
@@ -816,101 +1016,40 @@ ${dbContext}
 
 Please respond to the user's message accordingly.`;
 
+        const activeModel = await this.getActiveModel();
         try {
-            this.logger.log(`Sending prompt to local model '${this.modelName}' at ${this.ollamaUrl}...`);
-            
-            const response = await firstValueFrom(
-                this.httpService.post(`${this.ollamaUrl}/api/generate`, {
-                    model: this.modelName,
-                    prompt: message,
-                    system: systemPrompt,
-                    stream: false,
-                    keep_alive: '20m',
-                    options: {
-                        temperature: 0.7,
-                        num_ctx: 8192,
-                    }
-                }, {
-                    headers: { 'Content-Type': 'application/json' },
-                    timeout: 240000, // 4 minutes timeout for local CPU/GPU LLM generation
-                })
-            );
-
-            let data = response.data;
-            
-            // If data is a string (e.g. if Axios did not automatically parse the response), parse it
-            if (typeof data === 'string') {
-                try {
-                    data = JSON.parse(data);
-                } catch (e) {
-                    this.logger.error(`Failed to parse Ollama response body as JSON string: ${data}`);
-                }
-            }
-
-            // If the model was just loaded into memory, Ollama sometimes returns empty response with done_reason: 'load'.
-            // In this case, we automatically retry the request since the model is now active in memory.
-            if (data && data.done_reason === 'load' && !data.response) {
-                this.logger.log(`Model '${this.modelName}' was just loaded into memory (done_reason: 'load'). Retrying request...`);
-                const retryResponse = await firstValueFrom(
-                    this.httpService.post(`${this.ollamaUrl}/api/generate`, {
-                        model: this.modelName,
-                        prompt: message,
-                        system: systemPrompt,
-                        stream: false,
-                        keep_alive: '20m',
-                        options: {
-                            temperature: 0.7,
-                            num_ctx: 8192,
-                        }
-                    }, {
-                        headers: { 'Content-Type': 'application/json' },
-                        timeout: 240000, // 4 minutes timeout
-                    })
-                );
-                
-                let retryData = retryResponse.data;
-                if (typeof retryData === 'string') {
-                    try {
-                        retryData = JSON.parse(retryData);
-                    } catch (e) {}
-                }
-                data = retryData;
-            }
-
-            if (data && data.response) {
-                return {
-                    response: data.response.trim(),
-                    model: this.modelName,
-                };
-            }
-
-            this.logger.error(`Ollama response structure mismatch. Raw data: ${JSON.stringify(response.data)}`);
-            throw new Error('Invalid response structure from Ollama');
+            const responseText = await this.generateChatCompletionDirect(message, systemPrompt, 0.7, 8192);
+            return {
+                response: responseText,
+                model: activeModel.name
+            };
         } catch (error) {
-            this.logger.error(`Error communicating with local AI model (${this.modelName}):`, error.message);
+            this.logger.error(`Error communicating with active AI model (${activeModel.name}):`, error.message);
             
-            // Check if connection was refused
-            if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
+            if (activeModel.provider === 'ollama' && (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED'))) {
                 return {
-                    response: `⚠️ DMS Copilot is currently offline. Please ensure Ollama is installed and running locally on your system, and that you have pulled the model using \`ollama pull ${this.modelName}\`.`,
-                    model: this.modelName,
+                    response: `⚠️ DMS Copilot is currently offline. Please ensure Ollama is installed and running locally on your system, and that you have pulled the model using \`ollama pull ${activeModel.name}\`.`,
+                    model: activeModel.name,
                 };
             }
 
             return {
-                response: `⚠️ Failed to get a response from local AI: ${error.message}`,
-                model: this.modelName,
+                response: `⚠️ Failed to get a response from AI model: ${error.message}`,
+                model: activeModel.name,
             };
         }
     }
 
     /**
-     * Sends a chat prompt to local Gemma 4 model running on Ollama and streams the response
-     * @param message User query
-     * @param context Optional system/page context to guide the model
-     * @param onChunk Callback function invoked for every generated token chunk
+     * Sends a chat prompt to the active AI model and streams the response back token by token,
+     * fully supporting client-driven Axios stream cancellation.
      */
-    async chatStream(message: string, context: string, onChunk: (chunk: string) => void): Promise<void> {
+    async chatStream(
+        message: string, 
+        context: string, 
+        onChunk: (chunk: string) => void,
+        signal?: AbortSignal
+    ): Promise<void> {
         const dbContext = await this.getDatabaseContext(message);
         const localRules = this.getLocalRules();
         const kbMatches = await this.kbService.search(message, 5);
@@ -931,7 +1070,7 @@ Your goal is to assist users with documents, audits, calibration, risk managemen
 - Frame product and process deviations in context of **ISO Clause 8.7 (Control of nonconforming outputs)** and **Clause 10.2 (Nonconformity and corrective action)**.
 - Frame Management of Change (MOC) in context of **ISO Clause 6.3 (Planning of changes)** and **Clause 8.5.6 (Control of changes)**.
 
-Be highly professional, structured, and compliant. Cite specific ISO clauses where relevant to reinforce compliance. Always reassure the user that all data is stored 100% locally and processed securely offline on premises.
+Be highly professional, structured, and compliant. Cite specific ISO clauses where relevant to reinforce compliance. Always reassure the user that all data is stored securely and processed privately.
 
 **Crucial App-Specific Instructions:**
 When users ask how to upload a new document or how to revise an existing document, you MUST guide them using the exact user-interface flow of this DMS application instead of giving generic answers:
@@ -978,12 +1117,14 @@ ${dbContext}
 
 Please respond to the user's message accordingly.`;
 
-        try {
-            this.logger.log(`Sending streaming prompt to local model '${this.modelName}' at ${this.ollamaUrl}...`);
+        const activeModel = await this.getActiveModel();
+
+        if (activeModel.provider === 'ollama') {
+            this.logger.log(`Sending streaming prompt to local model '${activeModel.name}' at ${this.ollamaUrl}...`);
             
             const response = await firstValueFrom(
                 this.httpService.post(`${this.ollamaUrl}/api/generate`, {
-                    model: this.modelName,
+                    model: activeModel.name,
                     prompt: message,
                     system: systemPrompt,
                     stream: true,
@@ -996,6 +1137,7 @@ Please respond to the user's message accordingly.`;
                     headers: { 'Content-Type': 'application/json' },
                     responseType: 'stream',
                     timeout: 240000,
+                    signal
                 })
             );
 
@@ -1003,6 +1145,7 @@ Please respond to the user's message accordingly.`;
                 let buffer = '';
                 
                 response.data.on('data', (chunkBuffer: Buffer) => {
+                    if (signal?.aborted) return;
                     buffer += chunkBuffer.toString('utf8');
                     let index;
                     while ((index = buffer.indexOf('\n')) !== -1) {
@@ -1014,14 +1157,13 @@ Please respond to the user's message accordingly.`;
                                 if (parsed.response) {
                                     onChunk(parsed.response);
                                 }
-                            } catch (err) {
-                                // Ignore json parse errors for incomplete lines
-                            }
+                            } catch (err) {}
                         }
                     }
                 });
 
                 response.data.on('end', () => {
+                    if (signal?.aborted) return resolve();
                     if (buffer.trim()) {
                         try {
                             const parsed = JSON.parse(buffer.trim());
@@ -1037,13 +1179,96 @@ Please respond to the user's message accordingly.`;
                     reject(err);
                 });
             });
+        } else {
+            const isGemini = activeModel.provider === 'gemini';
+            const apiKeyEnv = isGemini ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY';
+            const apiKey = this.configService.get<string>(apiKeyEnv);
+            
+            if (!apiKey) {
+                throw new Error(`API Key for ${activeModel.provider} is not configured in backend .env`);
+            }
+            
+            const url = isGemini 
+                ? 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' 
+                : 'https://api.openai.com/v1/chat/completions';
+            
+            this.logger.log(`Sending streaming prompt to cloud model '${activeModel.name}' via ${activeModel.provider}...`);
+            
+            const response = await firstValueFrom(
+                this.httpService.post(url, {
+                    model: activeModel.name,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: message }
+                    ],
+                    stream: true,
+                    temperature: 0.7
+                }, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    responseType: 'stream',
+                    timeout: 240000,
+                    signal
+                })
+            );
 
-        } catch (error) {
-            this.logger.error(`Error communicating with local AI model (${this.modelName}) in stream:`, error.message);
-            throw error;
+            await new Promise<void>((resolve, reject) => {
+                let buffer = '';
+                
+                response.data.on('data', (chunkBuffer: Buffer) => {
+                    if (signal?.aborted) return;
+                    buffer += chunkBuffer.toString('utf8');
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    
+                    for (const line of lines) {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine.startsWith('data: ')) {
+                            const dataStr = trimmedLine.slice(6).trim();
+                            if (dataStr === '[DONE]') continue;
+                            try {
+                                const parsed = JSON.parse(dataStr);
+                                const content = parsed.choices?.[0]?.delta?.content;
+                                if (content) {
+                                    onChunk(content);
+                                }
+                            } catch (err) {}
+                        }
+                    }
+                });
+
+                response.data.on('end', () => {
+                    if (signal?.aborted) return resolve();
+                    if (buffer.trim()) {
+                        const trimmedLine = buffer.trim();
+                        if (trimmedLine.startsWith('data: ')) {
+                            const dataStr = trimmedLine.slice(6).trim();
+                            if (dataStr !== '[DONE]') {
+                                try {
+                                    const parsed = JSON.parse(dataStr);
+                                    const content = parsed.choices?.[0]?.delta?.content;
+                                    if (content) {
+                                        onChunk(content);
+                                    }
+                                } catch (err) {}
+                            }
+                        }
+                    }
+                    resolve();
+                });
+
+                response.data.on('error', (err: any) => {
+                    reject(err);
+                });
+            });
         }
     }
 
+    /**
+     * Dynamically recommends SWOT and PESTLE analysis categories using the active model.
+     */
     async recommendSwotPestle(text: string): Promise<any> {
         const prompt = `Analyze the following organizational issue description and recommend the SWOT Category, PESTLE Category, general Impact level, and applicable ISO standard(s) (choose from: "ISO 9001" for quality/operations/customers, "ISO 14001" for environmental/resource/waste/emission issues, "ISO 45001" for occupational health/safety/hazard issues).
 
@@ -1061,26 +1286,9 @@ Respond ONLY with a valid raw JSON object matching this structure (no markdown c
         const systemPrompt = `You are an Integrated Management System (IMS) compliance expert (ISO 9001, ISO 14001, ISO 45001). Your task is to analyze issues and return a raw JSON recommendation. Do not include markdown code block formatting (such as \`\`\`json) in your response, just return the raw JSON object. Ensure the values fit the exact lists specified.`;
 
         try {
-            const resp = await firstValueFrom(
-                this.httpService.post(`${this.ollamaUrl}/api/generate`, {
-                    model: this.modelName,
-                    prompt: prompt,
-                    system: systemPrompt,
-                    stream: false,
-                    keep_alive: '20m',
-                    options: {
-                        temperature: 0.1,
-                        num_ctx: 2048,
-                    }
-                }, {
-                    headers: { 'Content-Type': 'application/json' },
-                    timeout: 60000,
-                })
-            );
-
-            let textResponse = resp.data.response || '';
-            textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-            const parsed = JSON.parse(textResponse);
+            const textResponse = await this.generateChatCompletionDirect(prompt, systemPrompt, 0.1, 2048);
+            const cleanedResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(cleanedResponse);
             return parsed;
         } catch (error) {
             this.logger.error('Failed to recommend SWOT/PESTLE via AI:', error);
@@ -1093,6 +1301,9 @@ Respond ONLY with a valid raw JSON object matching this structure (no markdown c
         }
     }
 
+    /**
+     * Dynamically drafts risk mitigation actions using the active model.
+     */
     async draftRiskMitigation(title: string, standards: string[]): Promise<any> {
         const prompt = `Draft ISO mitigation control, action plan steps, and assess likelihood (1 to 5) and consequence (1 to 5) for the following risk.
 
@@ -1110,26 +1321,9 @@ Respond ONLY with a valid raw JSON object matching this structure (no markdown c
         const systemPrompt = `You are an expert in ISO Risk Assessment. Assess the risk and return a raw JSON object containing mitigation control and action plans. Do not include markdown code block formatting (such as \`\`\`json) in your response, just return the raw JSON object. Likelihood and consequence must be integers from 1 to 5.`;
 
         try {
-            const resp = await firstValueFrom(
-                this.httpService.post(`${this.ollamaUrl}/api/generate`, {
-                    model: this.modelName,
-                    prompt: prompt,
-                    system: systemPrompt,
-                    stream: false,
-                    keep_alive: '20m',
-                    options: {
-                        temperature: 0.3,
-                        num_ctx: 2048,
-                    }
-                }, {
-                    headers: { 'Content-Type': 'application/json' },
-                    timeout: 60000,
-                })
-            );
-
-            let textResponse = resp.data.response || '';
-            textResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-            const parsed = JSON.parse(textResponse);
+            const textResponse = await this.generateChatCompletionDirect(prompt, systemPrompt, 0.3, 2048);
+            const cleanedResponse = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(cleanedResponse);
             return parsed;
         } catch (error) {
             this.logger.error('Failed to draft risk mitigation via AI:', error);

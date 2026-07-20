@@ -4,11 +4,18 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../entities/user.entity';
+import { Public } from '../auth/public.decorator';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DocumentsController {
     constructor(private readonly documentsService: DocumentsService) { }
+
+    @Public()
+    @Get('public/formats')
+    findPublicFormats(@Query() filters: any) {
+        return this.documentsService.findPublicFormats(filters);
+    }
 
     @Post()
     @Roles(UserRole.ADMIN, UserRole.CREATOR, UserRole.DEPT_HEAD, UserRole.REVIEWER)

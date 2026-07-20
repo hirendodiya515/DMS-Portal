@@ -69,7 +69,7 @@ export class FilesService {
         return savedVersion;
     }
 
-    async downloadFile(versionId: string, userId: string): Promise<{ buffer: Buffer; fileName: string; mimeType: string }> {
+    async downloadFile(versionId: string, userId: string | null): Promise<{ buffer: Buffer; fileName: string; mimeType: string }> {
         const version = await this.versionRepository.findOne({ where: { id: versionId } });
 
         if (!version) {
@@ -166,10 +166,10 @@ Set objWord = Nothing
         }
     }
 
-    private async logAction(action: AuditAction, userId: string, documentId: string, details: string) {
+    private async logAction(action: AuditAction, userId: string | null, documentId: string, details: string) {
         const log = this.auditRepository.create({
             action,
-            userId,
+            userId: (userId || null) as any,
             documentId,
             details,
         });

@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquareCode, Sparkles, Send, X, RotateCcw, Bot, User, Minimize2 } from 'lucide-react';
+import { MessageSquareCode, Sparkles, Send, X, RotateCcw, Bot, User, Minimize2, Square, Settings } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
-import api from '../lib/api';
 
 interface Message {
     id: string;
@@ -84,6 +83,13 @@ export default function FloatingAiChat() {
     const location = useLocation();
     const navigate = useNavigate();
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    // Dynamic model selection states
+    const [showSettings, setShowSettings] = useState(false);
+    const [localModels, setLocalModels] = useState<{ name: string; displayName: string }[]>([]);
+    const [cloudModels, setCloudModels] = useState<{ name: string; displayName: string; provider: 'gemini' | 'openai'; available: boolean }[]>([]);
+    const [activeModel, setActiveModel] = useState<{ name: string; provider: 'ollama' | 'gemini' | 'openai' } | null>(null);
 
     // Get current context and starters based on route (supporting dynamic prefixes)
     const getRouteConfig = (pathname: string) => {
@@ -99,7 +105,48 @@ export default function FloatingAiChat() {
 
     const currentRouteConfig = getRouteConfig(location.pathname);
 
-    // Load initial greeting / session history and fetch active model name
+    // Save history to sessionStorage
+    const saveChatHistory = (updatedMessages: Message[]) => {
+        setMessages(updatedMessages);
+        sessionStorage.setItem('dms_ai_chat_history', JSON.stringify(updatedMessages));
+    };
+
+    const fetchModels = async () => {
+        try {
+            const token = useAuthStore.getState().token;
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            const response = await fetch(`${baseUrl}/ai/models`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setLocalModels(data.localModels || []);
+                setCloudModels(data.cloudModels || []);
+                setActiveModel(data.activeModel || null);
+                
+                if (data.activeModel) {
+                    const formatted = formatModelName(data.activeModel.name);
+                    setModelName(formatted);
+                    
+                    // Also update greeting message if it's still using the default/fallback placeholder
+                    setMessages(prev => prev.map(msg => 
+                        msg.id === 'greeting'
+                            ? {
+                                ...msg,
+                                text: `Hello! I am your **DMS Copilot** powered by **${formatted}** (${data.activeModel.provider === 'ollama' ? 'Local' : 'Cloud'}). I can help you search documents, explain policies, audit procedures, or guide you through this portal. All conversation data is processed privately.`
+                              }
+                            : msg
+                    ));
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch available models:", error);
+        }
+    };
+
+    // Load initial greeting / session history and fetch active models
     useEffect(() => {
         const savedHistory = sessionStorage.getItem('dms_ai_chat_history');
         if (savedHistory) {
@@ -123,44 +170,71 @@ export default function FloatingAiChat() {
                 }
             ]);
         }
-
-        const fetchModelName = async () => {
-            try {
-                const response = await api.get('/ai/model');
-                if (response.data && response.data.model) {
-                    const formatted = formatModelName(response.data.model);
-                    setModelName(formatted);
-                    
-                    // Also update greeting message if it's still using the default/fallback placeholder
-                    setMessages(prev => prev.map(msg => 
-                        msg.id === 'greeting' && (msg.text.includes('**Local AI**') || msg.text.includes('**Google Gemma 4**'))
-                            ? {
-                                ...msg,
-                                text: `Hello! I am your **DMS Copilot** powered by **${formatted}** locally. I can help you search documents, explain policies, audit procedures, or guide you through this portal. All conversation data is processed 100% locally and privately.`
-                              }
-                            : msg
-                    ));
-                }
-            } catch (error) {
-                console.error("Failed to fetch active model name:", error);
-            }
-        };
-        fetchModelName();
+        fetchModels();
     }, []);
 
-    // Save history to sessionStorage
-    const saveChatHistory = (updatedMessages: Message[]) => {
-        setMessages(updatedMessages);
-        sessionStorage.setItem('dms_ai_chat_history', JSON.stringify(updatedMessages));
-    };
+    // Re-fetch model availability when settings panel is opened
+    useEffect(() => {
+        if (showSettings) {
+            fetchModels();
+        }
+    }, [showSettings]);
 
     // Scroll to bottom when messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isLoading]);
 
+    const handleSelectModel = async (name: string, provider: 'ollama' | 'gemini' | 'openai') => {
+        try {
+            const token = useAuthStore.getState().token;
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+            const response = await fetch(`${baseUrl}/ai/select-model`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ model: name, provider })
+            });
+            
+            if (response.ok) {
+                setActiveModel({ name, provider });
+                const formatted = formatModelName(name);
+                setModelName(formatted);
+                
+                setMessages(prev => prev.map(msg => 
+                    msg.id === 'greeting'
+                        ? {
+                            ...msg,
+                            text: `Hello! I am your **DMS Copilot** powered by **${formatted}** (${provider === 'ollama' ? 'Local' : 'Cloud'}). I can help you search documents, explain policies, audit procedures, or guide you through this portal. All conversation data is processed privately.`
+                          }
+                        : msg
+                ));
+            }
+        } catch (error) {
+            console.error("Failed to select model:", error);
+        }
+    };
+
+    const handleStop = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsLoading(false);
+    };
+
     const handleSend = async (text: string) => {
         if (!text.trim() || isLoading) return;
+
+        // Cancel any active running request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
         const userMessage: Message = {
             id: `msg-${Date.now()}-user`,
@@ -197,7 +271,8 @@ export default function FloatingAiChat() {
                 body: JSON.stringify({
                     message: text,
                     context: `Current page: ${location.pathname}. Context: ${currentRouteConfig.context}`
-                })
+                }),
+                signal: controller.signal
             });
 
             if (!response.ok) {
@@ -233,6 +308,26 @@ export default function FloatingAiChat() {
             }]));
 
         } catch (error: any) {
+            if (error.name === 'AbortError') {
+                // Request was intentionally stopped by user
+                const stoppedText = accumulatedText 
+                    ? accumulatedText + "\n\n⏹️ *Generation stopped by user.*"
+                    : "⏹️ *Generation stopped by user.*";
+                
+                setMessages(prev => prev.map(msg => 
+                    msg.id === aiMessageId ? { ...msg, text: stoppedText } : msg
+                ));
+                
+                sessionStorage.setItem('dms_ai_chat_history', JSON.stringify([...updatedHistory, {
+                    id: aiMessageId,
+                    sender: 'ai',
+                    text: stoppedText,
+                    timestamp: new Date()
+                }]));
+                setIsLoading(false);
+                return;
+            }
+
             console.error("Streaming error:", error);
             const errorText = accumulatedText 
                 ? accumulatedText + "\n\n⚠️ Stream connection interrupted. Ensure backend is online."
@@ -249,6 +344,9 @@ export default function FloatingAiChat() {
                 timestamp: new Date()
             }]));
         } finally {
+            if (abortControllerRef.current === controller) {
+                abortControllerRef.current = null;
+            }
             setIsLoading(false);
         }
     };
@@ -352,7 +450,7 @@ export default function FloatingAiChat() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 30, scale: 0.9 }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="w-96 h-[500px] mb-4 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-2xl overflow-hidden flex flex-col"
+                        className="w-96 h-[500px] mb-4 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-2xl overflow-hidden flex flex-col relative"
                     >
                         {/* Header */}
                         <div className="px-4 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex items-center justify-between shadow-md">
@@ -368,11 +466,24 @@ export default function FloatingAiChat() {
                                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                                         </span>
                                     </h3>
-                                    <span className="text-[10px] text-slate-300">{modelName} Local (Online)</span>
+                                    <span className="text-[10px] text-slate-300">
+                                        {modelName} ({activeModel?.provider === 'ollama' ? 'Local' : 'Cloud'})
+                                    </span>
                                 </div>
                             </div>
                             
                             <div className="flex items-center gap-1.5">
+                                <button 
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    title="AI Settings"
+                                    className={`p-1 rounded-md transition-colors ${
+                                        showSettings 
+                                            ? 'bg-white/20 text-white' 
+                                            : 'hover:bg-white/10 text-slate-300 hover:text-white'
+                                    }`}
+                                >
+                                    <Settings size={16} />
+                                </button>
                                 <button 
                                     onClick={handleClearChat}
                                     title="Clear Chat History"
@@ -389,6 +500,88 @@ export default function FloatingAiChat() {
                                 </button>
                             </div>
                         </div>
+
+                        {/* Settings Overlay Panel */}
+                        {showSettings && (
+                            <div className="absolute inset-x-0 top-[52px] bottom-0 bg-white z-20 flex flex-col p-4 overflow-y-auto">
+                                <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                                    <h4 className="font-semibold text-sm text-slate-800 flex items-center gap-1.5">
+                                        <Settings size={16} className="text-indigo-600 animate-spin-slow" />
+                                        AI Copilot Settings
+                                    </h4>
+                                    <button 
+                                        onClick={() => setShowSettings(false)}
+                                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                                
+                                <div className="space-y-4 flex-1 animate-fadeIn">
+                                    <div>
+                                        <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Local Models (Ollama)</h5>
+                                        {localModels.length === 0 ? (
+                                            <p className="text-xs text-slate-400 italic">No local models found. Ensure Ollama is running.</p>
+                                        ) : (
+                                            <div className="space-y-1.5">
+                                                {localModels.map((m) => (
+                                                    <button
+                                                        key={m.name}
+                                                        onClick={() => handleSelectModel(m.name, 'ollama')}
+                                                        className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between border transition-all ${
+                                                            activeModel?.name === m.name
+                                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium shadow-sm shadow-indigo-100/50'
+                                                                : 'bg-slate-50/50 border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 text-slate-700'
+                                                        }`}
+                                                    >
+                                                        <span>{m.displayName}</span>
+                                                        {activeModel?.name === m.name && (
+                                                            <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div>
+                                        <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Cloud Models</h5>
+                                        <div className="space-y-1.5">
+                                            {cloudModels.map((m) => (
+                                                <button
+                                                    key={m.name}
+                                                    disabled={!m.available}
+                                                    onClick={() => handleSelectModel(m.name, m.provider)}
+                                                    className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between border transition-all ${
+                                                        activeModel?.name === m.name
+                                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium shadow-sm shadow-indigo-100/50'
+                                                            : m.available
+                                                                ? 'bg-slate-50/50 border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 text-slate-700'
+                                                                : 'bg-slate-100/40 border-slate-100 text-slate-400 cursor-not-allowed'
+                                                    }`}
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span>{m.displayName}</span>
+                                                        {!m.available && (
+                                                            <span className="text-[9px] text-slate-400 mt-0.5">Key missing in backend .env</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {m.available && activeModel?.name === m.name && (
+                                                            <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-400">
+                                    To configure cloud models, add <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-600">GEMINI_API_KEY</code> or <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-600">OPENAI_API_KEY</code> to your backend <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-600">.env</code>.
+                                </div>
+                            </div>
+                        )}
 
                         {/* Message Panel */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
@@ -473,13 +666,24 @@ export default function FloatingAiChat() {
                                 disabled={isLoading}
                                 className="flex-1 bg-slate-50 hover:bg-slate-100/50 focus:bg-white text-slate-800 border border-slate-200/80 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50"
                             />
-                            <button
-                                type="submit"
-                                disabled={!inputValue.trim() || isLoading}
-                                className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors flex items-center justify-center shadow-md shadow-indigo-600/10 shrink-0 cursor-pointer"
-                            >
-                                <Send size={16} />
-                            </button>
+                            {isLoading ? (
+                                <button
+                                    type="button"
+                                    onClick={handleStop}
+                                    className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors flex items-center justify-center shadow-md shadow-red-600/10 shrink-0 cursor-pointer"
+                                    title="Stop Generation"
+                                >
+                                    <Square size={16} fill="white" />
+                                </button>
+                            ) : (
+                                <button
+                                    type="submit"
+                                    disabled={!inputValue.trim()}
+                                    className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl disabled:opacity-50 disabled:hover:bg-indigo-600 transition-colors flex items-center justify-center shadow-md shadow-indigo-600/10 shrink-0 cursor-pointer"
+                                >
+                                    <Send size={16} />
+                                </button>
+                            )}
                         </form>
                     </motion.div>
                 )}

@@ -11,6 +11,13 @@ export interface FlowchartData {
   updatedAt?: string;
 }
 
+export interface NodeSummaryData {
+  sops: number;
+  formats: number;
+  manuals: number;
+  equipment: number;
+}
+
 export const flowchartApi = {
   // Get the latest flowchart
   getLatest: async (): Promise<FlowchartData | null> => {
@@ -26,6 +33,14 @@ export const flowchartApi = {
   // Save flowchart (create or update)
   save: async (data: FlowchartData): Promise<FlowchartData> => {
     const response = await api.post('/flowcharts', data);
+    return response.data;
+  },
+
+  // Get node summary
+  getNodeSummary: async (nodeId: string, label?: string, dept?: string): Promise<NodeSummaryData> => {
+    const response = await api.get(`/flowcharts/summary/${nodeId}`, {
+      params: { label, dept }
+    });
     return response.data;
   },
 };

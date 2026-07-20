@@ -4,11 +4,18 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../entities/user.entity';
+import { Public } from '../auth/public.decorator';
 
 @Controller('settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SettingsController {
     constructor(private readonly settingsService: SettingsService) {}
+
+    @Public()
+    @Get('public/departments')
+    getPublicDepartments() {
+        return this.settingsService.getSetting('departments');
+    }
 
     @Get()
     @Roles(UserRole.ADMIN)

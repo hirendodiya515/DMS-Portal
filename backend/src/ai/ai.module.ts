@@ -21,6 +21,7 @@ import { HiraRisk } from '../entities/hira-risk.entity';
 import { EaaRisk } from '../entities/eaa-risk.entity';
 import { QraRisk } from '../entities/qra-risk.entity';
 import { InterestedParty } from '../entities/interested-party.entity';
+import { SystemSetting } from '../entities/system-setting.entity';
 
 @Module({
     imports: [
@@ -42,7 +43,8 @@ import { InterestedParty } from '../entities/interested-party.entity';
             HiraRisk,
             EaaRisk,
             QraRisk,
-            InterestedParty
+            InterestedParty,
+            SystemSetting
         ]),
     ],
     controllers: [AiController],

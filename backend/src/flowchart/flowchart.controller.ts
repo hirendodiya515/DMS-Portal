@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { FlowchartService } from './flowchart.service';
 import { Flowchart } from '../entities/flowchart.entity';
+import { Public } from '../auth/public.decorator';
 
 @Controller('flowcharts')
 export class FlowchartController {
@@ -14,6 +15,16 @@ export class FlowchartController {
   @Get('latest')
   getLatest() {
     return this.flowchartService.getLatest();
+  }
+
+  @Public()
+  @Get('summary/:nodeId')
+  getNodeSummary(
+    @Param('nodeId') nodeId: string,
+    @Query('label') label?: string,
+    @Query('dept') dept?: string,
+  ) {
+    return this.flowchartService.getNodeSummary(nodeId, label, dept);
   }
 
   @Get(':id')

@@ -1,23 +1,26 @@
-import { createConnection } from 'typeorm';
-const ormconfig = require('./ormconfig.json');
+import { DataSource } from 'typeorm';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
-createConnection(ormconfig).then(async (c) => {
-    const res1 = await c.query(`
-        SELECT TO_CHAR("createdAt", 'YYYY-MM') as month, COUNT(*) as count 
-        FROM product_deviations 
-        GROUP BY TO_CHAR("createdAt", 'YYYY-MM') 
-        ORDER BY month DESC LIMIT 12
-    `);
-    
-    const res2 = await c.query(`
-        SELECT TO_CHAR("startDate", 'YYYY-MM') as month, COUNT(*) as count 
-        FROM product_deviations 
-        GROUP BY TO_CHAR("startDate", 'YYYY-MM') 
-        ORDER BY month DESC LIMIT 12
-    `);
+const AppDataSource = new DataSource({
+    type: 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    username: process.env.DB_USERNAME || 'dms_user',
+    password: process.env.DB_PASSWORD || 'dms_password',
+    database: process.env.DB_DATABASE || 'dms_db',
+    entities: [],
+    synchronize: false,
+});
 
-    console.log("Creation Date Counts:", res1);
-    console.log("Production Date Counts:", res2);
+AppDataSource.initialize().then(async (c) => {
+    const docs = await c.query(`SELECT id, title, type, departments FROM documents`);
+    const equip = await c.query(`SELECT id, name, department, location FROM equipment`);
+
+    console.log("--- DOCUMENTS ---");
+    console.log(JSON.stringify(docs, null, 2));
+    console.log("--- EQUIPMENT ---");
+    console.log(JSON.stringify(equip, null, 2));
     
     process.exit(0);
 }).catch(console.error);

@@ -106,6 +106,32 @@ export class DocumentsService {
         return query.getMany();
     }
 
+    async findPublicFormats(filters: any) {
+        const query = this.documentRepository.createQueryBuilder('document')
+            .leftJoinAndSelect('document.versions', 'version')
+            .where('document.status = :status', { status: DocumentStatus.APPROVED })
+            .andWhere('(document.type ILIKE :type1 OR document.type ILIKE :type2 OR document.type ILIKE :type3)', {
+                type1: '%format%',
+                type2: '%record%',
+                type3: '%form%',
+            })
+            .orderBy('document.updatedAt', 'DESC')
+            .addOrderBy('version.versionNumber', 'DESC');
+
+        if (filters.search) {
+            query.andWhere(
+                '(document.title ILIKE :search OR document.description ILIKE :search OR document.documentNumber ILIKE :search)',
+                { search: `%${filters.search}%` }
+            );
+        }
+
+        if (filters.department && filters.department !== 'all') {
+            query.andWhere('document.departments LIKE :department', { department: `%${filters.department}%` });
+        }
+
+        return query.getMany();
+    }
+
     async findOne(id: string, userId: string) {
         const document = await this.documentRepository.findOne({
             where: { id },
