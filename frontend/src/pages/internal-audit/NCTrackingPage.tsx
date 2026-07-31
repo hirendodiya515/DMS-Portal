@@ -24,6 +24,9 @@ interface NC {
   requirement: string;
   targetDate: string;
   date: string;
+  observedDate?: string;
+  executionDate?: string;
+  scheduledDate?: string;
   department: string;
   auditors: { id: string; name: string; email?: string }[];
   ncStatus: 'Open' | 'Awaiting Review' | 'Closed';
@@ -440,12 +443,12 @@ export default function NCTrackingPage() {
                     </span>
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
-                    <div className="text-sm font-semibold text-slate-700">{new Date(nc.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                    <div className="text-sm font-semibold text-slate-700">{new Date(nc.observedDate || nc.executionDate || nc.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</div>
                     <div className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-tight">{nc.docNumber || 'NO REF'}</div>
                   </td>
                   <td className="px-6 py-5 whitespace-nowrap">
                     <div className="text-sm font-bold text-slate-900">{nc.department}</div>
-                    <div className="text-xs font-medium text-slate-500 mt-0.5">{new Date(nc.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>
+                    <div className="text-xs font-medium text-slate-500 mt-0.5">{new Date(nc.scheduledDate || nc.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</div>
                   </td>
                   <td className="px-6 py-5 min-w-[300px]">
                     <div className="text-sm text-slate-600 leading-relaxed line-clamp-2 italic">"{nc.ncStatement}"</div>
@@ -578,7 +581,7 @@ export default function NCTrackingPage() {
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Observed On</p>
                         <p className="text-sm font-bold text-slate-700 mt-1 flex items-center gap-2">
                             <Calendar className="w-3.5 h-3.5 text-rose-500" />
-                            {selectedNC?.date ? new Date(selectedNC.date).toLocaleDateString() : '-'}
+                            {(selectedNC?.observedDate || selectedNC?.executionDate || selectedNC?.date) ? new Date(selectedNC.observedDate || selectedNC.executionDate || selectedNC.date).toLocaleDateString() : '-'}
                         </p>
                     </div>
                     <div>

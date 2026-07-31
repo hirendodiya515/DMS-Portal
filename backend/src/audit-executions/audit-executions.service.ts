@@ -168,9 +168,13 @@ export class AuditExecutionsService {
       if (!exec.entries) return;
       exec.entries.forEach(entry => {
         if (entry.status === 'NC') {
+          const scheduledDate = exec.schedule?.date || exec.date;
           ncList.push({
             executionId: exec.id,
-            date: exec.date,
+            executionDate: exec.date,
+            observedDate: exec.date,
+            scheduledDate: scheduledDate,
+            date: scheduledDate,
             department: exec.schedule?.department || 'N/A',
             auditors: exec.schedule?.auditors || [],
             ...entry,
