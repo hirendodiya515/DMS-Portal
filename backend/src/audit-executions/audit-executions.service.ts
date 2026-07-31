@@ -201,6 +201,9 @@ export class AuditExecutionsService {
 
     if (data.ncStatus === 'Closed' && !execution.entries[entryIndex].closedDate) {
       execution.entries[entryIndex].closedDate = new Date().toISOString();
+    } else if (data.ncStatus === 'Open') {
+      delete execution.entries[entryIndex].closedDate;
+      delete execution.entries[entryIndex].closedBy;
     }
 
     return this.repository.save(execution);

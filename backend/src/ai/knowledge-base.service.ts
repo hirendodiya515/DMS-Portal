@@ -136,43 +136,72 @@ export class KnowledgeBaseService {
     }
 
     /**
-     * Chunk text using sliding window of characters
+     * Smart Section, Paragraph & Table-Aware Semantic Chunking
      */
-    private chunkText(text: string, chunkSize = 800, overlap = 150): string[] {
-        // Normalize newlines and excess whitespace
-        const cleanText = text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n');
-        
-        // If the text is smaller than or equal to the chunk size, return it as a single chunk
-        if (cleanText.length <= chunkSize) {
-            return [cleanText.trim()].filter(c => c.length > 20);
+    private chunkText(text: string, maxChunkSize = 1000, targetChunkSize = 750): string[] {
+        if (!text || text.trim().length === 0) {
+            return [];
         }
 
-        const chunks: string[] = [];
-        let index = 0;
+        // Normalize line breaks
+        const normalizedText = text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 
-        while (index < cleanText.length) {
-            // Grab a chunk of text
-            let chunk = cleanText.substring(index, index + chunkSize);
-            
-            // Adjust to prevent cutting off words in the middle
-            if (index + chunkSize < cleanText.length) {
-                const lastSpace = chunk.lastIndexOf(' ');
-                if (lastSpace > chunkSize - 100) {
-                    chunk = chunk.substring(0, lastSpace);
+        if (normalizedText.length <= targetChunkSize) {
+            return [normalizedText].filter(c => c.length > 20);
+        }
+
+        // Split text into structural blocks (double newlines, markdown headings, or table blocks)
+        const rawBlocks = normalizedText.split(/(?=\n#{1,6}\s)|\n\n+/);
+        const blocks: string[] = [];
+
+        for (const rawBlock of rawBlocks) {
+            const trimmed = rawBlock.trim();
+            if (!trimmed) continue;
+
+            // Check if block is a table (lines containing '|')
+            const isTable = trimmed.includes('|') && trimmed.split('\n').filter(l => l.includes('|')).length >= 2;
+
+            if (isTable || trimmed.length <= maxChunkSize) {
+                blocks.push(trimmed);
+            } else {
+                // If a single paragraph is larger than maxChunkSize, split cleanly by sentence endings (. , ! , ?)
+                const sentences = trimmed.split(/(?<=[.!?])\s+/);
+                let currentSentenceGroup = '';
+                for (const sentence of sentences) {
+                    if ((currentSentenceGroup + ' ' + sentence).length > maxChunkSize) {
+                        if (currentSentenceGroup.trim()) {
+                            blocks.push(currentSentenceGroup.trim());
+                        }
+                        currentSentenceGroup = sentence;
+                    } else {
+                        currentSentenceGroup = currentSentenceGroup ? `${currentSentenceGroup} ${sentence}` : sentence;
+                    }
+                }
+                if (currentSentenceGroup.trim()) {
+                    blocks.push(currentSentenceGroup.trim());
                 }
             }
+        }
 
-            chunks.push(chunk.trim());
-            
-            // Move index forward. Ensure it always moves by at least 1 even if overlap is somehow larger
-            const step = chunk.length - overlap;
-            index += step > 0 ? step : chunkSize;
+        // Merge smaller structural blocks into cohesive chunks up to maxChunkSize
+        const chunks: string[] = [];
+        let currentChunk = '';
 
-            // Break if the remaining part is smaller than the overlap
-            if (index + overlap >= cleanText.length) {
-                break;
+        for (const block of blocks) {
+            if (!currentChunk) {
+                currentChunk = block;
+            } else if ((currentChunk.length + block.length + 2) <= maxChunkSize) {
+                currentChunk += '\n\n' + block;
+            } else {
+                chunks.push(currentChunk.trim());
+                currentChunk = block;
             }
         }
+
+        if (currentChunk.trim()) {
+            chunks.push(currentChunk.trim());
+        }
+
         return chunks.filter(c => c.length > 20);
     }
 
@@ -227,8 +256,8 @@ export class KnowledgeBaseService {
      * Scan approved documents in PostgreSQL, parse raw files, chunk, embed new files, and save index.
      * Also generates OKF structured directories (metadata.json and content.md) and updates cache.
      */
-    async rebuildIndex(): Promise<{ success: boolean; filesProcessed: number; totalChunks: number }> {
-        this.logger.log('Starting database-integrated RAG reindexing process with OKF generation...');
+    async rebuildIndex(forceReindex = false): Promise<{ success: boolean; filesProcessed: number; totalChunks: number }> {
+        this.logger.log(`Starting database-integrated RAG reindexing process (forceReindex=${forceReindex})...`);
         this.ensureDirectories();
 
         // 1. Fetch all APPROVED documents from the database
@@ -287,8 +316,8 @@ export class KnowledgeBaseService {
                 }
             }
 
-            // 3. Incremental Vector Indexing Check
-            const existingChunks = this.vectorStore.filter(c => c.versionId === version.id);
+            // 3. Incremental Vector Indexing Check (bypassed if forceReindex is true)
+            const existingChunks = !forceReindex ? this.vectorStore.filter(c => c.versionId === version.id) : [];
             if (existingChunks.length > 0) {
                 this.logger.log(`Document version '${version.id}' ('${version.fileName}') is already vector indexed. Reusing ${existingChunks.length} chunks.`);
                 newStore.push(...existingChunks);

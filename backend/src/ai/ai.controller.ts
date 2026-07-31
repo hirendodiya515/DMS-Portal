@@ -60,8 +60,8 @@ export class AiController {
 
     @Post('reindex')
     @HttpCode(HttpStatus.OK)
-    async reindex() {
-        return this.kbService.rebuildIndex();
+    async reindex(@Body('force') force?: boolean) {
+        return this.kbService.rebuildIndex(force ?? true);
     }
 
     @Get('model')

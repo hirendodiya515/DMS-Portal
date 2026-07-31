@@ -25,7 +25,7 @@ interface NC {
   targetDate: string;
   date: string;
   department: string;
-  auditors: { id: string; name: string }[];
+  auditors: { id: string; name: string; email?: string }[];
   ncStatus: 'Open' | 'Awaiting Review' | 'Closed';
   auditeeCompletionDate?: string;
   rootCause?: string;
@@ -164,11 +164,44 @@ export default function NCTrackingPage() {
     }
   };
 
+  const isUserAuditorOfNC = (nc: NC) => {
+    if (!user) return false;
+    if (user.role === 'admin' || user.role === 'auditor') return true;
+
+    const userFullName = `${user.firstName || ''} ${user.lastName || ''}`.trim().toLowerCase();
+    const userEmail = user.email?.toLowerCase().trim();
+
+    return Boolean(
+      nc.auditors?.some(a => {
+        if (a.id && user.id && a.id === user.id) return true;
+        if (a.email && userEmail && a.email.toLowerCase().trim() === userEmail) return true;
+        if (a.name && userFullName && a.name.toLowerCase().trim() === userFullName) return true;
+        return false;
+      })
+    );
+  };
+
+  const isUserAuditeeOfNC = (nc: NC) => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    return Boolean(user.department && nc.department && user.department.toLowerCase().trim() === nc.department.toLowerCase().trim());
+  };
+
   const canClose = (nc: NC) => {
-    if (user?.role === 'admin') return true;
-    const isAuditor = nc.auditors?.some(a => a.id === user?.id);
-    const isAuditeeDept = nc.department === user?.department;
-    return isAuditor || isAuditeeDept;
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+
+    const isAuditor = isUserAuditorOfNC(nc);
+    const isAuditee = isUserAuditeeOfNC(nc);
+
+    if (nc.ncStatus === 'Open') {
+      return isAuditee || isAuditor;
+    } else if (nc.ncStatus === 'Awaiting Review') {
+      return isAuditor;
+    } else if (nc.ncStatus === 'Closed') {
+      return isAuditor;
+    }
+    return isAuditor || isAuditee;
   };
 
   if (loading) {
@@ -465,7 +498,9 @@ export default function NCTrackingPage() {
                       {nc.ncStatus === 'Closed' ? 'Edit Closure' : nc.ncStatus === 'Awaiting Review' ? 'Review NC' : 'Update NC'}
                     </button>
                     {!canClose(nc) && (
-                      <p className="text-[9px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">Authorized Only</p>
+                      <p className="text-[9px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">
+                        {nc.ncStatus === 'Awaiting Review' ? 'Auditor Action Required' : 'Authorized Only'}
+                      </p>
                     )}
                   </td>
                 </motion.tr>

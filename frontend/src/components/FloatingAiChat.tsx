@@ -80,6 +80,7 @@ export default function FloatingAiChat() {
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [modelName, setModelName] = useState('Local AI');
+    const [statusMessage, setStatusMessage] = useState<string>('');
     const location = useLocation();
     const navigate = useNavigate();
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -255,8 +256,10 @@ export default function FloatingAiChat() {
         setMessages([...updatedHistory, aiPlaceholder]);
         setInputValue('');
         setIsLoading(true);
+        setStatusMessage('🔍 Refining prompt & normalizing terms...');
 
         let accumulatedText = '';
+        let streamBuffer = '';
 
         try {
             const token = useAuthStore.getState().token;
@@ -291,12 +294,34 @@ export default function FloatingAiChat() {
                 if (done) break;
                 
                 const chunk = decoder.decode(value, { stream: true });
-                accumulatedText += chunk;
+                streamBuffer += chunk;
                 
-                // Update messages state dynamically in real-time
-                setMessages(prev => prev.map(msg => 
-                    msg.id === aiMessageId ? { ...msg, text: accumulatedText } : msg
-                ));
+                const lines = streamBuffer.split('\n');
+                streamBuffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('[STATUS] ')) {
+                        const status = line.replace('[STATUS] ', '').trim();
+                        if (status) setStatusMessage(status);
+                    } else if (line) {
+                        accumulatedText += (accumulatedText.length > 0 ? '\n' + line : line);
+                        setMessages(prev => prev.map(msg => 
+                            msg.id === aiMessageId ? { ...msg, text: accumulatedText } : msg
+                        ));
+                    }
+                }
+            }
+
+            if (streamBuffer.trim()) {
+                if (streamBuffer.startsWith('[STATUS] ')) {
+                    const status = streamBuffer.replace('[STATUS] ', '').trim();
+                    if (status) setStatusMessage(status);
+                } else {
+                    accumulatedText += (accumulatedText.length > 0 ? '\n' + streamBuffer : streamBuffer);
+                    setMessages(prev => prev.map(msg => 
+                        msg.id === aiMessageId ? { ...msg, text: accumulatedText } : msg
+                    ));
+                }
             }
             
             // Save the complete session history to sessionStorage
@@ -365,79 +390,130 @@ export default function FloatingAiChat() {
         }
     };
 
-    // Render message with very basic markdown formatting (bold, code blocks)
+    const renderTable = (tableMarkdown: string, tableKey: string) => {
+        const rawLines = tableMarkdown.trim().split('\n').map(l => l.trim()).filter(Boolean);
+        if (rawLines.length < 2) return null;
+
+        const parseCells = (line: string) => 
+            line.split('|')
+                .map(c => c.trim())
+                .filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+
+        const headerCells = parseCells(rawLines[0]);
+        if (headerCells.length === 0) return null;
+
+        const startIndex = rawLines[1].includes('---') ? 2 : 1;
+        const dataRows = rawLines.slice(startIndex).map(parseCells).filter(r => r.length > 0);
+
+        return (
+            <div key={tableKey} className="my-3 overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
+                <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr className="bg-slate-100/90 text-slate-800 font-semibold border-b border-slate-200">
+                            {headerCells.map((header, i) => (
+                                <th key={i} className="px-3 py-2 font-semibold">{header}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {dataRows.map((row, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-slate-50/80 transition-colors odd:bg-white even:bg-slate-50/40">
+                                {row.map((cell, cIdx) => (
+                                    <td key={cIdx} className="px-3 py-2 text-slate-700 font-normal">
+                                        {cell}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
+
+    // Render message with markdown formatting (tables, bold, code blocks, links)
     const renderMessageText = (text: string) => {
-        // Handle code blocks
-        const parts = text.split(/(```[\s\S]*?```)/g);
-        return parts.map((part, index) => {
-            if (part.startsWith('```') && part.endsWith('```')) {
-                const code = part.slice(3, -3).replace(/^[a-zA-Z]+\n/, ''); // remove language header if present
-                return (
-                    <pre key={index} className="bg-slate-900 text-slate-100 p-3 rounded-lg my-2 text-xs overflow-x-auto font-mono border border-slate-800 shadow-inner">
-                        <code>{code}</code>
-                    </pre>
-                );
+        // First handle Markdown tables
+        const tableBlockRegex = /((?:\|[^\n]+\|\r?\n?){2,})/g;
+        const tableParts = text.split(tableBlockRegex);
+
+        return tableParts.map((part, pIdx) => {
+            if (part.trim().startsWith('|') && part.includes('\n|')) {
+                const tableEl = renderTable(part, `tbl-${pIdx}`);
+                if (tableEl) return tableEl;
             }
 
-            // Handle inline code `code`
-            const inlineParts = part.split(/(`[^`]+`)/g);
-            return (
-                <span key={index}>
-                    {inlineParts.map((subPart, subIndex) => {
-                        if (subPart.startsWith('`') && subPart.endsWith('`')) {
-                            return <code key={subIndex} className="bg-slate-200 text-rose-600 px-1 py-0.5 rounded text-xs font-mono">{subPart.slice(1, -1)}</code>;
-                        }
-                        
-                        // Handle markdown links [label](url)
-                        const linkParts = subPart.split(/(\[[^\]]+\]\([^)]+\))/g);
-                        return linkParts.map((linkPart, linkIndex) => {
-                            if (linkPart.startsWith('[') && linkPart.includes('](')) {
-                                const match = linkPart.match(/\[([^\]]+)\]\(([^)]+)\)/);
-                                if (match) {
-                                    const [_, label, url] = match;
-                                    // Internal path navigation using useNavigate
-                                    if (url.startsWith('/')) {
-                                        return (
-                                            <a 
-                                                key={linkIndex} 
-                                                href={url} 
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    navigate(url);
-                                                }}
-                                                className="text-indigo-600 hover:text-indigo-800 underline font-medium cursor-pointer"
-                                            >
-                                                {label}
-                                            </a>
-                                        );
-                                    } else {
-                                        return (
-                                            <a 
-                                                key={linkIndex} 
-                                                href={url} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer" 
-                                                className="text-indigo-600 hover:text-indigo-800 underline font-medium cursor-pointer"
-                                            >
-                                                {label}
-                                            </a>
-                                        );
+            // Handle code blocks
+            const codeParts = part.split(/(```[\s\S]*?```)/g);
+            return codeParts.map((codePart, index) => {
+                if (codePart.startsWith('```') && codePart.endsWith('```')) {
+                    const code = codePart.slice(3, -3).replace(/^[a-zA-Z]+\n/, '');
+                    return (
+                        <pre key={index} className="bg-slate-900 text-slate-100 p-3 rounded-lg my-2 text-xs overflow-x-auto font-mono border border-slate-800 shadow-inner">
+                            <code>{code}</code>
+                        </pre>
+                    );
+                }
+
+                // Handle inline code `code`
+                const inlineParts = codePart.split(/(`[^`]+`)/g);
+                return (
+                    <span key={index}>
+                        {inlineParts.map((subPart, subIndex) => {
+                            if (subPart.startsWith('`') && subPart.endsWith('`')) {
+                                return <code key={subIndex} className="bg-slate-200 text-rose-600 px-1 py-0.5 rounded text-xs font-mono">{subPart.slice(1, -1)}</code>;
+                            }
+                            
+                            // Handle markdown links [label](url)
+                            const linkParts = subPart.split(/(\[[^\]]+\]\([^)]+\))/g);
+                            return linkParts.map((linkPart, linkIndex) => {
+                                if (linkPart.startsWith('[') && linkPart.includes('](')) {
+                                    const match = linkPart.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                                    if (match) {
+                                        const [_, label, url] = match;
+                                        if (url.startsWith('/')) {
+                                            return (
+                                                <a 
+                                                    key={linkIndex} 
+                                                    href={url} 
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        navigate(url);
+                                                    }}
+                                                    className="text-indigo-600 hover:text-indigo-800 underline font-medium cursor-pointer"
+                                                >
+                                                    {label}
+                                                </a>
+                                            );
+                                        } else {
+                                            return (
+                                                <a 
+                                                    key={linkIndex} 
+                                                    href={url} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer" 
+                                                    className="text-indigo-600 hover:text-indigo-800 underline font-medium cursor-pointer"
+                                                >
+                                                    {label}
+                                                </a>
+                                            );
+                                        }
                                     }
                                 }
-                            }
 
-                            // Handle bold **text**
-                            const boldParts = linkPart.split(/(\*\*[^*]+\*\*)/g);
-                            return boldParts.map((boldPart, boldIndex) => {
-                                if (boldPart.startsWith('**') && boldPart.endsWith('**')) {
-                                    return <strong key={boldIndex} className="font-semibold text-slate-900">{boldPart.slice(2, -2)}</strong>;
-                                }
-                                return boldPart;
+                                // Handle bold **text**
+                                const boldParts = linkPart.split(/(\*\*[^*]+\*\*)/g);
+                                return boldParts.map((boldPart, boldIndex) => {
+                                    if (boldPart.startsWith('**') && boldPart.endsWith('**')) {
+                                        return <strong key={boldIndex} className="font-semibold text-slate-900">{boldPart.slice(2, -2)}</strong>;
+                                    }
+                                    return boldPart;
+                                });
                             });
-                        });
-                    })}
-                </span>
-            );
+                        })}
+                    </span>
+                );
+            });
         });
     };
 
@@ -621,16 +697,15 @@ export default function FloatingAiChat() {
                                 );
                             })}
 
-                            {/* Typing Indicator - only show while waiting for the first stream chunk */}
+                            {/* Agentic Progress Indicator (ChatGPT / Gemini style) */}
                             {isLoading && (messages.length === 0 || !messages[messages.length - 1].text) && (
                                 <div className="flex gap-2.5 justify-start">
                                     <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 shadow-sm">
                                         <Bot size={15} />
                                     </div>
-                                    <div className="bg-white px-4 py-3 rounded-2xl rounded-tl-none border border-slate-100 shadow-sm flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                        <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                    <div className="bg-gradient-to-r from-indigo-50/90 via-purple-50/80 to-indigo-50/90 border border-indigo-100/90 px-3.5 py-2.5 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2.5 text-xs text-indigo-800 font-medium">
+                                        <Sparkles size={14} className="animate-spin text-indigo-600 shrink-0" style={{ animationDuration: '3s' }} />
+                                        <span className="animate-pulse">{statusMessage || 'Analyzing request...'}</span>
                                     </div>
                                 </div>
                             )}

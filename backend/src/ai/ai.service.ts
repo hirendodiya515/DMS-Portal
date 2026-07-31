@@ -75,7 +75,94 @@ export class AiService {
         this.modelName = this.configService.get<string>('OLLAMA_MODEL') || 'gemma4:e4b';
     }
 
+    private readonly dbContextCache: Map<string, { data: string; timestamp: number }> = new Map();
+    private readonly CACHE_TTL_MS = 60 * 1000; // 60s TTL for fast local caching
+
+    private static readonly DICTIONARY: Record<string, string> = {
+        // Calibration & Equipment
+        'clibration': 'calibration',
+        'calibratn': 'calibration',
+        'calib': 'calibration',
+        'eqip': 'equipment',
+        'eqp': 'equipment',
+        'equiptment': 'equipment',
+        'equipments': 'equipment',
+        'instrumnt': 'instrument',
+        'gauge': 'equipment',
+        'gauges': 'equipment',
+        'tool': 'equipment',
+        'maintanance': 'maintenance',
+        'maintence': 'maintenance',
+
+        // Audit
+        'auditt': 'audit',
+        'audits': 'audit',
+        'auditer': 'auditor',
+        'audite': 'auditee',
+        'schedul': 'schedule',
+        'schedulem': 'schedule',
+        'planing': 'plan',
+
+        // Document & SOP
+        'doc': 'document',
+        'docs': 'document',
+        'sop': 'document',
+        'sops': 'document',
+        'polcy': 'policy',
+        'procedur': 'procedure',
+        'manuals': 'manual',
+        'manul': 'manual',
+
+        // Deviations & Risk & MOC
+        'deveation': 'deviation',
+        'devation': 'deviation',
+        'rejection': 'deviation',
+        'defect': 'deviation',
+        'defects': 'deviation',
+        'rsk': 'risk',
+        'mitigatn': 'mitigation',
+        'swott': 'swot',
+        'chng': 'change',
+    };
+
+    /**
+     * Pre-processes raw user prompt to correct common typos, map synonyms,
+     * and normalize intent for better AI understanding and faster DB lookup.
+     */
+    public convertPrompt(rawPrompt: string): { original: string; normalized: string; correctedTerms: string[] } {
+        if (!rawPrompt || typeof rawPrompt !== 'string') {
+            return { original: rawPrompt || '', normalized: rawPrompt || '', correctedTerms: [] };
+        }
+
+        const correctedTerms: string[] = [];
+        const words = rawPrompt.split(/(\s+|[^\w\s])/);
+
+        const processedWords = words.map(token => {
+            const lower = token.toLowerCase();
+            if (AiService.DICTIONARY[lower]) {
+                correctedTerms.push(`${token} → ${AiService.DICTIONARY[lower]}`);
+                return AiService.DICTIONARY[lower];
+            }
+            return token;
+        });
+
+        const normalized = processedWords.join('');
+        return {
+            original: rawPrompt,
+            normalized,
+            correctedTerms,
+        };
+    }
+
+
+
     private async getDatabaseContext(message: string): Promise<string> {
+        const cacheKey = message.toLowerCase().trim();
+        const cached = this.dbContextCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < this.CACHE_TTL_MS)) {
+            return cached.data;
+        }
+
         const queryLower = message.toLowerCase();
         const contextParts: string[] = [];
         const today = new Date();
@@ -384,12 +471,10 @@ export class AiService {
                 const matchedTypes = types.filter(t => queryLower.includes(t));
 
                 if (matchedTypes.length > 0 || matchedDepts.length > 0) {
-                    const findOptions: any = { take: 50 };
-                    if (matchedTypes.length > 0) {
-                        findOptions.where = matchedTypes.map(t => ({ type: ILike(`%${t}%`) }));
-                    }
-                    let filteredDocs = await this.docRepo.find(findOptions);
+                    let allDocs = await this.docRepo.find({ take: 100 });
+                    let filteredDocs = allDocs;
 
+                    // 1. Filter by Department if matched
                     if (matchedDepts.length > 0) {
                         filteredDocs = filteredDocs.filter(d => 
                             d.departments && d.departments.some(dept => 
@@ -398,15 +483,43 @@ export class AiService {
                         );
                     }
 
-                    const typeHeader = matchedTypes.length > 0 ? `of Type ${matchedTypes.map(t => t.toUpperCase()).join('/')}` : '';
-                    const deptHeader = matchedDepts.length > 0 ? `in ${matchedDepts.map(d => d.toUpperCase()).join('/')} Department` : '';
-                    const filterHeader = `### Filtered Documents ${typeHeader} ${deptHeader}`.replace(/\s+/g, ' ').trim() + ':';
+                    // 2. Filter by Document Type / Keyword in title if matched
+                    if (matchedTypes.length > 0) {
+                        filteredDocs = filteredDocs.filter(d => {
+                            const titleLower = (d.title || '').toLowerCase();
+                            const typeLower = (d.type || '').toLowerCase();
+                            return matchedTypes.some(t => {
+                                if (t === 'sop' || t === 'work instruction' || t === 'work_instruction') {
+                                    return titleLower.includes('sop') || titleLower.includes('work instruction') || typeLower.includes('sop') || typeLower.includes('work_instruction');
+                                }
+                                if (t === 'procedure') {
+                                    return typeLower === 'procedure' || (titleLower.includes('procedure') && !titleLower.includes('sop'));
+                                }
+                                return titleLower.includes(t) || typeLower.includes(t);
+                            });
+                        });
+                    }
+
+                    const typeHeader = matchedTypes.length > 0 ? `Matching (${matchedTypes.map(t => t.toUpperCase()).join('/')})` : 'All Types';
+                    const deptHeader = matchedDepts.length > 0 ? `in ${matchedDepts.map(d => d.toUpperCase()).join('/')} Department` : 'All Departments';
+
+                    const appCount = filteredDocs.filter(d => (d.status as string) === 'approved').length;
+                    const draftCount = filteredDocs.filter(d => (d.status as string) === 'draft').length;
+                    const revCount = filteredDocs.filter(d => (d.status as string) === 'under_review').length;
+
+                    docText += `### Department & Document Type Filter Results (${typeHeader} ${deptHeader}):\n` +
+                        `- EXACT TOTAL MATCHING DOCUMENTS: ${filteredDocs.length}\n` +
+                        `- Approved Documents: ${appCount}\n` +
+                        `- Draft Documents: ${draftCount}\n` +
+                        `- Under Review Documents: ${revCount}\n\n`;
 
                     if (filteredDocs.length > 0) {
-                        docText += `${filterHeader}\n` +
-                            filteredDocs.slice(0, 15).map(d => `- Title: ${d.title}, No: ${d.documentNumber || 'N/A'}, Type: ${d.type}, Status: ${d.status}, Departments: ${d.departments ? d.departments.join(', ') : 'All'}`).join('\n') + '\n\n';
+                        docText += `### Exact Matching Documents (PRESENT TO USER AS A MARKDOWN TABLE):\n` +
+                            `| Document Name | Document Number | Type | Status | Department |\n` +
+                            `| :--- | :--- | :--- | :--- | :--- |\n` +
+                            filteredDocs.map(d => `| ${d.title} | ${d.documentNumber || 'N/A'} | ${d.type} | ${(d.status as string).toUpperCase()} | ${d.departments ? d.departments.join(', ') : 'All'} |`).join('\n') + '\n\n';
                     } else {
-                        docText += `${filterHeader} None found.\n\n`;
+                        docText += `- No documents found for this filter combination.\n\n`;
                     }
                 }
 
@@ -719,11 +832,12 @@ export class AiService {
             }
         }
 
-        if (contextParts.length === 0) {
-            return '';
-        }
+        const resultText = contextParts.length === 0 
+            ? '' 
+            : `\nRetrieved System Database Information:\n${contextParts.join('\n\n')}\n`;
 
-        return `\nRetrieved System Database Information:\n${contextParts.join('\n\n')}\n`;
+        this.dbContextCache.set(cacheKey, { data: resultText, timestamp: Date.now() });
+        return resultText;
     }
 
     private getLocalRules(): string {
@@ -942,16 +1056,22 @@ export class AiService {
      * and returns the full response content synchronously.
      */
     async chat(message: string, context?: string): Promise<{ response: string; model: string }> {
-        const dbContext = await this.getDatabaseContext(message);
+        const promptConversion = this.convertPrompt(message);
+        const effectiveMessage = promptConversion.normalized;
+        if (promptConversion.correctedTerms.length > 0) {
+            this.logger.log(`PromptConverter corrected terms: ${promptConversion.correctedTerms.join(', ')}`);
+        }
+
+        const dbContext = await this.getDatabaseContext(effectiveMessage);
         const localRules = this.getLocalRules();
         
-        const queryLower = message.toLowerCase();
+        const queryLower = effectiveMessage.toLowerCase();
         let kbLimit = 3;
         if (queryLower.includes('summary') || queryLower.includes('list') || queryLower.includes('how many') || queryLower.includes('count')) {
             kbLimit = 1;
         }
         
-        const kbMatches = await this.kbService.search(message, kbLimit);
+        const kbMatches = await this.kbService.search(effectiveMessage, kbLimit);
         const kbContext = kbMatches.length > 0
             ? `\nRetrieved Local Knowledge Base Documents:\n${kbMatches.map((m, i) => `[Document Snippet ${i + 1}]:\n${m}`).join('\n\n')}\n`
             : '';
@@ -970,6 +1090,9 @@ Your goal is to assist users with documents, audits, calibration, risk managemen
 - Frame Management of Change (MOC) in context of **ISO Clause 6.3 (Planning of changes)** and **Clause 8.5.6 (Control of changes)**.
 
 Be highly professional, structured, and compliant. Cite specific ISO clauses where relevant to reinforce compliance. Always reassure the user that all data is stored securely and processed privately.
+
+**CRITICAL TABLE FORMATTING MANDATE:**
+Whenever your response contains a list of database records or documents (such as SOPs, documents, calibration instruments, audit plans/schedules, risks, deviations, or MOC records), YOU MUST ALWAYS PRESENT THE RECORD LIST AS A MARKDOWN TABLE (e.g. | Document Title | Document Number | Type | Status | Department |). NEVER format record lists as numbered lists (1., 2., 3.) or bullet points.
 
 **Crucial App-Specific Instructions:**
 When users ask how to upload a new document or how to revise an existing document, you MUST guide them using the exact user-interface flow of this DMS application instead of giving generic answers:
@@ -1050,12 +1173,30 @@ Please respond to the user's message accordingly.`;
         onChunk: (chunk: string) => void,
         signal?: AbortSignal
     ): Promise<void> {
-        const dbContext = await this.getDatabaseContext(message);
+        onChunk(`[STATUS] 🔍 Refining prompt & normalizing terms...\n`);
+        const promptConversion = this.convertPrompt(message);
+        const effectiveMessage = promptConversion.normalized;
+        if (promptConversion.correctedTerms.length > 0) {
+            this.logger.log(`PromptConverter corrected terms: ${promptConversion.correctedTerms.join(', ')}`);
+            onChunk(`[STATUS] 🔍 Normalized terms: ${promptConversion.correctedTerms.join(', ')}\n`);
+        }
+
+        onChunk(`[STATUS] 🗂️ Searching live DMS database context...\n`);
+        const dbContext = await this.getDatabaseContext(effectiveMessage);
+
+        onChunk(`[STATUS] 📄 Matching document snippets & ISO clauses...\n`);
         const localRules = this.getLocalRules();
-        const kbMatches = await this.kbService.search(message, 5);
+        
+        const queryLower = effectiveMessage.toLowerCase();
+        const isDbQuery = (queryLower.includes('how many') || queryLower.includes('which') || queryLower.includes('list') || queryLower.includes('show') || queryLower.includes('count')) && !queryLower.includes('explain') && !queryLower.includes('step') && !queryLower.includes('content');
+        const kbLimit = isDbQuery ? 0 : 3;
+
+        const kbMatches = kbLimit > 0 ? await this.kbService.search(effectiveMessage, kbLimit) : [];
         const kbContext = kbMatches.length > 0
             ? `\nRetrieved Local Knowledge Base Documents:\n${kbMatches.map((m, i) => `[Document Snippet ${i + 1}]:\n${m}`).join('\n\n')}\n`
             : '';
+
+        onChunk(`[STATUS] ✨ Synthesizing response...\n`);
 
         const systemPrompt = `You are the DMS Copilot, an expert AI Consultant in Integrated Management Systems (IMS) specializing in ISO 9001:2015 (Quality), ISO 14001:2015 (Environmental), and ISO 45001:2018 (Occupational Health & Safety).
 
@@ -1071,6 +1212,9 @@ Your goal is to assist users with documents, audits, calibration, risk managemen
 - Frame Management of Change (MOC) in context of **ISO Clause 6.3 (Planning of changes)** and **Clause 8.5.6 (Control of changes)**.
 
 Be highly professional, structured, and compliant. Cite specific ISO clauses where relevant to reinforce compliance. Always reassure the user that all data is stored securely and processed privately.
+
+**CRITICAL TABLE FORMATTING MANDATE:**
+Whenever your response contains a list of database records or documents (such as SOPs, documents, calibration instruments, audit plans/schedules, risks, deviations, or MOC records), YOU MUST ALWAYS PRESENT THE RECORD LIST AS A MARKDOWN TABLE (e.g. | Document Title | Document Number | Type | Status | Department |). NEVER format record lists as numbered lists (1., 2., 3.) or bullet points.
 
 **Crucial App-Specific Instructions:**
 When users ask how to upload a new document or how to revise an existing document, you MUST guide them using the exact user-interface flow of this DMS application instead of giving generic answers:
@@ -1125,13 +1269,13 @@ Please respond to the user's message accordingly.`;
             const response = await firstValueFrom(
                 this.httpService.post(`${this.ollamaUrl}/api/generate`, {
                     model: activeModel.name,
-                    prompt: message,
+                    prompt: effectiveMessage,
                     system: systemPrompt,
                     stream: true,
-                    keep_alive: '20m',
+                    keep_alive: '60m',
                     options: {
                         temperature: 0.7,
-                        num_ctx: 8192,
+                        num_ctx: 4096,
                     }
                 }, {
                     headers: { 'Content-Type': 'application/json' },
