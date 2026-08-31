@@ -359,7 +359,7 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                   />
                 </div>
                 <div className="col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Total Quantity Produced (sqm)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Total Quantity Produced (pcs) *</label>
                   <input
                     type="number"
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -367,7 +367,7 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                   />
                 </div>
                 <div className="col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantity Under Deviation (sqm)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantity Under Deviation (pcs) *</label>
                   <input
                     type="number"
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -375,7 +375,7 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
                   />
                 </div>
                 <div className="col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantity Under Deviation (pcs)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Quantity Under Deviation (sqm)</label>
                   <input
                     type="number"
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -418,13 +418,153 @@ export function DeviationDetailsModal({ isOpen, onClose, deviationId, isNew }: P
               </div>
             ) : deviation ? (
               <div className="space-y-6">
+                {/* Dynamic Workflow Stage Sequence Stepper Card */}
+                <section className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2.5">
+                    Workflow Stage Sequence
+                  </div>
+                  {(() => {
+                    const hasMarketingStage = Boolean(deviation.marketingPersonId || deviation.marketingPerson || deviation.status === 'PENDING_MARKETING' || deviation.marketingRemarks);
+                    return (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+                        {/* Step 1: Creation */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="px-2.5 py-1 rounded-lg font-bold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1.5">
+                            <CheckCircle className="w-3.5 h-3.5 text-blue-600" />
+                            1. Created
+                          </span>
+                          <span className="text-slate-300 font-bold">→</span>
+                        </div>
+
+                        {/* Step 2: Analysis */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 ${
+                            deviation.status !== 'OPEN'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
+                          }`}>
+                            {deviation.status !== 'OPEN' ? <CheckCircle className="w-3.5 h-3.5 text-blue-600" /> : <Clock className="w-3.5 h-3.5 text-amber-600" />}
+                            2. Analysis & Action Plan
+                          </span>
+                          <span className="text-slate-300 font-bold">→</span>
+                        </div>
+
+                        {/* Step 3 (Dynamic): Marketing Review */}
+                        {hasMarketingStage && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 ${
+                              deviation.marketingSignedAt || deviation.status === 'PENDING_PLANT_HEAD' || deviation.status === 'PENDING_QUALITY_HEAD' || deviation.status === 'CLOSED'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : deviation.status === 'PENDING_MARKETING'
+                                ? 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
+                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                            }`}>
+                              {deviation.marketingSignedAt || deviation.status === 'PENDING_PLANT_HEAD' || deviation.status === 'PENDING_QUALITY_HEAD' || deviation.status === 'CLOSED' ? <CheckCircle className="w-3.5 h-3.5 text-blue-600" /> : <Clock className="w-3.5 h-3.5" />}
+                              3. Marketing Review
+                            </span>
+                            <span className="text-slate-300 font-bold">→</span>
+                          </div>
+                        )}
+
+                        {/* Step 4 (or 3): Plant Head / CEO Approval */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 ${
+                            deviation.status === 'PENDING_QUALITY_HEAD' || deviation.status === 'CLOSED'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : deviation.status === 'PENDING_PLANT_HEAD'
+                              ? 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
+                              : 'bg-slate-50 text-slate-400 border-slate-200'
+                          }`}>
+                            {deviation.status === 'PENDING_QUALITY_HEAD' || deviation.status === 'CLOSED' ? <CheckCircle className="w-3.5 h-3.5 text-blue-600" /> : <Clock className="w-3.5 h-3.5" />}
+                            {hasMarketingStage ? '4. Plant Head / CEO Approval' : '3. Plant Head / CEO Approval'}
+                          </span>
+                          <span className="text-slate-300 font-bold">→</span>
+                        </div>
+
+                        {/* Step 5 (or 4): QC Head Closure */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 ${
+                            deviation.status === 'CLOSED'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                              : deviation.status === 'PENDING_QUALITY_HEAD'
+                              ? 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
+                              : 'bg-slate-50 text-slate-400 border-slate-200'
+                          }`}>
+                            {deviation.status === 'CLOSED' ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Clock className="w-3.5 h-3.5" />}
+                            {hasMarketingStage ? '5. QC Head Closure' : '4. QC Head Closure'}
+                          </span>
+                        </div>
+
+                        {/* Post-Update Re-Approval Sequence (if quantities were updated) */}
+                        {deviation.quantityUpdatedAt && (
+                          <>
+                            <span className="text-amber-500 font-black px-1">⟹</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="px-2.5 py-1 rounded-lg font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5">
+                                {hasMarketingStage ? '6. Update Qty' : '5. Update Qty'}
+                              </span>
+                              <span className="text-slate-300 font-bold">→</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 ${
+                                (deviation.plantHeadSignedAt && new Date(deviation.plantHeadSignedAt) >= new Date(deviation.quantityUpdatedAt)) || (deviation.ceoSignedAt && new Date(deviation.ceoSignedAt) >= new Date(deviation.quantityUpdatedAt))
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : deviation.status === 'PENDING_PLANT_HEAD'
+                                  ? 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
+                                  : 'bg-slate-50 text-slate-400 border-slate-200'
+                              }`}>
+                                {(deviation.plantHeadSignedAt && new Date(deviation.plantHeadSignedAt) >= new Date(deviation.quantityUpdatedAt)) || (deviation.ceoSignedAt && new Date(deviation.ceoSignedAt) >= new Date(deviation.quantityUpdatedAt)) ? <CheckCircle className="w-3.5 h-3.5 text-blue-600" /> : <Clock className="w-3.5 h-3.5" />}
+                                {hasMarketingStage ? '7. Plant Head/CEO Re-Approval' : '6. Plant Head/CEO Re-Approval'}
+                              </span>
+                              <span className="text-slate-300 font-bold">→</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 ${
+                                deviation.status === 'CLOSED' && deviation.qualityHeadSignedAt && new Date(deviation.qualityHeadSignedAt) >= new Date(deviation.quantityUpdatedAt)
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                  : 'bg-slate-50 text-slate-400 border-slate-200'
+                              }`}>
+                                {deviation.status === 'CLOSED' && deviation.qualityHeadSignedAt && new Date(deviation.qualityHeadSignedAt) >= new Date(deviation.quantityUpdatedAt) ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Clock className="w-3.5 h-3.5" />}
+                                {hasMarketingStage ? '8. QC Head Final Closure' : '7. QC Head Final Closure'}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </section>
+
                 <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100 grid grid-cols-2 gap-4 text-sm text-slate-700">
                   <div><span className="font-semibold text-slate-900">Line:</span> {deviation.line}</div>
                   <div><span className="font-semibold text-slate-900">Dates:</span> {new Date(deviation.startDate).toLocaleDateString()} to {new Date(deviation.endDate).toLocaleDateString()}</div>
-                  <div><span className="font-semibold text-slate-900">Total Quantity Produced:</span> {deviation.totalQuantityProduced} sqm</div>
-                  <div><span className="font-semibold text-slate-900">Quantity under Deviation:</span> {deviation.quantityUnderDeviation} sqm</div>
-                  {deviation.quantityUnderDeviationPcs !== null && deviation.quantityUnderDeviationPcs !== undefined && (
-                    <div><span className="font-semibold text-slate-900">Quantity under Deviation (pcs):</span> {deviation.quantityUnderDeviationPcs} pcs</div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Total Quantity Produced (pcs):</span> {deviation.totalQuantityProduced} pcs
+                    {deviation.updatedTotalQuantityProduced !== null && deviation.updatedTotalQuantityProduced !== undefined && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">
+                        Updated: {deviation.updatedTotalQuantityProduced} pcs
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900">Quantity under Deviation (pcs):</span> {deviation.quantityUnderDeviation} pcs
+                    {deviation.updatedQuantityUnderDeviation !== null && deviation.updatedQuantityUnderDeviation !== undefined && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">
+                        Updated: {deviation.updatedQuantityUnderDeviation} pcs
+                      </span>
+                    )}
+                  </div>
+                  {(deviation.quantityUnderDeviationPcs !== null && deviation.quantityUnderDeviationPcs !== undefined || deviation.updatedQuantityUnderDeviationPcs !== null && deviation.updatedQuantityUnderDeviationPcs !== undefined) && (
+                    <div>
+                      <span className="font-semibold text-slate-900">Quantity under Deviation (sqm):</span> {deviation.quantityUnderDeviationPcs ?? 'N/A'} sqm
+                      {deviation.updatedQuantityUnderDeviationPcs !== null && deviation.updatedQuantityUnderDeviationPcs !== undefined && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-800">
+                          Updated: {deviation.updatedQuantityUnderDeviationPcs} sqm
+                        </span>
+                      )}
+                    </div>
                   )}
                   <div className="col-span-2"><span className="font-semibold text-slate-900">Nature of Deviation:</span> {deviation.natureOfDeviation}</div>
                   <div className="col-span-2"><span className="font-semibold text-slate-900">Details:</span> {deviation.detailsOfDeviation}</div>

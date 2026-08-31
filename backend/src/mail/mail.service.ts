@@ -1,6 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import * as os from 'os';
+
+function getAutoSystemIpUrl(port: number = 5176): string {
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      const iface = interfaces[name];
+      if (!iface) continue;
+      for (const alias of iface) {
+        if (alias.family === 'IPv4' && !alias.internal && alias.address !== '127.0.0.1') {
+          return `http://${alias.address}:${port}`;
+        }
+      }
+    }
+  } catch (err) {
+    // Fallback to localhost if network interface reading fails
+  }
+  return `http://localhost:${port}`;
+}
 
 @Injectable()
 export class MailService {
@@ -176,11 +195,16 @@ export class MailService {
       endDate: string;
       quantityProduced: number;
       quantityUnderDeviation: number;
+      quantityUnderDeviationSqm?: number | null;
       createdBy: string;
       natureOfDeviation: string;
       description: string;
       pendingWith: string;
       submittedBy?: string;
+      isQuantityUpdated?: boolean;
+      initialQuantityProduced?: number;
+      initialQuantityUnderDeviation?: number;
+      initialQuantityUnderDeviationSqm?: number | null;
     },
   ) {
     const isClosed = deviationData.status === 'CLOSED';
@@ -189,7 +213,28 @@ export class MailService {
       : `⚠️ Action Required: Product Deviation - ${deviationData.serialNumber} (Pending: ${deviationData.pendingWith})`;
 
     const color = isClosed ? '#10b981' : '#2563eb';
-    const link = `http://localhost:5173/product-deviation/${deviationData.id || ''}`;
+    const envUrl = this.configService.get<string>('PRODUCT_DEVIATION_PORTAL_URL') ||
+                   this.configService.get<string>('FRONTEND_URL');
+    
+    const portalBaseUrl = (envUrl && envUrl.trim() !== '' && !envUrl.includes('your-server-ip'))
+      ? envUrl
+      : getAutoSystemIpUrl(5176);
+
+    const link = `${portalBaseUrl.replace(/\/$/, '')}/product-deviation/${deviationData.id || ''}`;
+
+    const prodQtyDisplay = deviationData.isQuantityUpdated && deviationData.initialQuantityProduced !== undefined
+      ? `<strong>${deviationData.quantityProduced} Pcs</strong> <span style="color: #64748b; font-size: 12px;">(Initially: ${deviationData.initialQuantityProduced} Pcs)</span>`
+      : `${deviationData.quantityProduced} Pcs`;
+
+    const devQtyPcsDisplay = deviationData.isQuantityUpdated && deviationData.initialQuantityUnderDeviation !== undefined
+      ? `<strong>${deviationData.quantityUnderDeviation} Pcs</strong> <span style="color: #64748b; font-size: 12px;">(Initially: ${deviationData.initialQuantityUnderDeviation} Pcs)</span>`
+      : `${deviationData.quantityUnderDeviation} Pcs`;
+
+    const devQtySqmDisplay = deviationData.quantityUnderDeviationSqm !== undefined && deviationData.quantityUnderDeviationSqm !== null
+      ? (deviationData.isQuantityUpdated && deviationData.initialQuantityUnderDeviationSqm !== undefined && deviationData.initialQuantityUnderDeviationSqm !== null
+          ? `<strong>${deviationData.quantityUnderDeviationSqm} Sqm</strong> <span style="color: #64748b; font-size: 12px;">(Initially: ${deviationData.initialQuantityUnderDeviationSqm} Sqm)</span>`
+          : `${deviationData.quantityUnderDeviationSqm} Sqm`)
+      : 'N/A';
 
     const html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
@@ -201,6 +246,11 @@ export class MailService {
           <p>Hello,</p>
           <p style="margin: 0; color: #4b5563; font-size: 14px;">This is an automated notification regarding a Product Deviation.</p>
           
+          ${deviationData.isQuantityUpdated ? `
+          <div style="background-color: #fffbe6; border-left: 4px solid #faad14; padding: 12px 16px; margin: 16px 0; border-radius: 4px; color: #873800;">
+            <strong style="color: #d48806;">⚠️ Notice:</strong> Quantities have been updated by Responsible Person and sent for re-approval.
+          </div>` : ''}
+
           <div style="background-color: #f8fafc; border-left: 4px solid ${color}; padding: 12px 16px; margin: 24px 0; border-radius: 4px;">
             ${deviationData.submittedBy ? `<p style="margin: 0 0 8px 0; color: #1e293b; font-weight: 500;">Submitted By: <span style="color: #64748b; font-weight: 400;">${deviationData.submittedBy}</span></p>` : ''}
             <p style="margin: 0; color: #1e293b; font-weight: 500;">Pending Action With: <span style="color: ${color};">${deviationData.pendingWith}</span></p>
@@ -227,16 +277,20 @@ export class MailService {
               <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.endDate}</td>
             </tr>
             <tr>
-              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Quantity Produced</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.quantityProduced} Pcs</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Quantity Under Deviation</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.quantityUnderDeviation} Pcs</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Total Qty Produced (pcs)</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${prodQtyDisplay}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Qty Under Dev (pcs)</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${devQtyPcsDisplay}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Qty Under Dev (sqm)</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${devQtySqmDisplay}</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Nature of Deviation</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.natureOfDeviation}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Created By</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.createdBy}</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Nature of Deviation</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.natureOfDeviation}</td>
+              <td colSpan="3" style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.createdBy}</td>
             </tr>
           </table>
 

@@ -37,7 +37,8 @@ export function SettingsTab() {
       const resLines = await api.get('/settings/product_deviation_lines');
       
       if (resMarketing.data) setMarketingPersonId(resMarketing.data);
-      setEnableMarketing(resEnableMarketing.data !== 'false');
+      const mVal = resEnableMarketing.data;
+      setEnableMarketing(mVal !== false && mVal !== 'false' && mVal !== '0' && mVal !== 0 && mVal !== null);
       if (resPlant.data) setPlantHeadId(resPlant.data);
       if (resCeo.data) setCeoId(resCeo.data);
       if (resQuality.data) setQualityHeadId(resQuality.data);
@@ -52,7 +53,7 @@ export function SettingsTab() {
     setSaving(true);
     try {
       await api.post('/settings/product_deviation_marketing_person', { value: marketingPersonId });
-      await api.post('/settings/product_deviation_enable_marketing', { value: String(enableMarketing) });
+      await api.post('/settings/product_deviation_enable_marketing', { value: enableMarketing });
       await api.post('/settings/product_deviation_plant_head', { value: plantHeadId });
       await api.post('/settings/product_deviation_ceo', { value: ceoId });
       await api.post('/settings/product_deviation_quality_head', { value: qualityHeadId });

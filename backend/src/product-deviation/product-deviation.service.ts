@@ -6,7 +6,7 @@ import { ProductDeviationResponsible } from '../entities/product-deviation-respo
 import { User, UserRole } from '../entities/user.entity';
 import { AuditLog, AuditAction } from '../entities/audit-log.entity';
 import { SystemSetting } from '../entities/system-setting.entity';
-import { CreateProductDeviationDto, UpdateActionPlanDto, AddMarketingRemarkDto, ApprovePlantHeadDto, ApproveCeoDto, ApproveQualityHeadDto } from './dto/product-deviation.dto';
+import { CreateProductDeviationDto, UpdateActionPlanDto, AddMarketingRemarkDto, ApprovePlantHeadDto, ApproveCeoDto, ApproveQualityHeadDto, UpdateDeviationQuantityDto } from './dto/product-deviation.dto';
 import { MailService } from '../mail/mail.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
@@ -103,6 +103,15 @@ export class ProductDeviationService {
         toEmails = [...new Set(toEmails)];
         if (toEmails.length === 0) return;
 
+        const isQuantityUpdated = deviation.updatedTotalQuantityProduced !== null && deviation.updatedTotalQuantityProduced !== undefined;
+        const currentTotalQty = isQuantityUpdated ? Number(deviation.updatedTotalQuantityProduced) : Number(deviation.totalQuantityProduced);
+        const currentDevQty = isQuantityUpdated && deviation.updatedQuantityUnderDeviation !== null && deviation.updatedQuantityUnderDeviation !== undefined
+            ? Number(deviation.updatedQuantityUnderDeviation)
+            : Number(deviation.quantityUnderDeviation);
+        const currentDevSqm = isQuantityUpdated && deviation.updatedQuantityUnderDeviationPcs !== null && deviation.updatedQuantityUnderDeviationPcs !== undefined
+            ? Number(deviation.updatedQuantityUnderDeviationPcs)
+            : (deviation.quantityUnderDeviationPcs !== null && deviation.quantityUnderDeviationPcs !== undefined ? Number(deviation.quantityUnderDeviationPcs) : null);
+
         await this.mailService.sendProductDeviationAlert(toEmails, {
             id: deviation.id,
             serialNumber: deviation.serialNumber,
@@ -111,13 +120,18 @@ export class ProductDeviationService {
             creationDate: deviation.createdAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
             startDate: deviation.startDate ? new Date(deviation.startDate).toLocaleDateString('en-GB') : 'N/A',
             endDate: deviation.endDate ? new Date(deviation.endDate).toLocaleDateString('en-GB') : 'N/A',
-            quantityProduced: Number(deviation.totalQuantityProduced),
-            quantityUnderDeviation: Number(deviation.quantityUnderDeviation),
+            quantityProduced: currentTotalQty,
+            quantityUnderDeviation: currentDevQty,
+            quantityUnderDeviationSqm: currentDevSqm,
             createdBy: deviation.createdBy ? `${deviation.createdBy.firstName} ${deviation.createdBy.lastName}` : 'Unknown',
             submittedBy: submittedByStr,
             natureOfDeviation: deviation.natureOfDeviation,
             description: deviation.detailsOfDeviation,
-            pendingWith
+            pendingWith,
+            isQuantityUpdated,
+            initialQuantityProduced: Number(deviation.totalQuantityProduced),
+            initialQuantityUnderDeviation: Number(deviation.quantityUnderDeviation),
+            initialQuantityUnderDeviationSqm: deviation.quantityUnderDeviationPcs !== null && deviation.quantityUnderDeviationPcs !== undefined ? Number(deviation.quantityUnderDeviationPcs) : null,
         }).catch(err => console.error('Failed to trigger background deviation mail:', err));
     }
 
@@ -166,7 +180,7 @@ export class ProductDeviationService {
     async findAll() {
         return this.productDeviationRepo.find({
             where: { isDeleted: false },
-            relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead', 'ceo'],
+            relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead', 'ceo', 'quantityUpdatedBy'],
             order: { createdAt: 'DESC' }
         });
     }
@@ -174,13 +188,54 @@ export class ProductDeviationService {
     async findOne(id: string) {
         const deviation = await this.productDeviationRepo.findOne({
             where: { id, isDeleted: false },
-            relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead', 'ceo', 'auditLogs', 'auditLogs.user'],
+            relations: ['createdBy', 'responsiblePersons', 'responsiblePersons.user', 'marketingPerson', 'plantHead', 'qualityHead', 'ceo', 'quantityUpdatedBy', 'auditLogs', 'auditLogs.user'],
         });
         if (!deviation) throw new NotFoundException('Product Deviation not found');
         
         deviation.auditLogs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         return deviation;
     }
+
+    async updateQuantity(id: string, dto: UpdateDeviationQuantityDto, userId: string) {
+        const deviation = await this.findOne(id);
+
+        const responsibleRecord = await this.responsibleRepo.findOne({
+            where: { productDeviationId: id, userId }
+        });
+
+        if (!responsibleRecord) {
+            throw new ForbiddenException('Only assigned responsible persons can modify quantities.');
+        }
+
+        deviation.updatedTotalQuantityProduced = dto.totalQuantityProduced;
+        deviation.updatedQuantityUnderDeviation = dto.quantityUnderDeviation;
+        if (dto.quantityUnderDeviationPcs !== undefined) {
+            deviation.updatedQuantityUnderDeviationPcs = dto.quantityUnderDeviationPcs;
+        }
+        deviation.quantityUpdatedById = userId;
+        deviation.quantityUpdatedBy = { id: userId } as any;
+        deviation.quantityUpdatedAt = new Date();
+
+        // Pass through approval flow: Responsible Person Update -> Plant Head/CEO -> Quality Head -> Closed
+        deviation.status = ProductDeviationStatus.PENDING_PLANT_HEAD;
+
+        await this.productDeviationRepo.save(deviation);
+
+        const actor = await this.userRepo.findOne({ where: { id: userId } });
+        const actorName = actor ? `${actor.firstName} ${actor.lastName}` : 'Responsible Person';
+        
+        await this.logAction(
+            AuditAction.PRODUCT_DEVIATION_UPDATE,
+            userId,
+            id,
+            `Responsible person (${actorName}) updated quantities: Total=${dto.totalQuantityProduced} pcs, DevPcs=${dto.quantityUnderDeviationPcs} pcs, DevSqm=${dto.quantityUnderDeviation ?? 'N/A'}`
+        );
+
+        this.triggerWorkflowEmail(deviation.id, `${actorName} (Quantity Updated)`);
+
+        return deviation;
+    }
+
 
     async getSummary() {
         const total = await this.productDeviationRepo.count({ where: { isDeleted: false } });
@@ -258,7 +313,8 @@ export class ProductDeviationService {
 
         if (anySigned) {
             const enableMarketingSetting = await this.settingRepo.findOne({ where: { key: 'product_deviation_enable_marketing' } });
-            const enableMarketing = enableMarketingSetting?.value !== 'false'; // defaults to true
+            const val = enableMarketingSetting?.value;
+            const enableMarketing = val !== false && val !== 'false' && val !== '0' && val !== 0;
             deviation.status = enableMarketing ? ProductDeviationStatus.PENDING_MARKETING : ProductDeviationStatus.PENDING_PLANT_HEAD;
         }
 

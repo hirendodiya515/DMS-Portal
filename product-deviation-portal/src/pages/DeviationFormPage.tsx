@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, AlertCircle, FileWarning, Search, UploadCloud, FileText, Trash2, Download, LogOut, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, AlertCircle, FileWarning, Search, UploadCloud, FileText, Trash2, Download, LogOut, HelpCircle, CheckCircle, Clock } from 'lucide-react';
 import api from '../api';
 import { formatDate } from '../utils/dateFormatter';
 import UserGuideModal from '../components/UserGuideModal';
@@ -25,6 +25,7 @@ export default function DeviationFormPage() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [lineOptions, setLineOptions] = useState<string[]>(['Line 1', 'Line 2', 'Line 3']);
+  const [enableMarketing, setEnableMarketing] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -56,9 +57,11 @@ export default function DeviationFormPage() {
   const fetchFormContext = async () => {
     setLoading(true);
     try {
-      const [usersRes, linesRes] = await Promise.all([
+      const [usersRes, linesRes, marketingPersonRes, enableMarketingRes] = await Promise.all([
         api.get('/users'),
-        api.get('/settings/product_deviation_lines').catch(() => ({ data: '' }))
+        api.get('/settings/product_deviation_lines').catch(() => ({ data: '' })),
+        api.get('/settings/product_deviation_marketing_person').catch(() => ({ data: '' })),
+        api.get('/settings/product_deviation_enable_marketing').catch(() => ({ data: '' }))
       ]);
       
       setUsers(usersRes.data || []);
@@ -71,6 +74,10 @@ export default function DeviationFormPage() {
           setLineOptions(lines);
         }
       }
+
+      const mVal = enableMarketingRes.data;
+      const isMarketingEnabled = mVal !== false && mVal !== 'false' && mVal !== '0' && mVal !== 0 && mVal !== null && Boolean(marketingPersonRes.data);
+      setEnableMarketing(isMarketingEnabled);
     } catch (err) {
       console.error('Failed to load form context data:', err);
       setError('Could not load department users or lines. Please refresh the page.');
@@ -261,7 +268,62 @@ export default function DeviationFormPage() {
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full">
+      <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full space-y-6">
+        {/* Dynamic Workflow Stage Sequence Card */}
+        <section className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-soft">
+          <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3">
+            Workflow Stage Sequence
+          </div>
+          
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+            {/* Step 1: Creation */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="px-3 py-1.5 rounded-xl font-bold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1.5 shadow-2xs">
+                <CheckCircle className="w-3.5 h-3.5 text-blue-600" />
+                1. Created
+              </span>
+              <span className="text-slate-300 font-bold">→</span>
+            </div>
+
+            {/* Step 2: Analysis & Action Plan */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="px-3 py-1.5 rounded-xl font-bold bg-slate-50 text-slate-500 border border-slate-200 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                2. Analysis & Action Plan
+              </span>
+              <span className="text-slate-300 font-bold">→</span>
+            </div>
+
+            {/* Step 3 (Dynamic): Marketing Review (Only appears if Marketing Person is configured in chain) */}
+            {enableMarketing && (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="px-3 py-1.5 rounded-xl font-bold bg-slate-50 text-slate-500 border border-slate-200 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  3. Marketing Review & Remark
+                </span>
+                <span className="text-slate-300 font-bold">→</span>
+              </div>
+            )}
+
+            {/* Step 4 (or 3): Plant Head / CEO Approval */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="px-3 py-1.5 rounded-xl font-bold bg-slate-50 text-slate-500 border border-slate-200 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                {enableMarketing ? '4. Plant Head / CEO Approval' : '3. Plant Head / CEO Approval'}
+              </span>
+              <span className="text-slate-300 font-bold">→</span>
+            </div>
+
+            {/* Step 5 (or 4): QC Head Closure */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="px-3 py-1.5 rounded-xl font-bold bg-slate-50 text-slate-500 border border-slate-200 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                {enableMarketing ? '5. QC Head Closure' : '4. QC Head Closure'}
+              </span>
+            </div>
+          </div>
+        </section>
+
         {loading ? (
           <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center shadow-sm flex flex-col items-center justify-center">
             <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-4" />

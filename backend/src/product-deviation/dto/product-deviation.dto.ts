@@ -109,3 +109,18 @@ export class ApproveQualityHeadDto {
     @IsOptional()
     attachments?: { name: string; fileData: string }[];
 }
+
+export class UpdateDeviationQuantityDto {
+    @IsNumber()
+    @IsNotEmpty()
+    totalQuantityProduced: number;
+
+    @IsNumber()
+    @IsNotEmpty()
+    quantityUnderDeviation: number;
+
+    @IsNumber()
+    @IsOptional()
+    quantityUnderDeviationPcs?: number;
+}
+

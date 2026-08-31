@@ -38,6 +38,26 @@ export class ProductDeviation {
     @Column({ type: 'numeric', nullable: true })
     quantityUnderDeviationPcs: number;
 
+    @Column({ type: 'numeric', nullable: true })
+    updatedTotalQuantityProduced: number;
+
+    @Column({ type: 'numeric', nullable: true })
+    updatedQuantityUnderDeviation: number;
+
+    @Column({ type: 'numeric', nullable: true })
+    updatedQuantityUnderDeviationPcs: number;
+
+    @ManyToOne(() => User, { nullable: true })
+    @JoinColumn({ name: 'quantityUpdatedById' })
+    quantityUpdatedBy: User;
+
+    @Column({ nullable: true })
+    quantityUpdatedById: string;
+
+    @Column({ type: 'timestamp', nullable: true })
+    quantityUpdatedAt: Date;
+
+
     @Column({ nullable: true })
     natureOfDeviation: string;
 

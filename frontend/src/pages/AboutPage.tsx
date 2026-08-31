@@ -15,6 +15,18 @@ import {
 
 const changeLog = [
   {
+    version: '3.7.0',
+    date: '31 August 2026',
+    title: 'Product Deviation Post-Approval Quantity Modification & Dynamic Workflow Stepper',
+    changes: [
+      'Added facility for assigned Responsible Persons to modify Total Quantity Produced (pcs) and Quantity Under Deviation (pcs) post-submission and after initial closure/approval, preserving initial values in database schema audit records',
+      'Rendered a dynamic visual WORKFLOW STAGE SEQUENCE card across creation forms and detail views, showing real-time step progression and appends Phase 2 post-quantity update re-approval steps',
+      'Upgraded SettingsTab.tsx and workflow evaluation to robustly parse boolean settings (enableMarketing), ensuring the Marketing Review stage dynamically appears or disappears without persistence bugs',
+      'Updated PDF generator (generateDeviationPdf.ts) and view modals (DeviationDetailsModal.tsx) across main frontend and standalone portal to split digital authority signatures into Phase 1 (Initial Approval) and Phase 2 (Post-Update Re-Approval) tables with explicit unit formatting (Pcs for total & dev pcs, Sqm for dev sqm)',
+      'Configured backend mail service to automatically detect host IPv4 network interfaces on port 5176, generating ready-to-click email alert links seamlessly across local development and production servers'
+    ]
+  },
+  {
     version: '3.6.0',
     date: '14 July 2026',
     title: 'Internal & External Issues (SWOT/PESTLE) Upgrades & Excel Export',
@@ -334,7 +346,7 @@ export default function AboutPage() {
                 <p className="text-sm font-medium text-slate-500">Current Version</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-bold border border-emerald-200">
-                    v3.6.0
+                    v3.7.0
                   </span>
                   <span className="text-sm text-emerald-600 font-medium">Latest Release</span>
                 </div>

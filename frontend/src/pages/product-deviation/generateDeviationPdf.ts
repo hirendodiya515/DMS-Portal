@@ -56,15 +56,24 @@ export const generateDeviationPdf = async (deviation: any) => {
   let currentY = 35;
 
   // Base Info Table
-  const pcsStr = deviation.quantityUnderDeviationPcs !== null && deviation.quantityUnderDeviationPcs !== undefined 
-    ? `${deviation.quantityUnderDeviationPcs} pcs` 
-    : 'N/A';
+  const prodQtyStr = deviation.updatedTotalQuantityProduced !== null && deviation.updatedTotalQuantityProduced !== undefined
+    ? `${deviation.totalQuantityProduced} pcs (Updated: ${deviation.updatedTotalQuantityProduced} pcs)`
+    : `${deviation.totalQuantityProduced} pcs`;
+
+  const devQtyPcsStr = deviation.updatedQuantityUnderDeviation !== null && deviation.updatedQuantityUnderDeviation !== undefined
+    ? `${deviation.quantityUnderDeviation} pcs (Updated: ${deviation.updatedQuantityUnderDeviation} pcs)`
+    : `${deviation.quantityUnderDeviation} pcs`;
+
+  const devQtySqmStr = deviation.updatedQuantityUnderDeviationPcs !== null && deviation.updatedQuantityUnderDeviationPcs !== undefined
+    ? `${deviation.quantityUnderDeviationPcs ?? 'N/A'} sqm (Updated: ${deviation.updatedQuantityUnderDeviationPcs} sqm)`
+    : (deviation.quantityUnderDeviationPcs !== null && deviation.quantityUnderDeviationPcs !== undefined ? `${deviation.quantityUnderDeviationPcs} sqm` : 'N/A');
+
   const baseData = [
     ['Serial Number', deviation.serialNumber, 'Status', deviation.status],
-    ['Line', deviation.line, 'Creation Date', format(new Date(deviation.createdAt), 'dd MMM yyyy, hh:mm a')],
-    ['Start Date', format(new Date(deviation.startDate), 'dd MMM yyyy'), 'End Date', format(new Date(deviation.endDate), 'dd MMM yyyy')],
-    ['Quantity Produced', `${deviation.totalQuantityProduced} sqm`, 'Qty Under Dev (sqm)', `${deviation.quantityUnderDeviation} sqm`],
-    ['Qty Under Dev (pcs)', pcsStr, 'Nature of Deviation', deviation.natureOfDeviation],
+    ['Line', deviation.line, 'Creation Date', format(new Date(deviation.createdAt), 'dd-MMM-yy, hh:mm a')],
+    ['Start Date', format(new Date(deviation.startDate), 'dd-MMM-yy'), 'End Date', format(new Date(deviation.endDate), 'dd-MMM-yy')],
+    ['Total Qty Produced', prodQtyStr, 'Qty Under Dev (pcs)', devQtyPcsStr],
+    ['Qty Under Dev (sqm)', devQtySqmStr, 'Nature of Deviation', deviation.natureOfDeviation],
     ['Created By', `${deviation.createdBy?.firstName} ${deviation.createdBy?.lastName}`, 'Initiator Name', deviation.initiatorName || 'N/A']
   ];
 
@@ -131,78 +140,216 @@ export const generateDeviationPdf = async (deviation: any) => {
   });
 
   // Build Signatures Data
-  const sigData: string[][] = [];
-  
-  deviation.responsiblePersons?.forEach((rp: any) => {
-    sigData.push([
-      'Responsible Person',
-      `${rp.user?.firstName} ${rp.user?.lastName}\n\nStatus: Digitally Signed\nDate: ${rp.signedAt ? format(new Date(rp.signedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
-      'Action plan submitted.'
-    ]);
-  });
-  
-  if (deviation.marketingPersonId) {
-    let mRemarks = deviation.marketingRemarks ? `"${deviation.marketingRemarks}"` : 'No remarks provided.';
-    if (deviation.marketingAttachments && deviation.marketingAttachments.length > 0) {
-      mRemarks += `\n\nAttachments: ${deviation.marketingAttachments.map((f: any) => f.name).join(', ')}`;
-    }
-    sigData.push([
-      'Marketing Person',
-      `${deviation.marketingPerson?.firstName} ${deviation.marketingPerson?.lastName}\n\nStatus: Digitally Signed\nDate: ${deviation.marketingSignedAt ? format(new Date(deviation.marketingSignedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
-      mRemarks
-    ]);
-  }
+  const hasQtyUpdate = Boolean(deviation.quantityUpdatedAt);
+  const qtyUpdateDate = deviation.quantityUpdatedAt ? new Date(deviation.quantityUpdatedAt) : null;
 
-  if (deviation.plantHeadId) {
-    let pRemarks = deviation.plantHeadRemarks ? `"${deviation.plantHeadRemarks}"` : 'Approved.';
-    if (deviation.plantHeadAttachments && deviation.plantHeadAttachments.length > 0) {
-      pRemarks += `\n\nAttachments: ${deviation.plantHeadAttachments.map((f: any) => f.name).join(', ')}`;
+  if (!hasQtyUpdate) {
+    // Single Phase Signature Table
+    const sigData: string[][] = [];
+    
+    deviation.responsiblePersons?.forEach((rp: any) => {
+      sigData.push([
+        'Responsible Person',
+        `${rp.user?.firstName || ''} ${rp.user?.lastName || ''}\n\nStatus: Digitally Signed\nDate: ${rp.signedAt ? format(new Date(rp.signedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
+        'Action plan submitted.'
+      ]);
+    });
+    
+    if (deviation.marketingPersonId) {
+      let mRemarks = deviation.marketingRemarks ? `"${deviation.marketingRemarks}"` : 'No remarks provided.';
+      if (deviation.marketingAttachments && deviation.marketingAttachments.length > 0) {
+        mRemarks += `\n\nAttachments: ${deviation.marketingAttachments.map((f: any) => f.name).join(', ')}`;
+      }
+      sigData.push([
+        'Marketing Person',
+        `${deviation.marketingPerson?.firstName || ''} ${deviation.marketingPerson?.lastName || ''}\n\nStatus: Digitally Signed\nDate: ${deviation.marketingSignedAt ? format(new Date(deviation.marketingSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
+        mRemarks
+      ]);
     }
-    sigData.push([
-      'Plant Head',
-      `${deviation.plantHead?.firstName} ${deviation.plantHead?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.plantHeadSignedAt ? format(new Date(deviation.plantHeadSignedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
-      pRemarks
-    ]);
-  }
 
-  if (deviation.ceoId) {
-    let cRemarks = deviation.ceoRemarks ? `"${deviation.ceoRemarks}"` : 'Approved.';
-    if (deviation.ceoAttachments && deviation.ceoAttachments.length > 0) {
-      cRemarks += `\n\nAttachments: ${deviation.ceoAttachments.map((f: any) => f.name).join(', ')}`;
+    if (deviation.plantHeadId) {
+      let pRemarks = deviation.plantHeadRemarks ? `"${deviation.plantHeadRemarks}"` : 'Approved.';
+      if (deviation.plantHeadAttachments && deviation.plantHeadAttachments.length > 0) {
+        pRemarks += `\n\nAttachments: ${deviation.plantHeadAttachments.map((f: any) => f.name).join(', ')}`;
+      }
+      sigData.push([
+        'Plant Head',
+        `${deviation.plantHead?.firstName || ''} ${deviation.plantHead?.lastName || ''}\n\nStatus: Digitally Approved\nDate: ${deviation.plantHeadSignedAt ? format(new Date(deviation.plantHeadSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
+        pRemarks
+      ]);
     }
-    sigData.push([
-      'CEO',
-      `${deviation.ceo?.firstName} ${deviation.ceo?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.ceoSignedAt ? format(new Date(deviation.ceoSignedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
-      cRemarks
-    ]);
-  }
 
-  if (deviation.qualityHeadId) {
-    let qRemarks = deviation.qualityHeadRemarks ? `"${deviation.qualityHeadRemarks}"` : 'Final Approval completed.';
-    if (deviation.qualityHeadAttachments && deviation.qualityHeadAttachments.length > 0) {
-      qRemarks += `\n\nAttachments: ${deviation.qualityHeadAttachments.map((f: any) => f.name).join(', ')}`;
+    if (deviation.ceoId) {
+      let cRemarks = deviation.ceoRemarks ? `"${deviation.ceoRemarks}"` : 'Approved.';
+      if (deviation.ceoAttachments && deviation.ceoAttachments.length > 0) {
+        cRemarks += `\n\nAttachments: ${deviation.ceoAttachments.map((f: any) => f.name).join(', ')}`;
+      }
+      sigData.push([
+        'CEO',
+        `${deviation.ceo?.firstName || ''} ${deviation.ceo?.lastName || ''}\n\nStatus: Digitally Approved\nDate: ${deviation.ceoSignedAt ? format(new Date(deviation.ceoSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
+        cRemarks
+      ]);
     }
-    sigData.push([
-      'Quality Head',
-      `${deviation.qualityHead?.firstName} ${deviation.qualityHead?.lastName}\n\nStatus: Digitally Approved\nDate: ${deviation.qualityHeadSignedAt ? format(new Date(deviation.qualityHeadSignedAt), 'dd MMM yyyy, hh:mm a') : 'Pending'}`,
-      qRemarks
-    ]);
-  }
 
-  autoTable(doc, {
-    startY: currentY,
-    head: [['Role', 'Authority Name', 'Remarks']],
-    body: sigData,
-    theme: 'grid',
-    margin: { top: 35, bottom: 25 },
-    headStyles: { fillColor: [46, 204, 113], textColor: 255, fontSize: 10 },
-    styles: { fontSize: 9, cellPadding: 5 },
-    columnStyles: {
-      0: { fontStyle: 'bold', fillColor: [245, 245, 245], cellWidth: 40 },
-      1: { cellWidth: 60, fontStyle: 'bold', textColor: [40, 40, 40] },
-      2: { cellWidth: 'auto', fontStyle: 'italic', textColor: [80, 80, 80] }
+    if (deviation.qualityHeadId) {
+      let qRemarks = deviation.qualityHeadRemarks ? `"${deviation.qualityHeadRemarks}"` : 'Final Approval completed.';
+      if (deviation.qualityHeadAttachments && deviation.qualityHeadAttachments.length > 0) {
+        qRemarks += `\n\nAttachments: ${deviation.qualityHeadAttachments.map((f: any) => f.name).join(', ')}`;
+      }
+      sigData.push([
+        'Quality Head',
+        `${deviation.qualityHead?.firstName || ''} ${deviation.qualityHead?.lastName || ''}\n\nStatus: Digitally Approved\nDate: ${deviation.qualityHeadSignedAt ? format(new Date(deviation.qualityHeadSignedAt), 'dd-MMM-yy, hh:mm a') : 'Pending'}`,
+        qRemarks
+      ]);
     }
-  });
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Role', 'Authority Name', 'Remarks']],
+      body: sigData,
+      theme: 'grid',
+      margin: { top: 35, bottom: 25 },
+      headStyles: { fillColor: [46, 204, 113], textColor: 255, fontSize: 10 },
+      styles: { fontSize: 9, cellPadding: 5 },
+      columnStyles: {
+        0: { fontStyle: 'bold', fillColor: [245, 245, 245], cellWidth: 40 },
+        1: { cellWidth: 60, fontStyle: 'bold', textColor: [40, 40, 40] },
+        2: { cellWidth: 'auto', fontStyle: 'italic', textColor: [80, 80, 80] }
+      }
+    });
+  } else {
+    // Two-Phase Signature Tables (Initial Approval vs Quantity Update & Re-Approval)
+    // Phase 1: Initial Approval Table
+    const phase1Data: string[][] = [];
+
+    deviation.responsiblePersons?.forEach((rp: any) => {
+      phase1Data.push([
+        'Responsible Person',
+        `${rp.user?.firstName || ''} ${rp.user?.lastName || ''}\n\nStatus: Digitally Signed\nDate: ${rp.signedAt ? format(new Date(rp.signedAt), 'dd-MMM-yy, hh:mm a') : 'N/A'}`,
+        'Action plan submitted.'
+      ]);
+    });
+
+    if (deviation.marketingPersonId) {
+      let mRemarks = deviation.marketingRemarks ? `"${deviation.marketingRemarks}"` : 'No remarks provided.';
+      if (deviation.marketingAttachments && deviation.marketingAttachments.length > 0) {
+        mRemarks += `\n\nAttachments: ${deviation.marketingAttachments.map((f: any) => f.name).join(', ')}`;
+      }
+      phase1Data.push([
+        'Marketing Person',
+        `${deviation.marketingPerson?.firstName || ''} ${deviation.marketingPerson?.lastName || ''}\n\nStatus: Digitally Signed\nDate: ${deviation.marketingSignedAt ? format(new Date(deviation.marketingSignedAt), 'dd-MMM-yy, hh:mm a') : 'N/A'}`,
+        mRemarks
+      ]);
+    }
+
+    // Check pre-update approvals from plant head / CEO / Quality Head
+    if (deviation.plantHeadId && deviation.plantHeadSignedAt && qtyUpdateDate && new Date(deviation.plantHeadSignedAt) < qtyUpdateDate) {
+      phase1Data.push([
+        'Plant Head',
+        `${deviation.plantHead?.firstName || ''} ${deviation.plantHead?.lastName || ''}\n\nStatus: Digitally Approved\nDate: ${format(new Date(deviation.plantHeadSignedAt), 'dd-MMM-yy, hh:mm a')}`,
+        deviation.plantHeadRemarks ? `"${deviation.plantHeadRemarks}"` : 'Approved.'
+      ]);
+    }
+
+    if (deviation.ceoId && deviation.ceoSignedAt && qtyUpdateDate && new Date(deviation.ceoSignedAt) < qtyUpdateDate) {
+      phase1Data.push([
+        'CEO',
+        `${deviation.ceo?.firstName || ''} ${deviation.ceo?.lastName || ''}\n\nStatus: Digitally Approved\nDate: ${format(new Date(deviation.ceoSignedAt), 'dd-MMM-yy, hh:mm a')}`,
+        deviation.ceoRemarks ? `"${deviation.ceoRemarks}"` : 'Approved.'
+      ]);
+    }
+
+    if (deviation.qualityHeadId && deviation.qualityHeadSignedAt && qtyUpdateDate && new Date(deviation.qualityHeadSignedAt) < qtyUpdateDate) {
+      phase1Data.push([
+        'Quality Head',
+        `${deviation.qualityHead?.firstName || ''} ${deviation.qualityHead?.lastName || ''}\n\nStatus: Digitally Approved\nDate: ${format(new Date(deviation.qualityHeadSignedAt), 'dd-MMM-yy, hh:mm a')}`,
+        deviation.qualityHeadRemarks ? `"${deviation.qualityHeadRemarks}"` : 'Initial Closure completed.'
+      ]);
+    }
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Phase 1: Initial Approval Workflow', 'Authority Name', 'Remarks']],
+      body: phase1Data,
+      theme: 'grid',
+      margin: { top: 35, bottom: 25 },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255, fontSize: 10, fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 5 },
+      columnStyles: {
+        0: { fontStyle: 'bold', fillColor: [245, 245, 245], cellWidth: 50 },
+        1: { cellWidth: 60, fontStyle: 'bold', textColor: [40, 40, 40] },
+        2: { cellWidth: 'auto', fontStyle: 'italic', textColor: [80, 80, 80] }
+      },
+      didDrawPage: (data) => {
+        currentY = data.cursor ? data.cursor.y + 10 : currentY;
+      }
+    });
+
+    // Phase 2: Post Quantity-Update Re-Approval Table
+    const phase2Data: string[][] = [];
+
+    const updaterName = deviation.quantityUpdatedBy
+      ? `${deviation.quantityUpdatedBy.firstName} ${deviation.quantityUpdatedBy.lastName}`
+      : 'Responsible Person';
+    const updateDetails = `Quantities Updated:\n• Total Qty Produced: ${deviation.updatedTotalQuantityProduced} pcs (Initial: ${deviation.totalQuantityProduced} pcs)\n• Qty Under Dev (pcs): ${deviation.updatedQuantityUnderDeviation} pcs (Initial: ${deviation.quantityUnderDeviation} pcs)${deviation.updatedQuantityUnderDeviationPcs !== null && deviation.updatedQuantityUnderDeviationPcs !== undefined ? `\n• Qty Under Dev (sqm): ${deviation.updatedQuantityUnderDeviationPcs} sqm` : ''}`;
+
+    phase2Data.push([
+      'Quantity Update',
+      `${updaterName}\n\nStatus: Quantities Modified\nDate: ${format(qtyUpdateDate!, 'dd-MMM-yy, hh:mm a')}`,
+      updateDetails
+    ]);
+
+    if (deviation.plantHeadId && deviation.plantHeadSignedAt && qtyUpdateDate && new Date(deviation.plantHeadSignedAt) >= qtyUpdateDate) {
+      let pRemarks = deviation.plantHeadRemarks ? `"${deviation.plantHeadRemarks}"` : 'Updated quantity approved.';
+      if (deviation.plantHeadAttachments && deviation.plantHeadAttachments.length > 0) {
+        pRemarks += `\n\nAttachments: ${deviation.plantHeadAttachments.map((f: any) => f.name).join(', ')}`;
+      }
+      phase2Data.push([
+        'Plant Head Re-Approval',
+        `${deviation.plantHead?.firstName || ''} ${deviation.plantHead?.lastName || ''}\n\nStatus: Digitally Approved\nDate: ${format(new Date(deviation.plantHeadSignedAt), 'dd-MMM-yy, hh:mm a')}`,
+        pRemarks
+      ]);
+    }
+
+    if (deviation.ceoId && deviation.ceoSignedAt && qtyUpdateDate && new Date(deviation.ceoSignedAt) >= qtyUpdateDate) {
+      let cRemarks = deviation.ceoRemarks ? `"${deviation.ceoRemarks}"` : 'Updated quantity approved.';
+      if (deviation.ceoAttachments && deviation.ceoAttachments.length > 0) {
+        cRemarks += `\n\nAttachments: ${deviation.ceoAttachments.map((f: any) => f.name).join(', ')}`;
+      }
+      phase2Data.push([
+        'CEO Re-Approval',
+        `${deviation.ceo?.firstName || ''} ${deviation.ceo?.lastName || ''}\n\nStatus: Digitally Approved\nDate: ${format(new Date(deviation.ceoSignedAt), 'dd-MMM-yy, hh:mm a')}`,
+        cRemarks
+      ]);
+    }
+
+    if (deviation.qualityHeadId && deviation.qualityHeadSignedAt && qtyUpdateDate && new Date(deviation.qualityHeadSignedAt) >= qtyUpdateDate) {
+      let qRemarks = deviation.qualityHeadRemarks ? `"${deviation.qualityHeadRemarks}"` : 'Final Closure for updated quantity.';
+      if (deviation.qualityHeadAttachments && deviation.qualityHeadAttachments.length > 0) {
+        qRemarks += `\n\nAttachments: ${deviation.qualityHeadAttachments.map((f: any) => f.name).join(', ')}`;
+      }
+      phase2Data.push([
+        'Quality Head Final Closure',
+        `${deviation.qualityHead?.firstName || ''} ${deviation.qualityHead?.lastName || ''}\n\nStatus: Digitally Approved\nDate: ${format(new Date(deviation.qualityHeadSignedAt), 'dd-MMM-yy, hh:mm a')}`,
+        qRemarks
+      ]);
+    }
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Phase 2: Post-Update Re-Approval Workflow', 'Authority Name', 'Remarks / Details']],
+      body: phase2Data,
+      theme: 'grid',
+      margin: { top: 35, bottom: 25 },
+      headStyles: { fillColor: [46, 204, 113], textColor: 255, fontSize: 10, fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 5 },
+      columnStyles: {
+        0: { fontStyle: 'bold', fillColor: [245, 245, 245], cellWidth: 50 },
+        1: { cellWidth: 60, fontStyle: 'bold', textColor: [40, 40, 40] },
+        2: { cellWidth: 'auto', fontStyle: 'italic', textColor: [80, 80, 80] }
+      }
+    });
+  }
 
   const pageCount = (doc as any).internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
