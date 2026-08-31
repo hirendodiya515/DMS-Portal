@@ -17,6 +17,7 @@ import {
   UpdateObjectiveDto,
   CreateMeasurementDto,
   UpdateMeasurementDto,
+  CarryForwardDto,
 } from './dto/objectives.dto';
 
 @Controller('objectives')
@@ -37,8 +38,9 @@ export class ObjectivesController {
     @Query('status') status?: string,
     @Query('department') department?: string,
     @Query('search') search?: string,
+    @Query('financialYear') financialYear?: string,
   ) {
-    return this.objectivesService.findAll({ type, status, department, search });
+    return this.objectivesService.findAll({ type, status, department, search, financialYear });
   }
 
   @Get('dashboard')
@@ -46,8 +48,18 @@ export class ObjectivesController {
     @Query('type') type?: string,
     @Query('status') status?: string,
     @Query('search') search?: string,
+    @Query('financialYear') financialYear?: string,
   ) {
-    return this.objectivesService.getDashboardStats({ type, status, search });
+    return this.objectivesService.getDashboardStats({ type, status, search, financialYear });
+  }
+
+  @Post(':id/carryforward')
+  carryForward(
+    @Param('id') id: string,
+    @Body() carryForwardDto: CarryForwardDto,
+    @Request() req: any,
+  ) {
+    return this.objectivesService.carryForward(id, carryForwardDto, req.user.userId);
   }
 
   @Get(':id')

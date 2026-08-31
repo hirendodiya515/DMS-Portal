@@ -87,6 +87,15 @@ export class Objective {
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
   target: number;
 
+  @Column({ default: '2026-27' })
+  financialYear: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  monthlyTargets?: Record<string, number>;
+
+  @Column({ nullable: true })
+  carriedFromId: string;
+
   @Column({ default: true })
   higherIsBetter: boolean;
 

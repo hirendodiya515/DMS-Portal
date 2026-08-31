@@ -6,11 +6,12 @@ import {
 import { 
   Search, Filter, CheckCircle2, AlertCircle, Clock, 
   ChevronDown, LayoutDashboard, Database,
-  Calendar, User, FileText, CheckSquare, XCircle, Loader2, Eye
+  Calendar, User, FileText, CheckSquare, XCircle, Loader2, Eye, Sparkles
 } from 'lucide-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PreAuditBriefingModal } from '../../components/audit/PreAuditBriefingModal';
 
 interface NC {
   executionId: string;
@@ -54,6 +55,7 @@ export default function NCTrackingPage() {
   const [closing, setClosing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isViewOnly, setIsViewOnly] = useState(false);
+  const [briefingState, setBriefingState] = useState<{ isOpen: boolean; department?: string }>({ isOpen: false });
 
   const [closureData, setClosureData] = useState({
     rootCause: '',
@@ -255,6 +257,15 @@ export default function NCTrackingPage() {
             </select>
             <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
+
+          <button
+            onClick={() => setBriefingState({ isOpen: true, department: user?.department || 'Planning' })}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold text-sm rounded-xl shadow-sm transition-all"
+            title="AI Pre-Audit Briefing & Risk Predictor"
+          >
+            <Sparkles className="w-4 h-4 animate-pulse" />
+            <span>AI Risk Briefing</span>
+          </button>
         </div>
       </div>
 
@@ -773,6 +784,12 @@ export default function NCTrackingPage() {
         )}
       </AnimatePresence>
       
+      <PreAuditBriefingModal
+        isOpen={briefingState.isOpen}
+        onClose={() => setBriefingState({ isOpen: false })}
+        department={briefingState.department}
+      />
+
       <style>{`
         .glassmorphism {
           background: rgba(255, 255, 255, 0.95);

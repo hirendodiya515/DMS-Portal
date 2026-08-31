@@ -36,6 +36,14 @@ export class CreateObjectiveDto {
   @IsString()
   department?: string;
 
+  @IsOptional()
+  @IsString()
+  ownerId?: string;
+
+  @IsOptional()
+  @IsString()
+  financialYear?: string;
+
   @IsString()
   uom: string; // Unit of Measure from master data
 
@@ -44,6 +52,9 @@ export class CreateObjectiveDto {
 
   @IsNumber()
   target: number;
+
+  @IsOptional()
+  monthlyTargets?: Record<string, number>;
 
   @IsOptional()
   @IsBoolean()
@@ -82,6 +93,14 @@ export class UpdateObjectiveDto {
   department?: string;
 
   @IsOptional()
+  @IsString()
+  ownerId?: string;
+
+  @IsOptional()
+  @IsString()
+  financialYear?: string;
+
+  @IsOptional()
   @IsEnum(ObjectiveStatus)
   status?: ObjectiveStatus;
 
@@ -96,6 +115,9 @@ export class UpdateObjectiveDto {
   @IsOptional()
   @IsNumber()
   target?: number;
+
+  @IsOptional()
+  monthlyTargets?: Record<string, number>;
 
   @IsOptional()
   @IsBoolean()
@@ -114,6 +136,18 @@ export class UpdateObjectiveDto {
   @IsOptional()
   @IsString()
   aggregationType?: string;
+}
+
+export class CarryForwardDto {
+  @IsString()
+  targetFinancialYear: string;
+
+  @IsOptional()
+  @IsNumber()
+  target?: number;
+
+  @IsOptional()
+  monthlyTargets?: Record<string, number>;
 }
 
 export class CreateMeasurementDto {

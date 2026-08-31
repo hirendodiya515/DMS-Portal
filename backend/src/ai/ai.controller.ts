@@ -34,6 +34,8 @@ export class AiController {
         const { message, context } = chatDto;
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Transfer-Encoding', 'chunked');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
 
         const abortController = new AbortController();
         req.on('close', () => {
@@ -45,13 +47,18 @@ export class AiController {
                 message, 
                 context || '', 
                 (chunk: string) => {
-                    res.write(chunk);
+                    if (!abortController.signal.aborted) {
+                        res.write(chunk);
+                        if (typeof (res as any).flush === 'function') {
+                            (res as any).flush();
+                        }
+                    }
                 },
                 abortController.signal
             );
         } catch (err) {
             if (!abortController.signal.aborted) {
-                res.write(`⚠️ Connection Error: ${err.message}`);
+                res.write(`\n⚠️ Connection Error: ${err.message}`);
             }
         } finally {
             res.end();

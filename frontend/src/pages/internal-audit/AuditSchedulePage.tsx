@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Play, Calendar, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Play, Calendar, User, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
+import { PreAuditBriefingModal } from '../../components/audit/PreAuditBriefingModal';
 
 interface AuditSchedule {
   id: string;
@@ -28,6 +29,7 @@ export default function AuditSchedulePage() {
   const [editingItem, setEditingItem] = useState<AuditSchedule | null>(null);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [selectedMonthStr, setSelectedMonthStr] = useState<string>('');
+  const [briefingModalState, setBriefingModalState] = useState<{ isOpen: boolean; scheduleId?: string; department?: string }>({ isOpen: false });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -288,6 +290,13 @@ export default function AuditSchedulePage() {
                                 </button>
                             </>
                         )}
+                        <button 
+                            className="p-1.5 hover:bg-amber-50 bg-amber-500/10 text-amber-600 rounded border border-amber-200/60 transition-colors"
+                            title="AI Pre-Audit Briefing & Repeat NC Predictor"
+                            onClick={() => setBriefingModalState({ isOpen: true, scheduleId: item.id, department: item.department })}
+                        >
+                            <Sparkles className="w-3.5 h-3.5" />
+                        </button>
                         {(isAdmin || item.status !== 'Completed') && (
                             <button 
                                 className="p-1.5 hover:bg-blue-50 bg-slate-50 rounded text-slate-400 hover:text-blue-600 transition-colors border border-slate-200"
@@ -410,6 +419,13 @@ export default function AuditSchedulePage() {
           </div>
         </div>
       )}
+
+      <PreAuditBriefingModal
+        isOpen={briefingModalState.isOpen}
+        onClose={() => setBriefingModalState({ isOpen: false })}
+        scheduleId={briefingModalState.scheduleId}
+        department={briefingModalState.department}
+      />
     </div>
   );
 }

@@ -6,48 +6,55 @@ import {
   Target,
   Activity,
   X,
-  Trash2
+  Trash2,
+  Calendar,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import api from '../lib/api';
 import { format } from 'date-fns';
 import { useAuthStore } from '../stores/authStore';
 import { v4 as uuidv4 } from 'uuid';
+import type { Objective, Measurement } from '../types/objective';
 
-// Import new components
+// Import sub components
 import { ObjectivesList } from './objectives/ObjectivesList';
 import { ObjectivesHighlights } from './objectives/ObjectivesHighlights';
 import { ObjectivesLogs } from './objectives/ObjectivesLogs';
 import { ObjectiveDetailView } from './objectives/ObjectiveDetailView';
 import { ObjectivesTracking } from './objectives/ObjectivesTracking';
 
-interface Measurement {
-  id: string;
-  actualValue: number;
-  measurementDate: string;
-  remarks?: string;
-  subValues?: { subTargetId: string; value: number }[];
+export const FY_MONTH_KEYS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+
+export function getCurrentFY(): string {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const fyStartYear = currentMonth < 3 ? currentYear - 1 : currentYear;
+  return `FY ${fyStartYear}-${(fyStartYear + 1).toString().slice(-2)}`;
 }
 
-interface Objective {
+export function getFYOptions(): string[] {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentFYStart = currentMonth < 3 ? currentYear - 1 : currentYear;
+  
+  const options = [];
+  for (let i = 1; i >= -3; i--) {
+    const startYear = currentFYStart + i;
+    options.push(`FY ${startYear}-${(startYear + 1).toString().slice(-2)}`);
+  }
+  return options;
+}
+
+interface UserItem {
   id: string;
-  objectiveNumber: string;
-  name: string;
-  description: string;
-  type: 'quality' | 'environmental' | 'safety';
-  department: string;
-  status: 'active' | 'completed' | 'cancelled' | 'on_hold';
-  uom: string;
-  frequency: string;
-  target: number;
-  higherIsBetter: boolean;
-  measurements: Measurement[];
-  latestValue?: number | null;
-  progress?: number;
-  progressStatus?: string;
-  createdAt: string;
-  hasSubTargets?: boolean;
-  aggregationType?: 'sum' | 'average';
-  subTargets?: { id: string; name: string; target?: number }[];
+  firstName: string;
+  lastName: string;
+  email?: string;
+  department?: string;
 }
 
 interface DashboardStats {
@@ -76,30 +83,28 @@ const FREQUENCY_OPTIONS = [
 
 const DEFAULT_UOM_LIST = ['Number', 'Percentage', 'Currency', 'Days', 'Count', 'Rating'];
 
-function getFYLabel(): string {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  const fyStartYear = currentMonth < 3 ? currentYear - 1 : currentYear;
-  return `FY ${fyStartYear}-${(fyStartYear + 1).toString().slice(-2)}`;
-}
-
 export default function ObjectivesPage() {
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [departments, setDepartments] = useState<string[]>([]);
+  const [usersList, setUsersList] = useState<UserItem[]>([]);
   const [uomList, setUomList] = useState<string[]>(DEFAULT_UOM_LIST);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterDepartment, setFilterDepartment] = useState('all');
+  
+  // Year selector state
+  const [selectedFY, setSelectedFY] = useState<string>(getCurrentFY());
+  
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showMeasurementModal, setShowMeasurementModal] = useState(false);
+  const [showCarryForwardModal, setShowCarryForwardModal] = useState(false);
   const [selectedObjective, setSelectedObjective] = useState<Objective | null>(null);
   const [measurementToEdit, setMeasurementToEdit] = useState<Measurement | null>(null);
 
-  // New states for Tabs and Views
+  // Tabs and Views
   const [activeTab, setActiveTab] = useState<'highlights' | 'objectives' | 'tracking' | 'logs'>('objectives');
   const [viewingObjective, setViewingObjective] = useState<Objective | null>(null);
 
@@ -110,17 +115,19 @@ export default function ObjectivesPage() {
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, []); // Fetch all data initially, components handle local filtering
+    fetchData(selectedFY);
+  }, [selectedFY]);
 
   const fetchMasterData = async () => {
     try {
-      const [deptRes, uomRes] = await Promise.all([
+      const [deptRes, uomRes, usersRes] = await Promise.all([
         api.get('/settings/departments'),
         api.get('/settings/uom_list'),
+        api.get('/users'),
       ]);
       setDepartments(deptRes.data || ['HR', 'IT', 'Finance', 'Operations', 'Quality']);
       setUomList(uomRes.data?.length > 0 ? uomRes.data : DEFAULT_UOM_LIST);
+      setUsersList(usersRes.data || []);
     } catch (error) {
       console.error('Error fetching master data:', error);
       setDepartments(['HR', 'IT', 'Finance', 'Operations', 'Quality']);
@@ -128,11 +135,12 @@ export default function ObjectivesPage() {
     }
   };
 
-  const fetchData = async () => {
+  const fetchData = async (fy?: string) => {
     try {
       setLoading(true);
+      const fyClean = fy ? fy.replace('FY ', '') : selectedFY.replace('FY ', '');
       const dashboardRes = await api.get('/objectives/dashboard', {
-        params: { }, // Fetch all data
+        params: { financialYear: fyClean === 'all' ? undefined : fyClean },
       });
       const fetchedObjectives = dashboardRes.data.objectives || [];
       setObjectives(fetchedObjectives);
@@ -164,6 +172,11 @@ export default function ObjectivesPage() {
     setShowEditModal(true);
   };
 
+  const handleCarryForward = (objective: Objective) => {
+    setSelectedObjective(objective);
+    setShowCarryForwardModal(true);
+  };
+
   const handleEditMeasurement = (measurement: Measurement, obj: Objective) => {
     setMeasurementToEdit(measurement);
     setSelectedObjective(obj);
@@ -180,6 +193,8 @@ export default function ObjectivesPage() {
     }
   };
 
+  const fyOptions = getFYOptions();
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {viewingObjective ? (
@@ -188,6 +203,7 @@ export default function ObjectivesPage() {
           objective={viewingObjective}
           onBack={() => setViewingObjective(null)}
           onEdit={handleEdit}
+          onCarryForward={handleCarryForward}
           onDelete={(id) => {
             handleDelete(id);
             setViewingObjective(null);
@@ -204,12 +220,12 @@ export default function ObjectivesPage() {
       ) : (
         // Tabbed Mode
         <>
-          {/* Header Layout for Tabs */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+          {/* Header Layout for Tabs & Controls */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div className="flex flex-col gap-3">
               <div>
                 <h1 className="text-3xl font-bold text-slate-800 leading-tight">Objectives & KPIs</h1>
-                <p className="text-sm text-slate-500 mt-1">Track and monitor organizational objectives • {getFYLabel()}</p>
+                <p className="text-sm text-slate-500 mt-1">Track and monitor organizational objectives</p>
               </div>
               
               {/* Tabs inline under title */}
@@ -261,21 +277,40 @@ export default function ObjectivesPage() {
               </div>
             </div>
             
-            {(!viewingObjective && (
-              ['admin', 'compliance_manager', 'creator', 'reviewer', 'dept_head'].includes(user?.role || '')
-            )) && (
-              <button
-                onClick={() => {
-                  setSelectedObjective(null);
-                  setShowCreateModal(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm self-start md:self-auto h-fit"
-              >
-                <Plus className="w-4 h-4" />
-                New Objective
-              </button>
-            )}
+            {/* Header Right Actions: Year Selector + New Objective Button */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-white px-3 py-2 border border-slate-200 rounded-lg shadow-sm">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-semibold text-slate-500 uppercase">Year:</span>
+                <select
+                  value={selectedFY}
+                  onChange={(e) => setSelectedFY(e.target.value)}
+                  className="bg-transparent text-sm font-bold text-slate-800 focus:outline-none cursor-pointer"
+                >
+                  <option value="all">All Financial Years</option>
+                  {fyOptions.map((fy) => (
+                    <option key={fy} value={fy}>
+                      {fy}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {['admin', 'compliance_manager', 'creator', 'reviewer', 'dept_head'].includes(user?.role || '') && (
+                <button
+                  onClick={() => {
+                    setSelectedObjective(null);
+                    setShowCreateModal(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Objective
+                </button>
+              )}
+            </div>
           </div>
+
           {/* Tab Content */}
           {activeTab === 'highlights' && (
             <ObjectivesHighlights stats={dashboardStats} />
@@ -292,13 +327,15 @@ export default function ObjectivesPage() {
               filterDepartment={filterDepartment}
               setFilterDepartment={setFilterDepartment}
               departments={departments}
-              onViewDetails={setViewingObjective}
+              selectedFY={selectedFY}
+              onViewDetails={(obj) => setViewingObjective(obj)}
               onAddMeasurement={(obj) => {
                 setSelectedObjective(obj);
                 setMeasurementToEdit(null);
                 setShowMeasurementModal(true);
               }}
               onEdit={handleEdit}
+              onCarryForward={handleCarryForward}
               onDelete={handleDelete}
               user={user}
             />
@@ -309,7 +346,8 @@ export default function ObjectivesPage() {
                objectives={objectives} 
                loading={loading}
                departments={departments}
-               onViewDetails={setViewingObjective}
+               selectedFY={selectedFY}
+               onViewDetails={(obj) => setViewingObjective(obj)}
              />
           )}
 
@@ -327,7 +365,9 @@ export default function ObjectivesPage() {
         <ObjectiveFormModal
           mode="create"
           departments={departments}
+          usersList={usersList}
           uomList={uomList}
+          defaultFY={selectedFY === 'all' ? getCurrentFY() : selectedFY}
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
@@ -342,13 +382,31 @@ export default function ObjectivesPage() {
           mode="edit"
           objective={selectedObjective}
           departments={departments}
+          usersList={usersList}
           uomList={uomList}
+          defaultFY={selectedObjective.financialYear ? `FY ${selectedObjective.financialYear}` : getCurrentFY()}
           onClose={() => {
             setShowEditModal(false);
             setSelectedObjective(null);
           }}
           onSuccess={() => {
             setShowEditModal(false);
+            setSelectedObjective(null);
+            fetchData();
+          }}
+        />
+      )}
+
+      {/* Carry Forward Modal */}
+      {showCarryForwardModal && selectedObjective && (
+        <CarryForwardModal
+          objective={selectedObjective}
+          onClose={() => {
+            setShowCarryForwardModal(false);
+            setSelectedObjective(null);
+          }}
+          onSuccess={() => {
+            setShowCarryForwardModal(false);
             setSelectedObjective(null);
             fetchData();
           }}
@@ -382,22 +440,32 @@ function ObjectiveFormModal({
   mode,
   objective,
   departments,
+  usersList,
   uomList,
+  defaultFY,
   onClose, 
   onSuccess 
 }: { 
   mode: 'create' | 'edit';
   objective?: Objective;
   departments: string[];
+  usersList: UserItem[];
   uomList: string[];
+  defaultFY: string;
   onClose: () => void; 
   onSuccess: () => void;
 }) {
+  const initialFY = objective?.financialYear 
+    ? (objective.financialYear.startsWith('FY') ? objective.financialYear : `FY ${objective.financialYear}`)
+    : defaultFY;
+
   const [formData, setFormData] = useState({
     name: objective?.name || '',
     description: objective?.description || '',
     type: (objective?.type as string) || 'quality',
     department: objective?.department || '',
+    ownerId: objective?.ownerId || objective?.owner?.id || '',
+    financialYear: initialFY.replace('FY ', ''),
     uom: objective?.uom || (uomList.length > 0 ? uomList[0] : 'Number'),
     frequency: objective?.frequency || 'monthly',
     target: objective?.target?.toString() || '',
@@ -406,7 +474,10 @@ function ObjectiveFormModal({
     hasSubTargets: objective?.hasSubTargets ?? false,
     aggregationType: objective?.aggregationType || 'sum',
     subTargets: objective?.subTargets || [] as { id: string; name: string; target: number }[],
+    monthlyTargets: objective?.monthlyTargets || FY_MONTH_KEYS.reduce((acc, m) => ({ ...acc, [m]: '' }), {} as Record<string, string | number>),
   });
+
+  const [showMonthlyTargetGrid, setShowMonthlyTargetGrid] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Auto-calculate main target whenever subTargets or aggregationType changes
@@ -423,6 +494,37 @@ function ObjectiveFormModal({
       }));
     }
   }, [formData.subTargets, formData.aggregationType, formData.hasSubTargets]);
+
+  // Apply base target across all months if user updates base target
+  const handleBaseTargetChange = (val: string) => {
+    setFormData(prev => {
+      const newMonthly = { ...prev.monthlyTargets };
+      FY_MONTH_KEYS.forEach(m => {
+        newMonthly[m] = val;
+      });
+      return {
+        ...prev,
+        target: val,
+        monthlyTargets: newMonthly
+      };
+    });
+  };
+
+  const handleMonthlyTargetChange = (monthKey: string, val: string) => {
+    setFormData(prev => {
+      const updated = { ...prev.monthlyTargets, [monthKey]: val };
+      const monthIdx = FY_MONTH_KEYS.indexOf(monthKey);
+      if (monthIdx !== -1) {
+        for (let i = monthIdx + 1; i < FY_MONTH_KEYS.length; i++) {
+          const nextKey = FY_MONTH_KEYS[i];
+          if (!updated[nextKey] || updated[nextKey] === '') {
+            updated[nextKey] = val;
+          }
+        }
+      }
+      return { ...prev, monthlyTargets: updated };
+    });
+  };
 
   const handleAddSubTarget = () => {
     setFormData((prev: any) => ({
@@ -449,9 +551,39 @@ function ObjectiveFormModal({
     e.preventDefault();
     setLoading(true);
     try {
+      const finalMonthlyTargets: Record<string, number> = {};
+      let lastVal = parseFloat(formData.target) || 0;
+
+      FY_MONTH_KEYS.forEach(m => {
+        const valStr = formData.monthlyTargets[m];
+        if (valStr !== undefined && valStr !== null && valStr !== '') {
+          const num = parseFloat(valStr.toString());
+          if (!isNaN(num)) {
+            finalMonthlyTargets[m] = num;
+            lastVal = num;
+          } else {
+            finalMonthlyTargets[m] = lastVal;
+          }
+        } else {
+          finalMonthlyTargets[m] = lastVal;
+        }
+      });
+
       const payload = {
-        ...formData,
-        target: parseFloat(formData.target),
+        name: formData.name,
+        description: formData.description,
+        type: formData.type,
+        department: formData.department,
+        ownerId: formData.ownerId || undefined,
+        financialYear: formData.financialYear,
+        uom: formData.uom,
+        frequency: formData.frequency,
+        target: parseFloat(formData.target) || 0,
+        monthlyTargets: finalMonthlyTargets,
+        higherIsBetter: formData.higherIsBetter,
+        status: formData.status,
+        hasSubTargets: formData.hasSubTargets,
+        aggregationType: formData.aggregationType,
         subTargets: formData.hasSubTargets ? formData.subTargets.map((st: any) => ({
           ...st,
           target: parseFloat(st.target) || 0
@@ -472,57 +604,81 @@ function ObjectiveFormModal({
     }
   };
 
+  const fyOptions = getFYOptions();
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl w-full max-w-lg mx-4 shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
-          <h2 className="text-xl font-bold text-slate-800">
-            {mode === 'create' ? 'Create New Objective' : 'Edit Objective'}
-          </h2>
-          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-2xl mx-4 shadow-xl max-h-[90vh] flex flex-col">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between shrink-0 bg-slate-50 rounded-t-xl">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">
+              {mode === 'create' ? 'Create New Objective' : 'Edit Objective'}
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">Assigned for Financial Year {formData.financialYear}</p>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded text-slate-500">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Name *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Objective Name *</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g., Customer Satisfaction Rate"
+              placeholder="e.g., Customer Satisfaction Index"
               className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
               required
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={2}
+              placeholder="Detailed description of objective..."
               className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Financial Year *</label>
+              <select
+                value={`FY ${formData.financialYear}`}
+                onChange={(e) => setFormData({ ...formData, financialYear: e.target.value.replace('FY ', '') })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                required
+              >
+                {fyOptions.map((fy) => (
+                  <option key={fy} value={fy}>{fy}</option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Type *</label>
               <select
                 value={formData.type}
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white"
               >
                 <option value="quality">QMS (ISO 9001)</option>
                 <option value="environmental">EMS (ISO 14001)</option>
                 <option value="safety">OHSMS (ISO 45001)</option>
               </select>
             </div>
+
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Department *</label>
               <select
                 value={formData.department}
                 onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 required
               >
                 <option value="">Select Department</option>
@@ -532,55 +688,112 @@ function ObjectiveFormModal({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">UOM *</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Objective Owner *</label>
               <select
-                value={formData.uom}
-                onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                value={formData.ownerId}
+                onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white"
               >
-                {uomList.map((uom) => (
-                  <option key={uom} value={uom}>{uom}</option>
+                <option value="">Select Owner User</option>
+                {usersList.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.firstName} {u.lastName} {u.department ? `(${u.department})` : ''}
+                  </option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Frequency *</label>
-              <select
-                value={formData.frequency}
-                onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                {FREQUENCY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">UOM *</label>
+                <select
+                  value={formData.uom}
+                  onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                >
+                  {uomList.map((uom) => (
+                    <option key={uom} value={uom}>{uom}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Frequency *</label>
+                <select
+                  value={formData.frequency}
+                  onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                >
+                  {FREQUENCY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Target *</label>
+
+          {/* Base Target */}
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-semibold text-slate-800">Target Value *</label>
+                <p className="text-xs text-slate-500">Base target or default target applied across months</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMonthlyTargetGrid(!showMonthlyTargetGrid)}
+                className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200"
+              >
+                {showMonthlyTargetGrid ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                {showMonthlyTargetGrid ? 'Hide Monthly Targets' : 'Customize Month-by-Month Targets'}
+              </button>
+            </div>
+
             <input
               type="number"
               step="0.01"
               value={formData.target}
-              onChange={(e) => setFormData({ ...formData, target: e.target.value })}
-              placeholder="e.g., 95"
-              className={`w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 ${formData.hasSubTargets ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''}`}
+              onChange={(e) => handleBaseTargetChange(e.target.value)}
+              placeholder="e.g. 95"
+              className={`w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white ${formData.hasSubTargets ? 'opacity-70 cursor-not-allowed' : ''}`}
               required
               readOnly={formData.hasSubTargets}
             />
-            {formData.hasSubTargets && (
-              <p className="text-xs text-slate-500 mt-1 italic">Automatically calculated based on sub-targets and aggregation method.</p>
+
+            {/* Monthly Targets Grid */}
+            {showMonthlyTargetGrid && (
+              <div className="pt-3 border-t border-slate-200 animate-in fade-in duration-200">
+                <p className="text-xs font-medium text-slate-600 mb-2">
+                  Monthly Target Breakdown (FY {formData.financialYear}: Apr - Mar). Cascades to subsequent months if left empty.
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                  {FY_MONTH_KEYS.map((m) => (
+                    <div key={m} className="bg-white p-2 rounded-lg border border-slate-200">
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase text-center mb-1">{m}</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.monthlyTargets[m] ?? ''}
+                        onChange={(e) => handleMonthlyTargetChange(m, e.target.value)}
+                        placeholder={formData.target || '0'}
+                        className="w-full text-center px-1 py-1 text-xs border border-slate-200 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
+
           {mode === 'edit' && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
               <select
                 value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm"
               >
                 <option value="active">Active</option>
                 <option value="completed">Completed</option>
@@ -589,41 +802,43 @@ function ObjectiveFormModal({
               </select>
             </div>
           )}
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-2 pt-2">
             <input
               type="checkbox"
               id="higherIsBetter"
               checked={formData.higherIsBetter}
               onChange={(e) => setFormData({ ...formData, higherIsBetter: e.target.checked })}
-              className="w-4 h-4 rounded border-slate-300"
+              className="w-4 h-4 rounded border-slate-300 text-blue-600"
             />
             <label htmlFor="higherIsBetter" className="text-sm text-slate-700">
-              Higher value is better (uncheck for metrics like defects)
+              Higher value is better (uncheck for defect / incident reduction KPIs)
             </label>
           </div>
-          
+
+          {/* Sub-Targets / Line-wise */}
           <div className="pt-4 border-t border-slate-200">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   id="hasSubTargets"
                   checked={formData.hasSubTargets}
                   onChange={(e) => setFormData({ ...formData, hasSubTargets: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-300"
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600"
                 />
-                <label htmlFor="hasSubTargets" className="font-medium text-slate-700">
-                  Track Sub-Objectives (Line-wise details)
+                <label htmlFor="hasSubTargets" className="font-medium text-slate-700 text-sm">
+                  Track Sub-Objectives (Line-wise breakdown)
                 </label>
               </div>
               {formData.hasSubTargets && (
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-slate-700">Aggregation:</label>
+                    <label className="text-xs font-medium text-slate-700">Aggregation:</label>
                     <select
                       value={formData.aggregationType}
                       onChange={(e) => setFormData({ ...formData, aggregationType: e.target.value as 'sum' | 'average' })}
-                      className="text-sm border border-slate-200 rounded-md py-1 px-2 focus:ring-2 focus:ring-blue-500"
+                      className="text-xs border border-slate-200 rounded-md py-1 px-2 focus:ring-2 focus:ring-blue-500 bg-white"
                     >
                       <option value="sum">Sum</option>
                       <option value="average">Average</option>
@@ -632,29 +847,29 @@ function ObjectiveFormModal({
                   <button
                     type="button"
                     onClick={handleAddSubTarget}
-                    className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                    className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
                   >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-3.5 h-3.5" />
                     Add Line
                   </button>
                 </div>
               )}
             </div>
-            
+
             {formData.hasSubTargets && (
-              <div className="space-y-3 pl-6 border-l-2 border-slate-100">
+              <div className="space-y-2 pl-4 border-l-2 border-slate-200">
                 {formData.subTargets.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic">Click "Add Line" to define sub-components.</p>
+                  <p className="text-xs text-slate-400 italic">Click "Add Line" to define sub-components.</p>
                 ) : (
                   formData.subTargets.map((st: any, index: number) => (
                     <div key={st.id} className="flex items-center gap-2">
-                      <span className="text-sm text-slate-400 w-6">{index + 1}.</span>
+                      <span className="text-xs text-slate-400 w-5">{index + 1}.</span>
                       <input
                         type="text"
                         value={st.name}
                         onChange={(e) => handleSubTargetChange(st.id, 'name', e.target.value)}
-                        placeholder="e.g. Line 1"
-                        className="flex-1 px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500"
+                        placeholder="Line / Sub-target Name"
+                        className="flex-1 px-3 py-1.5 text-xs border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500"
                         required
                       />
                       <input
@@ -663,13 +878,13 @@ function ObjectiveFormModal({
                         value={st.target}
                         onChange={(e) => handleSubTargetChange(st.id, 'target', e.target.value)}
                         placeholder="Target"
-                        className="w-24 px-3 py-1.5 text-sm border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500"
+                        className="w-24 px-3 py-1.5 text-xs border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500"
                         required
                       />
                       <button
                         type="button"
                         onClick={() => handleRemoveSubTarget(st.id)}
-                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md"
+                        className="p-1 text-red-400 hover:text-red-600 rounded-md"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -680,20 +895,173 @@ function ObjectiveFormModal({
             )}
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50"
+              className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-lg hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
               {loading ? 'Saving...' : (mode === 'create' ? 'Create Objective' : 'Save Changes')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Carry Forward Objective Modal Component
+function CarryForwardModal({
+  objective,
+  onClose,
+  onSuccess,
+}: {
+  objective: Objective;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const currentFY = objective.financialYear || getCurrentFY().replace('FY ', '');
+  const nextFYStart = parseInt(currentFY.split('-')[0], 10) + 1;
+  const defaultNextFY = `FY ${nextFYStart}-${(nextFYStart + 1).toString().slice(-2)}`;
+
+  const [targetFY, setTargetFY] = useState(defaultNextFY);
+  const [target, setTarget] = useState(objective.target.toString());
+  const [monthlyTargets, setMonthlyTargets] = useState<Record<string, string | number>>(
+    objective.monthlyTargets || FY_MONTH_KEYS.reduce((acc, m) => ({ ...acc, [m]: objective.target }), {} as Record<string, string | number>)
+  );
+  const [loading, setLoading] = useState(false);
+
+  const fyOptions = getFYOptions();
+
+  const handleCarryForwardSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const finalMonthly: Record<string, number> = {};
+      let lastVal = parseFloat(target) || 0;
+      FY_MONTH_KEYS.forEach(m => {
+        const valStr = monthlyTargets[m];
+        if (valStr !== undefined && valStr !== null && valStr !== '') {
+          const num = parseFloat(valStr.toString());
+          finalMonthly[m] = !isNaN(num) ? num : lastVal;
+          if (!isNaN(num)) lastVal = num;
+        } else {
+          finalMonthly[m] = lastVal;
+        }
+      });
+
+      await api.post(`/objectives/${objective.id}/carryforward`, {
+        targetFinancialYear: targetFY.replace('FY ', ''),
+        target: parseFloat(target) || 0,
+        monthlyTargets: finalMonthly,
+      });
+
+      onSuccess();
+    } catch (error) {
+      console.error('Error carrying forward objective:', error);
+      alert('Failed to carry forward objective');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-lg shadow-xl flex flex-col">
+        <div className="p-6 border-b border-slate-200 flex items-center justify-between shrink-0 bg-blue-50 rounded-t-xl">
+          <div className="flex items-center gap-2">
+            <ArrowRight className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-bold text-slate-800">Carry Forward Objective</h2>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded text-slate-500">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleCarryForwardSubmit} className="p-6 space-y-4">
+          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <p className="text-xs text-slate-500 uppercase font-semibold">Selected Objective</p>
+            <p className="text-base font-bold text-slate-800 mt-0.5">{objective.name}</p>
+            <p className="text-xs text-slate-500 mt-1">Current Financial Year: <span className="font-semibold text-slate-700">FY {currentFY}</span></p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Carry Forward to FY *</label>
+            <select
+              value={targetFY}
+              onChange={(e) => setTargetFY(e.target.value)}
+              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white font-medium text-slate-800"
+              required
+            >
+              {fyOptions.map(fy => (
+                <option key={fy} value={fy}>{fy}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Target for New Year *</label>
+            <input
+              type="number"
+              step="0.01"
+              value={target}
+              onChange={(e) => {
+                const val = e.target.value;
+                setTarget(val);
+                setMonthlyTargets(prev => {
+                  const updated = { ...prev };
+                  FY_MONTH_KEYS.forEach(m => { updated[m] = val; });
+                  return updated;
+                });
+              }}
+              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-2">
+              Monthly Targets for {targetFY}
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {FY_MONTH_KEYS.map((m) => (
+                <div key={m} className="bg-slate-50 p-2 rounded border border-slate-200 text-center">
+                  <span className="block text-[10px] font-bold text-slate-500 uppercase">{m}</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={monthlyTargets[m] ?? ''}
+                    onChange={(e) => setMonthlyTargets({ ...monthlyTargets, [m]: e.target.value })}
+                    placeholder={target}
+                    className="w-full text-center px-1 py-1 text-xs border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 bg-white mt-1"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-slate-200 text-sm font-medium rounded-lg hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? 'Processing...' : 'Confirm & Carry Forward'}
             </button>
           </div>
         </form>

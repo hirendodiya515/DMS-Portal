@@ -11,6 +11,7 @@ import {
   UpdateObjectiveDto,
   CreateMeasurementDto,
   UpdateMeasurementDto,
+  CarryForwardDto,
 } from './dto/objectives.dto';
 
 @Injectable()
@@ -58,40 +59,50 @@ export class ObjectivesService {
   // ================== OBJECTIVES ==================
 
   async create(createDto: CreateObjectiveDto, userId: string): Promise<Objective> {
-    // 1. Find Dept Head or Reviewer for the selected department
-    let assignedOwnerId = userId; // Fallback to creator
-    if (createDto.department) {
-      // Try finding department head first
-      let deptManager = await this.userRepository.findOne({
-        where: { department: createDto.department, role: UserRole.DEPT_HEAD, isActive: true },
-      });
+    let assignedOwnerId = createDto.ownerId;
 
-      // If no dept head, try finding a reviewer for that department
-      if (!deptManager) {
-        deptManager = await this.userRepository.findOne({
-          where: { department: createDto.department, role: UserRole.REVIEWER, isActive: true },
+    // If ownerId not explicitly provided, try to find Dept Head or Reviewer for department
+    if (!assignedOwnerId) {
+      assignedOwnerId = userId; // Fallback to creator
+      if (createDto.department) {
+        let deptManager = await this.userRepository.findOne({
+          where: { department: createDto.department, role: UserRole.DEPT_HEAD, isActive: true },
         });
-      }
 
-      if (deptManager) {
-        assignedOwnerId = deptManager.id;
+        if (!deptManager) {
+          deptManager = await this.userRepository.findOne({
+            where: { department: createDto.department, role: UserRole.REVIEWER, isActive: true },
+          });
+        }
+
+        if (deptManager) {
+          assignedOwnerId = deptManager.id;
+        }
       }
     }
 
     const objective = this.objectiveRepository.create({
-      ...createDto,
-      objectiveNumber: this.generateObjectiveNumber(),
+      name: createDto.name,
+      description: createDto.description,
+      type: createDto.type,
+      department: createDto.department,
+      uom: createDto.uom,
+      frequency: createDto.frequency,
+      target: createDto.target,
       ownerId: assignedOwnerId,
+      financialYear: createDto.financialYear || '2026-27',
+      monthlyTargets: createDto.monthlyTargets || undefined,
       status: ObjectiveStatus.ACTIVE,
       higherIsBetter: createDto.higherIsBetter ?? true,
       hasSubTargets: createDto.hasSubTargets ?? false,
       aggregationType: createDto.aggregationType || 'sum',
       subTargets: createDto.subTargets || [],
+      objectiveNumber: this.generateObjectiveNumber(),
     });
 
     const savedObjective = await this.objectiveRepository.save(objective);
     
-    await this.logAction(AuditAction.CREATE, userId, savedObjective.id, `Objective "${savedObjective.name}" created`);
+    await this.logAction(AuditAction.CREATE, userId, savedObjective.id, `Objective "${savedObjective.name}" created for ${savedObjective.financialYear}`);
     
     return savedObjective;
   }
@@ -101,12 +112,19 @@ export class ObjectivesService {
     status?: string;
     department?: string;
     search?: string;
+    financialYear?: string;
   }): Promise<Objective[]> {
     const query = this.objectiveRepository
       .createQueryBuilder('objective')
       .leftJoinAndSelect('objective.owner', 'owner')
       .leftJoinAndSelect('objective.measurements', 'measurements')
       .orderBy('objective.createdAt', 'DESC');
+
+    if (filters?.financialYear && filters.financialYear !== 'all') {
+      query.andWhere('objective.financialYear = :financialYear', {
+        financialYear: filters.financialYear,
+      });
+    }
 
     if (filters?.type && filters.type !== 'all') {
       query.andWhere('objective.type = :type', { type: filters.type });
@@ -116,7 +134,7 @@ export class ObjectivesService {
       query.andWhere('objective.status = :status', { status: filters.status });
     }
 
-    if (filters?.department) {
+    if (filters?.department && filters.department !== 'all') {
       query.andWhere('objective.department = :department', {
         department: filters.department,
       });
@@ -237,17 +255,72 @@ export class ObjectivesService {
     await this.measurementRepository.remove(measurement);
   }
 
+  // ================== CARRY FORWARD ==================
+
+  async carryForward(
+    id: string,
+    carryForwardDto: CarryForwardDto,
+    userId: string,
+  ): Promise<Objective> {
+    const original = await this.findOne(id);
+    
+    // Create cloned objective for target financial year
+    const targetFY = carryForwardDto.targetFinancialYear;
+    const newTarget = carryForwardDto.target !== undefined ? carryForwardDto.target : original.target;
+    const newMonthlyTargets = carryForwardDto.monthlyTargets !== undefined 
+      ? carryForwardDto.monthlyTargets 
+      : original.monthlyTargets;
+
+    const clonedObjective = this.objectiveRepository.create({
+      name: original.name,
+      description: original.description,
+      type: original.type,
+      department: original.department,
+      uom: original.uom,
+      frequency: original.frequency,
+      target: newTarget,
+      monthlyTargets: newMonthlyTargets,
+      financialYear: targetFY,
+      carriedFromId: original.id,
+      higherIsBetter: original.higherIsBetter,
+      hasSubTargets: original.hasSubTargets,
+      aggregationType: original.aggregationType,
+      subTargets: original.subTargets || [],
+      ownerId: original.ownerId,
+      status: ObjectiveStatus.ACTIVE,
+      objectiveNumber: this.generateObjectiveNumber(),
+    });
+
+    const savedCloned = await this.objectiveRepository.save(clonedObjective);
+
+    await this.logAction(
+      AuditAction.CREATE,
+      userId,
+      savedCloned.id,
+      `Objective "${savedCloned.name}" carried forward from ${original.financialYear} to ${targetFY}`,
+    );
+
+    return savedCloned;
+  }
+
   // ================== DASHBOARD ==================
 
   async getDashboardStats(filters?: {
     type?: string;
     status?: string;
     search?: string;
+    financialYear?: string;
   }): Promise<any> {
     const query = this.objectiveRepository
       .createQueryBuilder('objective')
       .leftJoinAndSelect('objective.owner', 'owner')
       .leftJoinAndSelect('objective.measurements', 'measurements');
+
+    if (filters?.financialYear && filters.financialYear !== 'all') {
+      query.andWhere('objective.financialYear = :financialYear', {
+        financialYear: filters.financialYear,
+      });
+    }
 
     if (filters?.type && filters.type !== 'all') {
       query.andWhere('objective.type = :type', { type: filters.type });

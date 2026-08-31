@@ -288,6 +288,7 @@ export default function FloatingAiChat() {
             }
 
             const decoder = new TextDecoder('utf-8');
+            let isStatusPhase = true;
             
             while (true) {
                 const { done, value } = await reader.read();
@@ -296,28 +297,41 @@ export default function FloatingAiChat() {
                 const chunk = decoder.decode(value, { stream: true });
                 streamBuffer += chunk;
                 
-                const lines = streamBuffer.split('\n');
-                streamBuffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (line.startsWith('[STATUS] ')) {
-                        const status = line.replace('[STATUS] ', '').trim();
-                        if (status) setStatusMessage(status);
-                    } else if (line) {
-                        accumulatedText += (accumulatedText.length > 0 ? '\n' + line : line);
-                        setMessages(prev => prev.map(msg => 
-                            msg.id === aiMessageId ? { ...msg, text: accumulatedText } : msg
-                        ));
+                if (isStatusPhase) {
+                    let index;
+                    while ((index = streamBuffer.indexOf('\n')) !== -1) {
+                        const line = streamBuffer.substring(0, index).trim();
+                        streamBuffer = streamBuffer.substring(index + 1);
+                        if (line.startsWith('[STATUS] ')) {
+                            const status = line.replace('[STATUS] ', '').trim();
+                            if (status) setStatusMessage(status);
+                        } else if (line) {
+                            // Non-status content detected -> transition out of status phase
+                            isStatusPhase = false;
+                            accumulatedText += line;
+                            setMessages(prev => prev.map(msg => 
+                                msg.id === aiMessageId ? { ...msg, text: accumulatedText } : msg
+                            ));
+                            break;
+                        }
                     }
+                }
+                
+                if (!isStatusPhase && streamBuffer) {
+                    accumulatedText += streamBuffer;
+                    streamBuffer = '';
+                    setMessages(prev => prev.map(msg => 
+                        msg.id === aiMessageId ? { ...msg, text: accumulatedText } : msg
+                    ));
                 }
             }
 
-            if (streamBuffer.trim()) {
+            if (streamBuffer) {
                 if (streamBuffer.startsWith('[STATUS] ')) {
                     const status = streamBuffer.replace('[STATUS] ', '').trim();
                     if (status) setStatusMessage(status);
                 } else {
-                    accumulatedText += (accumulatedText.length > 0 ? '\n' + streamBuffer : streamBuffer);
+                    accumulatedText += streamBuffer;
                     setMessages(prev => prev.map(msg => 
                         msg.id === aiMessageId ? { ...msg, text: accumulatedText } : msg
                     ));

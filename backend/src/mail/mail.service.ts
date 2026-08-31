@@ -228,9 +228,9 @@ export class MailService {
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Quantity Produced</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.quantityProduced} sqm</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.quantityProduced} Pcs</td>
               <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Quantity Under Deviation</td>
-              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.quantityUnderDeviation} sqm</td>
+              <td style="padding: 10px; border: 1px solid #e2e8f0;">${deviationData.quantityUnderDeviation} Pcs</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #e2e8f0; font-weight: bold; background-color: #f1f5f9;">Created By</td>
